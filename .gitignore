@@ -1,0 +1,36 @@
+# Secrets / credentials — NEVER commit
+config/*.env
+config/*.json
+config/*.key
+.config/
+*.pem
+*.p12
+.mcp.json
+
+# Direnv
+.envrc.local
+
+# Node / TypeScript
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.turbo/
+
+# Pulumi
+**/Pulumi.*.yaml.bak
+.pulumi/
+
+# Logs
+*.log
+logs/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~
+
+# Claude Code local
+.claude/cache/
