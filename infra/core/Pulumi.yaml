@@ -1,0 +1,18 @@
+name: self-management-core
+runtime:
+  name: nodejs
+  options:
+    packagemanager: pnpm
+description: |
+  Core infrastructure for self-management.
+  - BigQuery dataset `ryan` (ryan-product-graph 用)
+  - Service account for graph app
+  - IAM bindings
+  - (optional) Secret Manager
+config:
+  gcp:project:
+    description: GCP project ID (個人スコープ)
+    default: ryan-self-management
+  gcp:region:
+    description: Default region
+    default: asia-northeast1

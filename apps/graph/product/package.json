@@ -1,0 +1,25 @@
+{
+  "name": "@self/graph-product",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ryan-product-graph — build pipeline、schema definitions、BQ tables の管理",
+  "type": "module",
+  "exports": {
+    "./schema": "./src/schema/index.ts",
+    "./types": "./src/schema/index.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "init-bq": "tsx scripts/init-bq.ts",
+    "build-graph": "tsx scripts/build-graph.ts",
+    "test": "echo 'no tests yet'"
+  },
+  "dependencies": {
+    "@google-cloud/bigquery": "^7.10.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^24.0.0"
+  }
+}

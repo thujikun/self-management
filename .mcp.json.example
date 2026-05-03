@@ -1,0 +1,30 @@
+{
+  "_comment": [
+    "self-management のローカル MCP servers 設定。",
+    ".mcp.json は gitignore (secrets を含むため)。",
+    "このファイルを参考に .mcp.json をローカルで作成。",
+    "",
+    "個人用 MCP (xmcp = X API ラッパー) は launchd で http://127.0.0.1:8765/mcp に常駐 (~/Workspace/xmcp)。",
+    "会社用 MCP (cortex / aws / biz-graph / etc) は air-closet.ai の HTTP gateway 経由、共通 API key 必要。"
+  ],
+  "mcpServers": {
+    "xmcp": {
+      "type": "http",
+      "url": "http://127.0.0.1:8765/mcp",
+      "_comment": "個人 X API server (launchd で稼働中)"
+    },
+    "cortex-auth": {
+      "type": "http",
+      "url": "https://mcp-auth.air-closet.ai/mcp",
+      "_comment": "会社用認証 (API key 不要)"
+    },
+    "aws": {
+      "type": "http",
+      "url": "https://mcp-aws.air-closet.ai/mcp",
+      "headers": {
+        "x-api-key": "<AIR_CLOSET_MCP_API_KEY>"
+      },
+      "_comment": "他 air-closet 系 MCP も同じ x-api-key を共有"
+    }
+  }
+}
