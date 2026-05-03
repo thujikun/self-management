@@ -10,8 +10,8 @@
     "destroy": "pulumi destroy"
   },
   "dependencies": {
-    "@pulumi/gcp": "^8.0.0",
-    "@pulumi/pulumi": "^3.130.0"
+    "@pulumi/gcp": "^9.22.0",
+    "@pulumi/pulumi": "^3.234.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
