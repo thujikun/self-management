@@ -7,7 +7,9 @@
     "outDir": "./dist",
     "rootDir": "./",
     "strict": true,
-    "noImplicitAny": true
+    "noImplicitAny": true,
+    "verbatimModuleSyntax": false,
+    "isolatedModules": false
   },
   "include": ["index.ts"]
 }

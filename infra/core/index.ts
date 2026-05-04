@@ -1,9 +1,9 @@
 import * as gcp from "@pulumi/gcp";
 import * as pulumi from "@pulumi/pulumi";
 
-const config = new pulumi.Config();
-const projectId = config.require("gcp:project");
-const location = config.get("gcp:region") ?? "asia-northeast1";
+const gcpConfig = new pulumi.Config("gcp");
+const projectId = gcpConfig.require("project");
+const location = gcpConfig.get("region") ?? "asia-northeast1";
 
 /**
  * ryan-product-graph 用 BQ dataset。
