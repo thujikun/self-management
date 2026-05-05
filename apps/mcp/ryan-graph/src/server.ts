@@ -29,11 +29,19 @@ import { listRecent } from "./tools/list-recent.js";
 /** @graph-connects none */
 const NodeTableSchema = z.enum(NODE_TABLES);
 
+/**
+ * MCP transport は integer 引数を string でも投げてくる (JSON-RPC 経由のクライアント実装による)。
+ * `z.coerce.number()` で string/number 両受け、内部では number として扱う。
+ *
+ * @graph-connects none
+ */
+const IntCoerce = z.coerce.number().int();
+
 /** @graph-connects none */
 const SearchInputSchema = z.object({
   query: z.string(),
   kind: NodeTableSchema.optional(),
-  limit: z.number().int().min(1).max(50).optional(),
+  limit: IntCoerce.min(1).max(50).optional(),
 });
 
 /** @graph-connects none */
@@ -48,14 +56,14 @@ const TraverseInputSchema = z.object({
   id: z.string(),
   edgeType: z.string().optional(),
   direction: z.enum(["out", "in", "both"]).optional(),
-  maxDepth: z.number().int().min(1).max(3).optional(),
+  maxDepth: IntCoerce.min(1).max(3).optional(),
 });
 
 /** @graph-connects none */
 const ListRecentInputSchema = z.object({
   kind: NodeTableSchema,
   since: z.string().optional(),
-  limit: z.number().int().min(1).max(100).optional(),
+  limit: IntCoerce.min(1).max(100).optional(),
 });
 
 /**
