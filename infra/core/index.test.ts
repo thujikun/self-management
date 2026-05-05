@@ -31,6 +31,7 @@ beforeAll(() => {
   // gcp:region は **意図的に省略**: `??` fallback (`asia-northeast1`) のブランチを通すため。
   pulumi.runtime.setAllConfig({
     "gcp:project": "test-project",
+    "grafana:stackSlug": "test-stack",
   });
   // resource provider mock。引数の inputs をそのまま state にする最小実装。
   pulumi.runtime.setMocks({
@@ -44,12 +45,15 @@ beforeAll(() => {
 });
 
 describe("infra/core stack", () => {
-  it("module import に成功し、4 つの export を返す", async () => {
+  it("module import に成功し、必須 export を全部返す", async () => {
     const m = await import("./index.js");
     expect(m.datasetId).toBeDefined();
     expect(m.datasetLocation).toBeDefined();
     expect(m.graphServiceAccountEmail).toBeDefined();
     expect(m.graphServiceAccountKey).toBeDefined();
+    expect(m.grafanaOtlpEndpoint).toBeDefined();
+    expect(m.grafanaStackId).toBeDefined();
+    expect(m.grafanaOtlpTokenSecretId).toBeDefined();
   });
 
   it("datasetId は 'ryan'", async () => {
