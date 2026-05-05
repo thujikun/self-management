@@ -24,3 +24,13 @@ pnpm exec tsx scripts/hooks/check-line-count.cli.ts $FILES
 
 # 4. @graph-* タグ整合性
 pnpm exec tsx scripts/hooks/check-graph-tags.cli.ts $FILES
+
+# 5. ESLint (max-warnings=0)
+# staged TS だけ走らせる (フルプロジェクト lint は CI 側で再度走る前提)
+TS_FILES=$(echo "$FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|cjs)$' || true)
+if [ -n "$TS_FILES" ]; then
+  pnpm exec eslint --max-warnings=0 $TS_FILES
+fi
+
+# 6. test:coverage (per-file 90% 閾値、threshold 違反は exit 1)
+pnpm exec vitest run --coverage
