@@ -14,24 +14,24 @@
     "test": "echo 'see root vitest'"
   },
   "dependencies": {
-    "@google-cloud/secret-manager": "^6.1.0",
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/api-logs": "^0.207.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.65.0",
-    "@opentelemetry/context-async-hooks": "^2.7.1",
-    "@opentelemetry/exporter-logs-otlp-http": "^0.207.0",
-    "@opentelemetry/exporter-metrics-otlp-http": "^0.207.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.207.0",
-    "@opentelemetry/resources": "^2.1.0",
-    "@opentelemetry/sdk-logs": "^0.207.0",
-    "@opentelemetry/sdk-metrics": "^2.1.0",
-    "@opentelemetry/sdk-node": "^0.207.0",
-    "@opentelemetry/sdk-trace-node": "^2.1.0",
-    "@opentelemetry/semantic-conventions": "^1.30.0",
-    "pino": "^10.0.0"
+    "@google-cloud/secret-manager": "catalog:",
+    "@opentelemetry/api": "catalog:",
+    "@opentelemetry/api-logs": "catalog:",
+    "@opentelemetry/auto-instrumentations-node": "catalog:",
+    "@opentelemetry/context-async-hooks": "catalog:",
+    "@opentelemetry/exporter-logs-otlp-http": "catalog:",
+    "@opentelemetry/exporter-metrics-otlp-http": "catalog:",
+    "@opentelemetry/exporter-trace-otlp-http": "catalog:",
+    "@opentelemetry/resources": "catalog:",
+    "@opentelemetry/sdk-logs": "catalog:",
+    "@opentelemetry/sdk-metrics": "catalog:",
+    "@opentelemetry/sdk-node": "catalog:",
+    "@opentelemetry/sdk-trace-node": "catalog:",
+    "@opentelemetry/semantic-conventions": "catalog:",
+    "pino": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "typescript": "^5.7.0"
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
   }
 }

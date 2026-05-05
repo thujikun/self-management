@@ -38,14 +38,15 @@ export const STACKS = new Set(["core", "ryan-product-graph"]);
 export const DOMAINS = new Set(["infra", "graph", "x-runtime", "content-pipeline", "release-management"]);
 
 /**
- * 対象拡張子。.test.ts は除外。
+ * 対象拡張子。.test.ts は除外。bin/ は CLI entry point として src/ 側のテスト済 lib を
+ * thin wrap するだけなので tag 強制対象外 (cortex の `apps/cli/*` 例外と同精神)。
  *
  * @graph-connects none
  */
 export const TARGET_RE = /^(apps|packages|infra)\/.+\.tsx?$/;
 
 /** @graph-connects none */
-export const EXCLUDE_RE = /\.(test|spec|d)\.tsx?$/;
+export const EXCLUDE_RE = /(\.(test|spec|d)\.tsx?$|\/bin\/)/;
 
 export interface FileError {
   file: string;

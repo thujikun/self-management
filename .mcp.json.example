@@ -8,6 +8,12 @@
     "会社用 MCP (cortex / aws / biz-graph / etc) は air-closet.ai の HTTP gateway 経由、共通 API key 必要。"
   ],
   "mcpServers": {
+    "ryan-graph": {
+      "type": "stdio",
+      "command": "pnpm",
+      "args": ["--silent", "exec", "tsx", "apps/mcp/ryan-graph/bin/ryan-graph.ts"],
+      "_comment": "個人 product graph (BigQuery + gemini-embedding-2)。direnv の env (GOOGLE_APPLICATION_CREDENTIALS / GOOGLE_CLOUD_PROJECT) を継承して動く"
+    },
     "xmcp": {
       "type": "http",
       "url": "http://127.0.0.1:8765/mcp",

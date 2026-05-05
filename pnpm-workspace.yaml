@@ -2,3 +2,57 @@ packages:
   - 'apps/**'
   - 'packages/**'
   - 'infra/**'
+
+# pnpm catalog: workspace 全体で同一バージョンを保証する。
+# 各 package.json は `"<name>": "catalog:"` で参照、ここを唯一の SSoT として bump する。
+# https://pnpm.io/catalogs
+catalog:
+  # Cloud SDKs
+  '@google-cloud/bigquery': ^8.3.0
+  '@google-cloud/secret-manager': ^6.1.0
+  google-auth-library: ^10.6.2
+
+  # OpenTelemetry
+  '@opentelemetry/api': ^1.9.0
+  '@opentelemetry/api-logs': ^0.207.0
+  '@opentelemetry/auto-instrumentations-node': ^0.65.0
+  '@opentelemetry/context-async-hooks': ^2.7.1
+  '@opentelemetry/exporter-logs-otlp-http': ^0.207.0
+  '@opentelemetry/exporter-metrics-otlp-http': ^0.207.0
+  '@opentelemetry/exporter-trace-otlp-http': ^0.207.0
+  '@opentelemetry/resources': ^2.1.0
+  '@opentelemetry/sdk-logs': ^0.207.0
+  '@opentelemetry/sdk-metrics': ^2.1.0
+  '@opentelemetry/sdk-node': ^0.207.0
+  '@opentelemetry/sdk-trace-node': ^2.1.0
+  '@opentelemetry/semantic-conventions': ^1.30.0
+
+  # Logging
+  pino: ^10.0.0
+
+  # MCP
+  '@modelcontextprotocol/sdk': ^1.20.0
+
+  # Pulumi (infra/)
+  '@pulumi/gcp': ^9.22.0
+  '@pulumi/pulumi': ^3.234.0
+  '@pulumiverse/grafana': ^2.29.0
+
+  # Validation / utils
+  zod: ^3.24.0
+  uuid: ^14.0.0
+
+  # Toolchain (lint / test / build)
+  '@commitlint/cli': ^20.5.3
+  '@commitlint/config-conventional': ^20.5.3
+  '@eslint/js': ^10.0.1
+  '@types/node': ^24.0.0
+  '@types/uuid': ^11.0.0
+  '@vitest/coverage-v8': ^4.1.5
+  eslint: ^10.3.0
+  husky: ^9.1.7
+  prettier: ^3.8.3
+  tsx: ^4.21.0
+  typescript: ^5.7.0
+  typescript-eslint: ^8.59.2
+  vitest: ^4.1.5

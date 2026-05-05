@@ -29,6 +29,8 @@ export default defineConfig({
         "scripts/hooks/**/*.ts",
         "infra/**/*.ts",
       ],
+      // bin/ や scripts/ の CLI entry point は process.argv / 標準入出力依存で
+      // unit test 対象外。pure logic は src/ 側に分離してテスト済。
       exclude: [
         "**/*.test.ts",
         "**/*.spec.ts",

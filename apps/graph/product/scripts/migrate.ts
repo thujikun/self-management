@@ -24,12 +24,11 @@
  * @graph-connects bigquery [writes_to] 全 node/edge テーブルへ idempotent UPSERT で書き込み
  */
 
+import { embedBatch, EMBEDDING_MODEL } from "@self/embedding";
 import { createLogger, initOtel, shutdownOtel, withSpan } from "@self/otel";
-import { embedBatch } from "../src/migrate/common/embedding.js";
 import { deterministicEdgeId } from "../src/migrate/common/id.js";
 import { mergeRows } from "../src/migrate/common/bq-merge.js";
 import type { EdgeInput, NodeInput, ParseResult } from "../src/migrate/common/types.js";
-import { EMBEDDING_MODEL } from "../src/schema/index.js";
 import { parseOperationsLog } from "../src/migrate/sources/operations-log.js";
 import { parseThreads } from "../src/migrate/sources/threads.js";
 import { parseStrategyDoc } from "../src/migrate/sources/strategy.js";
