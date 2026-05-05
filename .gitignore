@@ -34,6 +34,8 @@ logs/
 
 # Claude Code local
 .claude/cache/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
 
 # vitest coverage output
 coverage/

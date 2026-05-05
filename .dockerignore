@@ -1,0 +1,39 @@
+# node_modules: image build 中に再 install するので含めない
+**/node_modules/
+
+# build artifact / cache
+**/dist/
+**/.turbo/
+**/coverage/
+**/.next/
+
+# 開発用 / docs
+.git/
+.github/
+.husky/
+.claude/
+.config/
+.vscode/
+.idea/
+**/*.md
+
+# Python (apps/xmcp) は別 stack なので image に含めない
+apps/xmcp/
+
+# Pulumi infra も image に含めない
+infra/
+
+# テストは runtime に不要
+**/*.test.ts
+**/*.spec.ts
+**/__tests__/
+
+# その他
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+
+# scripts (root) は不要
+/scripts/
