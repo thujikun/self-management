@@ -84,4 +84,32 @@ describe("infra/core stack", () => {
     const v = await promiseOf(m.graphServiceAccountKey);
     expect(v === undefined || typeof v === "string").toBe(true);
   });
+
+  it("normalizeOtlpUrl: 末尾に /otlp が無ければ付ける", async () => {
+    const { normalizeOtlpUrl } = await import("./index.js");
+    expect(normalizeOtlpUrl("https://otlp-gateway-prod-xx.grafana.net")).toBe(
+      "https://otlp-gateway-prod-xx.grafana.net/otlp",
+    );
+  });
+
+  it("normalizeOtlpUrl: 既に /otlp 末尾なら no-op", async () => {
+    const { normalizeOtlpUrl } = await import("./index.js");
+    expect(normalizeOtlpUrl("https://otlp-gateway-prod-xx.grafana.net/otlp")).toBe(
+      "https://otlp-gateway-prod-xx.grafana.net/otlp",
+    );
+  });
+
+  it("normalizeOtlpUrl: 末尾の trailing slash を除去してから /otlp 付与", async () => {
+    const { normalizeOtlpUrl } = await import("./index.js");
+    expect(normalizeOtlpUrl("https://otlp-gateway-prod-xx.grafana.net/")).toBe(
+      "https://otlp-gateway-prod-xx.grafana.net/otlp",
+    );
+  });
+
+  it("normalizeOtlpUrl: undefined / null / 空文字 → 空文字 (mock 環境向け defensive)", async () => {
+    const { normalizeOtlpUrl } = await import("./index.js");
+    expect(normalizeOtlpUrl(undefined)).toBe("");
+    expect(normalizeOtlpUrl(null)).toBe("");
+    expect(normalizeOtlpUrl("")).toBe("");
+  });
 });

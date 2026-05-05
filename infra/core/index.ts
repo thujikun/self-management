@@ -25,6 +25,18 @@ const projectId = gcpConfig.require("project");
 const location = gcpConfig.get("region") ?? "asia-northeast1";
 
 /**
+ * Grafana Cloud `getStack` の `otlpUrl` を OTLP base URL (`/otlp` suffix 付き) に正規化する。
+ * Stack API は `/otlp` 含まないものと含むものの両方を返しうるので両ケース対応。
+ *
+ * @graph-connects none
+ */
+export function normalizeOtlpUrl(raw: string | undefined | null): string {
+  if (!raw) return "";
+  if (raw.endsWith("/otlp")) return raw;
+  return `${raw.replace(/\/$/, "")}/otlp`;
+}
+
+/**
  * 必要な Google API の有効化。Pulumi 適用時に自動 enable (既に有効なら no-op)。
  *
  * - serviceusage / cloudresourcemanager / compute / iam: Pulumi GCP provider 自身が
@@ -285,12 +297,13 @@ export const graphServiceAccountEmail = graphSa.email;
 export const graphServiceAccountKey = pulumi.secret(graphKey.privateKey);
 
 /**
- * Grafana Cloud OTLP endpoint URL (例: https://otlp-gateway-prod-ap-northeast-0.grafana.net)。
+ * Grafana Cloud OTLP gateway endpoint。
+ * `getStack` は base URL のみ返すため、`/otlp` suffix を付けて完全な OTLP base にする。
  * `@self/otel` の OTel SDK 設定に流し込む。
  *
  * @graph-connects none
  */
-export const grafanaOtlpEndpoint = grafanaStack.otlpUrl;
+export const grafanaOtlpEndpoint = grafanaStack.otlpUrl.apply(normalizeOtlpUrl);
 
 /** @graph-connects none */
 export const grafanaStackId = grafanaStack.id;
