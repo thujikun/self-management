@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@pulumi/gcp": "^9.22.0",
-    "@pulumi/pulumi": "^3.234.0"
+    "@pulumi/pulumi": "^3.234.0",
+    "@pulumiverse/grafana": "^2.29.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

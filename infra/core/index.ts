@@ -14,6 +14,7 @@
  */
 
 import * as gcp from "@pulumi/gcp";
+import * as grafana from "@pulumiverse/grafana";
 import * as pulumi from "@pulumi/pulumi";
 
 /** @graph-connects none */
@@ -40,6 +41,7 @@ for (const service of [
   "iam.googleapis.com",
   "bigquery.googleapis.com",
   "aiplatform.googleapis.com",
+  "secretmanager.googleapis.com",
 ]) {
   const slug = service.replace(/\.googleapis\.com$/, "").replace(/\./g, "-");
   apiServices[slug] = new gcp.projects.Service(`${slug}-api`, {
@@ -131,14 +133,19 @@ new gcp.projects.IAMMember(
  * - resourcemanager.projectIamAdmin: IAM 管理
  * - iam.serviceAccountAdmin: SA 管理 (新規 SA 作成や key rotation 含む)
  * - iam.serviceAccountKeyAdmin: SA key 管理
+ * - compute.networkViewer: Pulumi GCP provider が `compute.regions.list` を叩いて
+ *   region 検証する際の権限不足 warning を解消
+ * - secretmanager.admin: Pulumi が secret / version / IAM を管理
  *
- * @graph-connects iam [writes_to] Pulumi 自身が SA で動くための admin 権限 4 種を bind
+ * @graph-connects iam [writes_to] Pulumi 自身が SA で動くための admin 権限を bind
  */
 const adminRoles = [
   "roles/serviceusage.serviceUsageAdmin",
   "roles/resourcemanager.projectIamAdmin",
   "roles/iam.serviceAccountAdmin",
   "roles/iam.serviceAccountKeyAdmin",
+  "roles/compute.networkViewer",
+  "roles/secretmanager.admin",
 ];
 for (const role of adminRoles) {
   const slug = role.replace(/^roles\//, "").replace(/\./g, "-");
@@ -160,6 +167,114 @@ const graphKey = new gcp.serviceaccount.Key("graph-sa-key", {
   serviceAccountId: graphSa.name,
 });
 
+/**
+ * Grafana Cloud 連携。
+ *
+ * 前提: Ryan が手で Grafana Cloud Access Policy (admin scope) を発行し、
+ * Secret Manager `grafana-cloud-admin-token` に格納済み。
+ *
+ * Pulumi はこの secret を読み出し、grafana provider を介して:
+ * - Stack の OTLP endpoint URL を Cloud API から取得
+ * - OTLP write 専用の Access Policy + Token を declarative に作成
+ * - 発行された token を別の Secret (`grafana-otlp-write-token`) として保存
+ * - graph-app SA に上記 secret の secretAccessor 権限を付与
+ *
+ * これにより、アプリ側 SA は OTLP write token のみアクセスでき、
+ * admin token には触れられない (least privilege)。
+ *
+ * @graph-connects grafana-cloud [writes_to] OTLP write 用 access policy + token を作成
+ * @graph-connects secret-manager [writes_to] OTLP write token を Secret Manager に保管
+ */
+/** @graph-connects none */
+const grafanaConfig = new pulumi.Config("grafana");
+/** @graph-connects none */
+const grafanaStackSlug = grafanaConfig.require("stackSlug");
+
+/** @graph-connects secret-manager [reads_from] admin token をロード */
+const grafanaAdminTokenSecret = gcp.secretmanager.getSecretVersionOutput({
+  secret: "grafana-cloud-admin-token",
+  project: projectId,
+});
+
+/** @graph-connects grafana-cloud [calls] Grafana Cloud API への Pulumi provider */
+const grafanaProvider = new grafana.Provider("grafana-cloud", {
+  cloudAccessPolicyToken: grafanaAdminTokenSecret.secretData,
+});
+
+/** @graph-connects grafana-cloud [reads_from] stack の OTLP endpoint / region 等を取得 */
+const grafanaStack = grafana.cloud.getStackOutput(
+  { slug: grafanaStackSlug },
+  { provider: grafanaProvider },
+);
+
+/**
+ * OTLP write 用 access policy。
+ * scopes は metrics / logs / traces / profiles の write のみ (least privilege)。
+ *
+ * @graph-connects grafana-cloud [writes_to] access policy resource
+ */
+const otlpAccessPolicy = new grafana.cloud.AccessPolicy(
+  "otlp-write",
+  {
+    region: grafanaStack.regionSlug,
+    name: "self-management-otlp-write",
+    displayName: "self-management OTLP write",
+    scopes: [
+      "metrics:write",
+      "logs:write",
+      "traces:write",
+      "profiles:write",
+    ],
+    realms: [
+      {
+        type: "stack",
+        identifier: grafanaStack.id,
+      },
+    ],
+  },
+  { provider: grafanaProvider },
+);
+
+/** @graph-connects grafana-cloud [writes_to] access policy token (OTLP write) */
+const otlpAccessPolicyToken = new grafana.cloud.AccessPolicyToken(
+  "otlp-write-token",
+  {
+    region: grafanaStack.regionSlug,
+    accessPolicyId: otlpAccessPolicy.policyId,
+    name: "self-management-otlp-write",
+    displayName: "self-management OTLP write",
+  },
+  { provider: grafanaProvider },
+);
+
+/**
+ * Grafana Cloud OTLP write token を Secret Manager に保管。
+ * graph-app SA は secretAccessor で読み出して OTLP リクエストの Authorization header に使う。
+ *
+ * @graph-connects secret-manager [writes_to] OTLP write token secret
+ */
+const otlpTokenSecret = new gcp.secretmanager.Secret(
+  "grafana-otlp-write-token",
+  {
+    secretId: "grafana-otlp-write-token",
+    replication: { auto: {} },
+  },
+  { dependsOn: [apiServices["secretmanager"]] },
+);
+
+/** @graph-connects secret-manager [writes_to] token の値を version として書き込む */
+new gcp.secretmanager.SecretVersion("grafana-otlp-write-token-v1", {
+  secret: otlpTokenSecret.id,
+  secretData: otlpAccessPolicyToken.token,
+});
+
+/** @graph-connects iam [writes_to] graph-app SA に OTLP token secret の read 権限を付与 */
+new gcp.secretmanager.SecretIamMember("graph-otlp-token-accessor", {
+  secretId: otlpTokenSecret.id,
+  role: "roles/secretmanager.secretAccessor",
+  member: pulumi.interpolate`serviceAccount:${graphSa.email}`,
+});
+
 /** @graph-connects none */
 export const datasetId = ryanDataset.datasetId;
 /** @graph-connects none */
@@ -168,3 +283,17 @@ export const datasetLocation = ryanDataset.location;
 export const graphServiceAccountEmail = graphSa.email;
 /** @graph-connects none */
 export const graphServiceAccountKey = pulumi.secret(graphKey.privateKey);
+
+/**
+ * Grafana Cloud OTLP endpoint URL (例: https://otlp-gateway-prod-ap-northeast-0.grafana.net)。
+ * `@self/otel` の OTel SDK 設定に流し込む。
+ *
+ * @graph-connects none
+ */
+export const grafanaOtlpEndpoint = grafanaStack.otlpUrl;
+
+/** @graph-connects none */
+export const grafanaStackId = grafanaStack.id;
+
+/** @graph-connects none */
+export const grafanaOtlpTokenSecretId = otlpTokenSecret.id;

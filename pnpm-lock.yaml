@@ -78,6 +78,9 @@ importers:
       '@pulumi/pulumi':
         specifier: ^3.234.0
         version: 3.234.0(typescript@5.9.3)
+      '@pulumiverse/grafana':
+        specifier: ^2.29.0
+        version: 2.29.0(typescript@5.9.3)
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -722,6 +725,9 @@ packages:
         optional: true
       typescript:
         optional: true
+
+  '@pulumiverse/grafana@2.29.0':
+    resolution: {integrity: sha512-/CAb0KiftFYK0DxG+AxgTbA6WhFyE36wK+Zzn95il/ls6bJyKHJOcUXllv616L3gIRIDjypdJCZ5lHQiJj2Cdw==}
 
   '@rolldown/binding-android-arm64@1.0.0-rc.17':
     resolution: {integrity: sha512-s70pVGhw4zqGeFnXWvAzJDlvxhlRollagdCCKRgOsgUOH3N1l0LIxf83AtGzmb5SiVM4Hjl5HyarMRfdfj3DaQ==}
@@ -3208,6 +3214,14 @@ snapshots:
       typescript: 5.9.3
     transitivePeerDependencies:
       - supports-color
+
+  '@pulumiverse/grafana@2.29.0(typescript@5.9.3)':
+    dependencies:
+      '@pulumi/pulumi': 3.234.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - supports-color
+      - ts-node
+      - typescript
 
   '@rolldown/binding-android-arm64@1.0.0-rc.17':
     optional: true
