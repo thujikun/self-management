@@ -57,6 +57,7 @@ for (const service of [
   "artifactregistry.googleapis.com",
   "run.googleapis.com",
   "cloudscheduler.googleapis.com",
+  "cloudbuild.googleapis.com",
 ]) {
   const slug = service.replace(/\.googleapis\.com$/, "").replace(/\./g, "-");
   apiServices[slug] = new gcp.projects.Service(`${slug}-api`, {
