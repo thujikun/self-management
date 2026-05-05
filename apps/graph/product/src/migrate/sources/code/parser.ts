@@ -272,7 +272,11 @@ export async function findFilesWithGraphTags(
 ): Promise<string[]> {
   const all: string[] = [];
   for (const p of patterns) {
-    const matched = await glob(p, { cwd, absolute: true });
+    const matched = await glob(p, {
+      cwd,
+      absolute: true,
+      ignore: ["**/node_modules/**", "**/dist/**", "**/.venv/**"],
+    });
     all.push(...matched);
   }
   const filtered = all.filter((f) => readFileSync(f, "utf-8").includes("@graph-"));
