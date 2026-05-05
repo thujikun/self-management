@@ -56,6 +56,8 @@ describe("infra/core stack", () => {
     expect(m.grafanaOtlpTokenSecretId).toBeDefined();
     expect(m.xmcpAppSecretId).toBeDefined();
     expect(m.XMCP_ACCOUNTS).toEqual(["ryantsuji", "ryanaircloset"]);
+    expect(m.artifactRegistryRepoId).toBeDefined();
+    expect(m.graphMigrateJobName).toBeDefined();
   });
 
   it("datasetId は 'ryan'", async () => {

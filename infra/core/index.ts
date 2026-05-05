@@ -54,6 +54,9 @@ for (const service of [
   "bigquery.googleapis.com",
   "aiplatform.googleapis.com",
   "secretmanager.googleapis.com",
+  "artifactregistry.googleapis.com",
+  "run.googleapis.com",
+  "cloudscheduler.googleapis.com",
 ]) {
   const slug = service.replace(/\.googleapis\.com$/, "").replace(/\./g, "-");
   apiServices[slug] = new gcp.projects.Service(`${slug}-api`, {
@@ -341,6 +344,120 @@ for (const account of XMCP_ACCOUNTS) {
 
 /** @graph-connects none */
 export const xmcpAppSecretId = xmcpAppSecret.id;
+
+/**
+ * graph-product (X ingest) を Cloud Run Job として日次実行するための infra。
+ *
+ * 構成:
+ * - Artifact Registry repo `self-mgmt` (Docker image 配置先)
+ * - Cloud Run Job `graph-migrate` (graph-app SA で実行、tsx で migrate.ts を起動)
+ * - Cloud Scheduler `graph-migrate-daily` (00:00 UTC = 09:00 JST、graph-app SA で OIDC auth)
+ *
+ * image の build/push は別オペ:
+ *   gcloud builds submit --region=asia-northeast1 \
+ *     --tag asia-northeast1-docker.pkg.dev/${PROJECT}/self-mgmt/graph-product:latest \
+ *     -f apps/graph/product/Dockerfile .
+ *
+ * @graph-connects artifact-registry [writes_to] Docker repo を作成
+ */
+const arRepo = new gcp.artifactregistry.Repository(
+  "self-mgmt",
+  {
+    repositoryId: "self-mgmt",
+    format: "DOCKER",
+    location,
+    description: "self-management container images (graph-product / future workers)",
+  },
+  { dependsOn: [apiServices["artifactregistry"]] },
+);
+
+/** @graph-connects iam [writes_to] graph-app SA に AR repo の reader 権限 (Cloud Run pull 用) */
+new gcp.artifactregistry.RepositoryIamMember("graph-ar-reader", {
+  repository: arRepo.name,
+  location: arRepo.location,
+  role: "roles/artifactregistry.reader",
+  member: pulumi.interpolate`serviceAccount:${graphSa.email}`,
+});
+
+/**
+ * Cloud Run Job: 日次の X ingest を含む migrate。
+ *
+ * env:
+ * - GOOGLE_CLOUD_PROJECT / OTEL_* は graph-app SA 配下で direnv-equivalent な値を直書き
+ *
+ * 初回 pulumi up 時点では image が存在しない → image push 後に再 pulumi up で job spec
+ * が確定する想定。Cloud Run Job 自体は image 不在でも spec 登録は通る。
+ *
+ * @graph-connects cloud-run [writes_to] graph-migrate Job (X ingest を週次/日次で実行)
+ */
+const graphMigrateJob = new gcp.cloudrunv2.Job(
+  "graph-migrate",
+  {
+    name: "graph-migrate",
+    location,
+    template: {
+      template: {
+        serviceAccount: graphSa.email,
+        timeout: "1800s",
+        maxRetries: 1,
+        containers: [
+          {
+            image: pulumi.interpolate`${location}-docker.pkg.dev/${projectId}/${arRepo.repositoryId}/graph-product:latest`,
+            resources: { limits: { cpu: "1", memory: "1Gi" } },
+            envs: [
+              { name: "GOOGLE_CLOUD_PROJECT", value: projectId },
+              {
+                name: "OTEL_EXPORTER_OTLP_ENDPOINT",
+                value: "https://otlp-gateway-prod-ap-northeast-0.grafana.net/otlp",
+              },
+              { name: "GRAFANA_OTLP_INSTANCE_ID", value: "1623802" },
+            ],
+          },
+        ],
+      },
+    },
+  },
+  { dependsOn: [apiServices["run"], graphSa, arRepo] },
+);
+
+/** @graph-connects iam [writes_to] graph-app SA に Job 起動権限 (Scheduler が graph-app の OIDC で叩くため) */
+new gcp.cloudrunv2.JobIamMember("graph-job-invoker", {
+  name: graphMigrateJob.name,
+  location: graphMigrateJob.location,
+  role: "roles/run.invoker",
+  member: pulumi.interpolate`serviceAccount:${graphSa.email}`,
+});
+
+/**
+ * Cloud Scheduler: 日次 00:00 UTC (09:00 JST) で graph-migrate Job をキック。
+ * Cloud Run v2 Job の run endpoint を OAuth2 で POST する。
+ *
+ * @graph-connects cloud-scheduler [writes_to] daily cron
+ * @graph-connects cloud-run [calls] graph-migrate Job の run endpoint を OAuth で呼び出し
+ */
+new gcp.cloudscheduler.Job(
+  "graph-migrate-daily",
+  {
+    name: "graph-migrate-daily",
+    region: location,
+    schedule: "0 0 * * *",
+    timeZone: "Etc/UTC",
+    httpTarget: {
+      httpMethod: "POST",
+      uri: pulumi.interpolate`https://run.googleapis.com/v2/projects/${projectId}/locations/${location}/jobs/${graphMigrateJob.name}:run`,
+      oauthToken: {
+        serviceAccountEmail: graphSa.email,
+        scope: "https://www.googleapis.com/auth/cloud-platform",
+      },
+    },
+  },
+  { dependsOn: [apiServices["cloudscheduler"], graphMigrateJob] },
+);
+
+/** @graph-connects none */
+export const artifactRegistryRepoId = arRepo.repositoryId;
+/** @graph-connects none */
+export const graphMigrateJobName = graphMigrateJob.name;
 
 /** @graph-connects none */
 export const datasetId = ryanDataset.datasetId;

@@ -6,6 +6,8 @@
  *   pnpm graph:migrate -- --dry-run           # parse + 統計のみ、BQ には書かない
  *   pnpm graph:migrate -- --source=memory     # 単一 source のみ
  *   pnpm graph:migrate -- --no-embed          # embedding 生成を skip
+ *   pnpm graph:migrate -- --source=x --incremental    # X のみ最近 ~200 件のみ取得 (cron 用)
+ *   pnpm graph:migrate -- --source=x --max-pages=5    # X のページ数を明示指定
  *
  * フロー:
  * 1. 各 parser を呼び出し ParseResult を集める
@@ -45,7 +47,13 @@ const dryRun = args.has("--dry-run");
 /** @graph-connects none */
 const noEmbed = args.has("--no-embed");
 /** @graph-connects none */
+const incremental = args.has("--incremental");
+/** @graph-connects none */
 const sourceFilter = [...args].find((a) => a.startsWith("--source="))?.slice("--source=".length);
+/** @graph-connects none */
+const maxPagesArg = [...args].find((a) => a.startsWith("--max-pages="))?.slice("--max-pages=".length);
+/** @graph-connects none */
+const maxPages = maxPagesArg ? Number(maxPagesArg) : incremental ? 2 : undefined;
 
 type SourceName = "operations-log" | "threads" | "strategy" | "memory" | "x";
 /** @graph-connects none */
@@ -70,7 +78,7 @@ async function runParsers(): Promise<ParseResult[]> {
           threads: parseThreads,
           strategy: parseStrategyDoc,
           memory: parseMemory,
-          x: parseX,
+          x: () => parseX(undefined, maxPages !== undefined ? { maxPages } : undefined),
         })[t](),
     );
     log.info({ source: t, nodes: r.nodes.length, edges: r.edges.length }, "parsed source");
