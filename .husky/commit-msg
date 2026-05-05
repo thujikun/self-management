@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# commit message lint (Conventional Commits)。
+pnpm exec commitlint --edit "$1"

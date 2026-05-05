@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# pre-commit guard。
+# staged file を取り、各 check を順次実行。
+# どれか fail なら commit を block。
+#
+# `--no-verify` 等で bypass するのは絶対禁止 (CLAUDE.md ルール 1)。
+# hook が落ちたら根本原因を直す。
+
+set -e
+
+FILES=$(git diff --cached --name-only --diff-filter=ACMR)
+if [ -z "$FILES" ]; then
+  exit 0
+fi
+
+# 1. シークレット混入検査 (cortex から流用)
+bash scripts/hooks/secret-check.sh $FILES
+
+# 2. 抑制コメント禁止 (詳細は scripts/hooks/check-no-ignore.sh)
+bash scripts/hooks/check-no-ignore.sh $FILES
+
+# 3. ファイル行数上限 (コメント・空行除外、CAP=500)
+pnpm exec tsx scripts/hooks/check-line-count.ts $FILES
+
+# 4. @graph-* タグ整合性
+pnpm exec tsx scripts/hooks/check-graph-tags.ts $FILES

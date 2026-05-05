@@ -34,3 +34,6 @@ logs/
 
 # Claude Code local
 .claude/cache/
+
+# vitest coverage output
+coverage/
