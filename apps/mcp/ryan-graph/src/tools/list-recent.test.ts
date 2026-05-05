@@ -69,7 +69,26 @@ describe("listRecent", () => {
     await listRecent({ kind: "product_graph_nodes" });
     const sql = createQueryJobMock.mock.calls[0][0].query;
     expect(sql).toContain("description AS body_summary");
-    expect(sql).not.toContain("body_summary AS body_summary");
+  });
+
+  it("persons は bio 列を summary に使う (body_summary 列不在の fallback)", async () => {
+    createQueryJobMock.mockResolvedValueOnce([
+      { getQueryResults: async () => [[]] },
+    ]);
+    const { listRecent } = await import("./list-recent.js");
+    await listRecent({ kind: "persons" });
+    const sql = createQueryJobMock.mock.calls[0][0].query;
+    expect(sql).toContain("bio AS body_summary");
+  });
+
+  it("decisions は rationale_md を summary に使う", async () => {
+    createQueryJobMock.mockResolvedValueOnce([
+      { getQueryResults: async () => [[]] },
+    ]);
+    const { listRecent } = await import("./list-recent.js");
+    await listRecent({ kind: "decisions" });
+    const sql = createQueryJobMock.mock.calls[0][0].query;
+    expect(sql).toContain("rationale_md AS body_summary");
   });
 
   it("結果配列がそのまま返る", async () => {

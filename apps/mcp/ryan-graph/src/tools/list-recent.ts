@@ -9,7 +9,7 @@
  * @graph-connects bigquery [reads_from] kind 別に時系列 column で sort
  */
 
-import { PK_COLUMN, PROJECT_ID, TITLE_EXPR, query, type NodeTable } from "../bq.js";
+import { PK_COLUMN, PROJECT_ID, SUMMARY_EXPR, TITLE_EXPR, query, type NodeTable } from "../bq.js";
 
 export interface ListRecentInput {
   kind: NodeTable;
@@ -50,7 +50,6 @@ export function timeOrderColumn(kind: NodeTable): string {
 export async function listRecent(input: ListRecentInput): Promise<ListRecentRow[]> {
   const limit = input.limit ?? 20;
   const ts = timeOrderColumn(input.kind);
-  const summary = input.kind === "product_graph_nodes" ? "description" : "body_summary";
   const sinceCond = input.since ? `WHERE ${ts} >= @since` : "";
   const params: Record<string, unknown> = { lim: limit };
   if (input.since) params.since = input.since;
@@ -59,7 +58,7 @@ export async function listRecent(input: ListRecentInput): Promise<ListRecentRow[
     SELECT
       ${PK_COLUMN[input.kind]} AS id,
       ${TITLE_EXPR[input.kind]} AS title,
-      ${summary} AS body_summary,
+      ${SUMMARY_EXPR[input.kind]} AS body_summary,
       CAST(${ts} AS STRING) AS ts
     FROM \`${PROJECT_ID}.ryan.${input.kind}\`
     ${sinceCond}

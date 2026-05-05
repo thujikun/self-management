@@ -18,6 +18,7 @@ import {
   NODE_TABLES,
   PK_COLUMN,
   PROJECT_ID,
+  SUMMARY_EXPR,
   TITLE_EXPR,
   query,
   type NodeTable,
@@ -43,15 +44,14 @@ export interface SearchInput {
  * @graph-connects none
  */
 export function buildPerTableSelect(t: NodeTable): string {
-  // product_graph_nodes は description column を持つ (body_summary は無い)。
-  // 出力列名を body_summary に揃えるため AS で alias。
-  const summaryExpr = t === "product_graph_nodes" ? "description" : "body_summary";
+  // 各 table で「summary 相当の column」が違う (bio / body_summary / rationale_md /
+  // description)。出力 column 名は body_summary に統一して UNION ALL を成立させる。
   return `
     SELECT
       '${t}' AS kind,
       ${PK_COLUMN[t]} AS id,
       ${TITLE_EXPR[t]} AS title,
-      ${summaryExpr} AS body_summary,
+      ${SUMMARY_EXPR[t]} AS body_summary,
       ML.DISTANCE(embedding, @qvec, 'COSINE') AS cosine_distance
     FROM \`${PROJECT_ID}.ryan.${t}\`
     WHERE ARRAY_LENGTH(embedding) > 0

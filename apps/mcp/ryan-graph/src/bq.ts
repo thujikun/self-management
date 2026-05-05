@@ -102,3 +102,19 @@ export const TITLE_EXPR: Record<NodeTable, string> = {
   release_notes: "title",
   product_graph_nodes: "name",
 };
+
+/**
+ * 各 table の "要約" として使う SQL 式。body_summary 列が無い table は近い意味の
+ * 別 column を使う。すべて output には `AS body_summary` で alias 統一する想定。
+ *
+ * @graph-connects none
+ */
+export const SUMMARY_EXPR: Record<NodeTable, string> = {
+  persons: "bio",
+  contents: "body_summary",
+  decisions: "rationale_md",
+  topics: "description",
+  events: "description",
+  release_notes: "body_summary",
+  product_graph_nodes: "description",
+};
