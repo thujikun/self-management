@@ -35,6 +35,19 @@ const DEFAULT_DIR = join(REPO_ROOT, "threads/posted");
 /** @graph-connects none */
 const RYAN_PERSON_ID = deterministicId(PERSON_SOURCE, "ryantsuji");
 
+/**
+ * 各 thread の手書き要約 (embedding の input)。
+ * key は thread_posted file の `thread_name` か `short_name` のいずれか。
+ *
+ * @graph-connects none
+ */
+const THREAD_SUMMARIES: Record<string, string> = {
+  "17mcp":
+    '17 MCP Servers thread (5本、2026-05-03 JST 20:00 投稿)。airCloset の Agentic Graph RAG を支えている 17 個の MCP server fleet を CTO 1 人で運用するために必要だった boring infra (共通 OAuth library、Redis sessions、shared BigQuery logger) の実装と、なぜ stateful monolith ではなく fleet にしたのかという設計判断の話。1.4M ユーザー基盤を持つ会社で AI infra を CTO 1 人が builds する事例として、英語圏 AI infra コミュニティ向けの再 boot 1 本目。',
+  dbgraph:
+    "DB Graph thread (5本、2026-05-04 JST 23:14 投稿)。airCloset の 991 BQ tables / 15 schemas を natural language で誰でも query できる MCP server を $10/月 で構築した話。dictionary materialization が hard part、knowledge と access を分離する設計、Gemini で全 991 表 description を first-pass 生成し human review で long-tail を埋める運用、GCP OIDC → AWS STS → VPC Lambda の zero-static-creds auth chain、variant 検出で daily rebuild $0.10-0.20。dev.to 元記事へのリンクで thread を締める構成。",
+};
+
 interface Frontmatter {
   thread_name?: string;
   short_name?: string;
@@ -148,7 +161,10 @@ export async function parseThreads(dir: string = DEFAULT_DIR): Promise<ParseResu
   const nodes: NodeInput[] = [];
   const edges: EdgeInput[] = [];
 
-  // Ryan 本人 (self) を必ず先頭に登録
+  // Ryan 本人 (self) を必ず先頭に登録。body_summary は self profile の凝縮。
+  const ryanSummary =
+    "Ryan Tsuji (@ryantsuji on X、@thujikun on GitHub/Zenn)。airCloset (1.4M users、日本最大のファッションレンタル) の CTO。Claude Code / MCP のヘビーユーザーで、production AI infrastructure を 1 人で構築・運用してきた立場。社内 codebase + DBs の上に Agentic Graph RAG を実装し、17 MCP servers の fleet を運用、991 BQ tables を natural language で query できる DB Graph MCP を $10/月で動かしている。日本市場では Zenn ベースの認知があり、英語圏では再 boot 中で sub-200 follower phase。Why over How / 知識の外部化 / AI as leverage on non-AI business を一貫して主張する。";
+
   nodes.push({
     kind: "persons",
     id: RYAN_PERSON_ID,
@@ -165,6 +181,7 @@ export async function parseThreads(dir: string = DEFAULT_DIR): Promise<ParseResu
       bio: "CTO @airCloset (1.4M users). Built an Agentic Graph RAG over our codebase + DBs. Writing about AI infra that actually works in production. Tokyo 🇯🇵",
       metadata: { language: "ja+en", role: "self" },
     },
+    body_summary: ryanSummary,
     metadata: { language: "ja+en", role: "self" },
   });
 
@@ -186,6 +203,14 @@ export async function parseThreads(dir: string = DEFAULT_DIR): Promise<ParseResu
         ? new Date(fm.posted_at).toISOString()
         : null;
 
+    // 個別 thread は手書き summary (THREAD_SUMMARIES) があれば使い、無ければ body 先頭抜粋に fallback。
+    const shortName = fm.thread_name ?? fm.short_name ?? file.replace(/\.md$/, "");
+    const summary =
+      THREAD_SUMMARIES[shortName] ??
+      THREAD_SUMMARIES[fm.short_name ?? ""] ??
+      THREAD_SUMMARIES[fm.thread_name ?? ""] ??
+      body.replace(/```[\s\S]*?```/g, "").slice(0, 500).trim();
+
     nodes.push({
       kind: "contents",
       id,
@@ -194,11 +219,12 @@ export async function parseThreads(dir: string = DEFAULT_DIR): Promise<ParseResu
         source: "x",
         external_id: conversationId,
         url,
-        title: fm.thread_name ?? fm.short_name ?? file.replace(/\.md$/, ""),
+        title: shortName,
         body_md: body,
         published_at: publishedAt,
         author_person_id: RYAN_PERSON_ID,
       },
+      body_summary: summary,
       metadata: {
         source: SOURCE,
         source_file: `threads/posted/${file}`,

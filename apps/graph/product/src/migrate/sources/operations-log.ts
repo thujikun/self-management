@@ -115,6 +115,16 @@ export async function parseOperationsLog(path: string = DEFAULT_PATH): Promise<P
     const slug = slugify(sec.title);
     const externalId = `${released_at.slice(0, 10)}:${slug}`;
     const id = deterministicId(SOURCE, externalId);
+
+    // body_summary は title (= 1 行 release 概要) + body 先頭 ~300 字。
+    // 各 release_note は具体的に何が起きたかを 1 段落で表現する小品で、これで embedding 検索の input として十分濃度がある。
+    const bodyHead = sec.body
+      .replace(/^#{1,6}\s+.*$/gm, "") // 内部 H3 等を除去
+      .replace(/\n{2,}/g, "\n")
+      .trim()
+      .slice(0, 300);
+    const summary = `${sec.title}\n${bodyHead}`.trim();
+
     nodes.push({
       kind: "release_notes",
       id,
@@ -125,6 +135,7 @@ export async function parseOperationsLog(path: string = DEFAULT_PATH): Promise<P
         released_at,
         version: null,
       },
+      body_summary: summary,
       metadata: {
         source: SOURCE,
         source_file: "operations/log.md",
