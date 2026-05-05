@@ -41,6 +41,8 @@ catalog:
   # Validation / utils
   zod: ^3.24.0
   uuid: ^14.0.0
+  ts-morph: ^25.0.0
+  glob: ^13.0.6
 
   # Toolchain (lint / test / build)
   '@commitlint/cli': ^20.5.3
