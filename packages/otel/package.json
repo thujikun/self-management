@@ -8,7 +8,8 @@
     ".": "./src/index.ts",
     "./logger": "./src/logger.ts",
     "./init": "./src/init.ts",
-    "./span": "./src/span.ts"
+    "./span": "./src/span.ts",
+    "./secret": "./src/secret.ts"
   },
   "scripts": {
     "test": "echo 'see root vitest'"
