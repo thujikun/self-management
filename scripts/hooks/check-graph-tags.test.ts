@@ -226,6 +226,13 @@ export const a = 1;
     expect(errors).toEqual([]);
   });
 
+  it("bin/ 配下 (CLI entry) は対象外", async () => {
+    process.chdir(root);
+    await write("apps/x/bin/cli.ts", "const a = 1;\n");
+    const errors = runGraphTagsCheck(["apps/x/bin/cli.ts"]);
+    expect(errors).toEqual([]);
+  });
+
   it("apps 配下で違反があれば error 配列を返す", async () => {
     process.chdir(root);
     await write(

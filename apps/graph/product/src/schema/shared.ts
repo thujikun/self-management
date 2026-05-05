@@ -76,25 +76,9 @@ export interface BaseRowFields {
   updated_at: string;
 }
 
-/**
- * 現在の embedding model 名 (BQ row に書き込むラベル + Vertex AI に投げる model_id)。
- * 切替時はここ + `migrate/common/embedding.ts` の publisher 設定を更新。
- *
- * `gemini-embedding-2` (3072 次元、8192 input token、multimodal text+image+audio+video+pdf)。
- * https://docs.cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/embedding-2
- *
- * 注意:
- * - 提供 region は `global` のみ確認済 (`us-central1` は HTTP 404)。`asia-northeast1` 不可。
- * - 旧世代 (gemini-embedding-001 / text-embedding-005) と違い `:predict` ではなく
- *   `:embedContent` endpoint を使う (Gemini API 系 schema)。
- *
- * @graph-connects none
- */
-export const EMBEDDING_MODEL = "gemini-embedding-2";
-/** @graph-connects none */
-export const EMBEDDING_DIMENSIONS = 3072;
-/** @graph-connects none */
-export const EMBEDDING_LOCATION = "global";
+// embedding model 定数 (EMBEDDING_MODEL / EMBEDDING_DIMENSIONS / EMBEDDING_LOCATION) は
+// `@self/embedding` package に集約。schema 側から re-export しない (依存方向を schema → embedding に
+// 一方化するため、schema は embedding を知らない)。
 
 /**
  * 1 つの BQ table の作成に必要な定義 (init-bq.ts が消費)。

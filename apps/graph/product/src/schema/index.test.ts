@@ -17,9 +17,6 @@ import {
   COMMON_EMBEDDING_FIELDS,
   COMMON_TIMESTAMP_FIELDS,
   CONTENT_SOURCES,
-  EMBEDDING_DIMENSIONS,
-  EMBEDDING_LOCATION,
-  EMBEDDING_MODEL,
   NODE_TABLES,
   PERSONAL_EDGE_TYPES,
   PERSONAL_GRAPH_TABLES,
@@ -51,12 +48,6 @@ describe("schema barrel", () => {
     expect(NODE_TABLES).toContain("events");
     expect(NODE_TABLES).toContain("release_notes");
     expect(NODE_TABLES).toContain("product_graph_nodes");
-  });
-
-  it("EMBEDDING_MODEL = 'gemini-embedding-2', dim=3072, region=global", () => {
-    expect(EMBEDDING_MODEL).toBe("gemini-embedding-2");
-    expect(EMBEDDING_DIMENSIONS).toBe(3072);
-    expect(EMBEDDING_LOCATION).toBe("global");
   });
 
   it("COMMON_TIMESTAMP_FIELDS / COMMON_EMBEDDING_FIELDS が定義されている", () => {

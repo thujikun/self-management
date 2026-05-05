@@ -1,0 +1,29 @@
+{
+  "name": "@self/mcp-ryan-graph",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP server (local stdio) over Ryan's personal product graph (BigQuery + gemini-embedding-2)",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "mcp-ryan-graph": "./bin/ryan-graph.ts"
+  },
+  "scripts": {
+    "start": "tsx bin/ryan-graph.ts"
+  },
+  "dependencies": {
+    "@google-cloud/bigquery": "catalog:",
+    "@modelcontextprotocol/sdk": "catalog:",
+    "@self/embedding": "workspace:*",
+    "@self/graph-product": "workspace:*",
+    "@self/otel": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
+  }
+}
