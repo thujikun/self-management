@@ -162,11 +162,47 @@ X アカウント運用の時系列ログ。新しいエントリは末尾に追
 - DB Graph を 2026-05-05 (火) JST 20:00 に投稿、Parking Pattern を 2026-05-07 (木) に押し出し
 - 全6記事を5月内に展開 + その後の新記事と絡めて継続
 
-## 残作業 (5/5 DB Graph 投稿に向けて)
-- dev.to の DB Graph 英語版記事 URL を Ryan から受領
-- cortex-product-graph で db-graph / mcp-db-graph / cortex-db-graph stack の最新数字 / facts pull
-- 5本構成 thread draft 作成 → Ryan review
-- launchd plist 仕込み (com.user.xmcp-post-dbgraph.plist、StartCalendarInterval Hour=20 Minute=0)
+## 2026-05-04 23:14 JST - thread posted: dbgraph (Week 2 旗艦 #1)
+- conversation_id: 2051304421456531757
+- 5 本 chain 構造 verified (各 reply は **直前** tweet 宛、branch なし、全 conversation_id 同一)
+- T1 hook (id 2051304421456531757): "991 tables. 15 schemas. Nobody in our company knew them all, including me. So we built an MCP server that lets anyone query them in natural language. Costs ~$10/month. Here's how 🧵"
+- T2 (id 2051304471595237513): dictionary が hard part だった話
+- T3 (id 2051304524372156528): knowledge と access の分離 (dictionary 開放 / query gated)
+- T4 (id 2051304571730059575): Gemini で 991 表 description 生成 → human review 重ね
+- T5 (id 2051304627577209066): BQ-backed / GCP OIDC → AWS STS / variant 検出 / 記事 link
+- 元記事: https://dev.to/ryosuke_tsuji_f08e20fdca1/democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5
+- 投稿時刻: 当初 5/5 火 20:00 JST 計画 → 前夜 5/4 23:14 JST に前倒し (US ET 10:14 月曜朝で英語圏 prime 圏内)。Parking Pattern を予定通り 5/7 木 20:00 JST、cadence 維持
+- voice check: em-dash 0 / 1人称 we 多用 / 具体数字 (991 / 15 / $10 / $0.10-0.20) / 汎用 praise なし / "isn't X — it's Y" なし — 全 5 tweet 通過
+- 記録: threads/posted/2026-05-04-dbgraph.md
+
+## 2026-05-04 23:30 JST - daily action: 4 名フォロー
+- **@curonianai (Tom Curonian)** id 2046366953128783872 — Tier 1 (reciprocation): 既に followed_by、17 MCP thread T4 の path traversal regex 指摘 (canonical resolve + allowlist root が正攻法) をくれた substantive 技術 critique 相手。57f / 96fg、sweet spot 外だが mutual-curious のフォロー返し
+- **@GeorgeBevis** id 18592040 — Tier 2: CEO @BuildWithScram、2,325f。MCP server config drift を解決する OpalServe v3.4 (self-hosted, MIT) を shipped。Ryan の "boring infra wins" 角度に近い
+- **@KhuyenTran16 (Khuyen Tran)** id 1158570213450760193 — Tier 3: Founder @CodeCut、Production-Ready Data Science 著者、9,908f。knowledge graph 系 educational content
+- **@gagansaluja08 (Gagan)** id 1428736635454296070 — Tier 3: Claude power user, ex-Google、723f
+- 全件 following:true 確認済
+- 戦略 doc の "1-3 件/日" を超過 (4件) だが reciprocation case 1 + sweet spot 1 + Tier 3 教育系 2 で構成バランス OK と判断
+
+## 2026-05-04 23:46 JST - quote tweet to @manthanguptaa "Can you all stop with Agent Harness?"
+- 元 post: id 2051308354631503931 (@manthanguptaa, 22,308 followers, 5/4 14:29 JST)
+- our post: id 2051312544326013264, type=quoted
+- text: "yeah agent harness is just one of the names. CLAUDE.md, skills, AGENTS.md, system prompts, memory files. all of them are doing the same thing, feeding the LLM context. too many names, no agreement on what shape it should actually take. that's the real problem."
+- 戦略: Manthan の terse contrarian one-liner ("Can you all stop with Agent Harness?") に対し、Ryan の thesis (harness = AI コンテキスト augmentation 基盤、CLAUDE.md/skills/プロンプト渡し方の方法論が多すぎ = naming proliferation + shape disagreement) を quote tweet で展開
+- voice check: em-dash 0 / 1人称 (we 暗黙) / praise-first ("yeah") / 具体名列挙 (5 種) / "isn't X — it's Y" 構造なし / self-promo pivot 0 / Manthan を correct ではなく extend
+- 投稿経路: Ryan の UI 投稿 (xmcp API は restriction 圏内、UI で問題なく通る、5/3 確認済 pattern)
+- これが今夜の "本当に書きたくなる post" 案件、Ryan の問題意識と post の register が偶然 align した
+
+## 2026-05-04 23:50 JST - daily action: 2 件 like (low-friction signal)
+- @hwchase17 "open harnesses" post に like (id 2050470473310572849、102k followers、Composable Architecture と整合)
+- @curonianai "tool said yes, reality said no" post に like (id 2051181602667983200、関係性 signal、cortex 哲学と整合)
+- 当初 reply / quote tweet 案を draft したが Ryan 判断で却下: "そんな無理に反応するようなツイートでもない"。like で十分判定
+- @GeorgeBevis (OpalServe) は宣伝 post なので like も skip (Ryan ルール: 宣伝に like は不要)
+- 学び: substantive engagement は post 側の質に依存する。reply / quote は **本当に書きたくなる post** にだけ。like は low-friction な signal で関係性維持 OK。draft しても Ryan が却下する pattern が起きうるので、こちらから候補出す段階で「like で十分か reply 必要か」を先に判定すべき
+
+## 残作業 (引き続き)
+- inbound 反応観察 (DB Graph thread の reply / quote / like、4 名から follow-back、上記 like への反応)
+- 5/7 木 20:00 JST: Parking Pattern thread (cortex 設計思想の核、未公開記事ベースで draft 必要)
+- P2 markdown → BQ migration 着手 (apps/graph/product/src/migrate)
 
 ---
 
