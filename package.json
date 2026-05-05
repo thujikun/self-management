@@ -12,7 +12,8 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "graph:build": "pnpm --filter @self/graph-product build-graph",
-    "graph:init": "pnpm --filter @self/graph-product init-bq"
+    "graph:init": "pnpm --filter @self/graph-product init-bq",
+    "graph:migrate": "pnpm --filter @self/graph-product migrate"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

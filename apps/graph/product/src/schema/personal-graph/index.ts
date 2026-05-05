@@ -5,10 +5,16 @@
  * node table は type ごとに分離 (cortex の 1-table-with-discriminator とは異なる選択、
  * type-specific column を REQUIRED にして schema 自己文書化)。
  * edges は polymorphic な 1 table、cross-graph (product / release) の参照も含めて全部ここに。
+ *
+ * @graph-stack ryan-product-graph
+ * @graph-domain graph
+ * @graph-business Ryan 自身の人格・コンテンツ・思想・社会関係 (X follow / reply / DM 含む) を統合する schema。type ごと別テーブルで型固有カラムを REQUIRED にし、edges は polymorphic で cross-graph 参照も収容
+ * @graph-connects bigquery [writes_to] persons / contents / decisions / topics / events / personal_edges 6 テーブルを定義
  */
 
 import type { TableSchema } from "@google-cloud/bigquery";
 import {
+  COMMON_EMBEDDING_FIELDS,
   COMMON_TIMESTAMP_FIELDS,
   type BaseRowFields,
   type NodeTable,
@@ -17,6 +23,8 @@ import {
 
 /**
  * `contents` の source platform 値。新 platform 追加時はここに足す。
+ *
+ * @graph-connects none
  */
 export const CONTENT_SOURCES = [
   "x", // X (Twitter) tweet または DM (metadata.subtype で区別)
@@ -35,6 +43,8 @@ export type ContentSource = (typeof CONTENT_SOURCES)[number];
 /**
  * `personal_edges` の edge 種別。
  * cross-graph (release / product への参照) も含む。
+ *
+ * @graph-connects none
  */
 export const PERSONAL_EDGE_TYPES = [
   // authorship
@@ -60,13 +70,20 @@ export const PERSONAL_EDGE_TYPES = [
 
 export type PersonalEdgeType = (typeof PERSONAL_EDGE_TYPES)[number];
 
+/** @graph-connects none */
 export const PERSONS_TABLE = "persons";
+/** @graph-connects none */
 export const CONTENTS_TABLE = "contents";
+/** @graph-connects none */
 export const DECISIONS_TABLE = "decisions";
+/** @graph-connects none */
 export const TOPICS_TABLE = "topics";
+/** @graph-connects none */
 export const EVENTS_TABLE = "events";
+/** @graph-connects none */
 export const PERSONAL_EDGES_TABLE = "personal_edges";
 
+/** @graph-connects none */
 const PERSONS_SCHEMA: TableSchema = {
   fields: [
     { name: "person_id", type: "STRING", mode: "REQUIRED" },
@@ -75,10 +92,12 @@ const PERSONS_SCHEMA: TableSchema = {
     { name: "display_name", type: "STRING", mode: "NULLABLE" },
     { name: "bio", type: "STRING", mode: "NULLABLE" },
     { name: "metadata", type: "JSON", mode: "NULLABLE" }, // X-specific (followers_count, listed_count, ...)
+    ...COMMON_EMBEDDING_FIELDS,
     ...COMMON_TIMESTAMP_FIELDS,
   ],
 };
 
+/** @graph-connects none */
 const CONTENTS_SCHEMA: TableSchema = {
   fields: [
     { name: "content_id", type: "STRING", mode: "REQUIRED" },
@@ -91,10 +110,12 @@ const CONTENTS_SCHEMA: TableSchema = {
     { name: "published_at", type: "TIMESTAMP", mode: "NULLABLE" },
     { name: "author_person_id", type: "STRING", mode: "NULLABLE" },
     { name: "metadata", type: "JSON", mode: "NULLABLE" }, // X: subtype (tweet/dm/retweet), conversation_id, recipient_person_ids, private 等
+    ...COMMON_EMBEDDING_FIELDS,
     ...COMMON_TIMESTAMP_FIELDS,
   ],
 };
 
+/** @graph-connects none */
 const DECISIONS_SCHEMA: TableSchema = {
   fields: [
     { name: "decision_id", type: "STRING", mode: "REQUIRED" },
@@ -103,20 +124,24 @@ const DECISIONS_SCHEMA: TableSchema = {
     { name: "decided_at", type: "TIMESTAMP", mode: "REQUIRED" },
     { name: "scope", type: "JSON", mode: "NULLABLE" },
     { name: "metadata", type: "JSON", mode: "NULLABLE" },
+    ...COMMON_EMBEDDING_FIELDS,
     ...COMMON_TIMESTAMP_FIELDS,
   ],
 };
 
+/** @graph-connects none */
 const TOPICS_SCHEMA: TableSchema = {
   fields: [
     { name: "topic_id", type: "STRING", mode: "REQUIRED" },
     { name: "name", type: "STRING", mode: "REQUIRED" },
     { name: "description", type: "STRING", mode: "NULLABLE" },
     { name: "metadata", type: "JSON", mode: "NULLABLE" },
+    ...COMMON_EMBEDDING_FIELDS,
     ...COMMON_TIMESTAMP_FIELDS,
   ],
 };
 
+/** @graph-connects none */
 const EVENTS_SCHEMA: TableSchema = {
   fields: [
     { name: "event_id", type: "STRING", mode: "REQUIRED" },
@@ -125,10 +150,12 @@ const EVENTS_SCHEMA: TableSchema = {
     { name: "occurred_at", type: "TIMESTAMP", mode: "REQUIRED" },
     { name: "location", type: "STRING", mode: "NULLABLE" },
     { name: "metadata", type: "JSON", mode: "NULLABLE" },
+    ...COMMON_EMBEDDING_FIELDS,
     ...COMMON_TIMESTAMP_FIELDS,
   ],
 };
 
+/** @graph-connects none */
 const PERSONAL_EDGES_SCHEMA: TableSchema = {
   fields: [
     { name: "edge_id", type: "STRING", mode: "REQUIRED" },
@@ -143,6 +170,11 @@ const PERSONAL_EDGES_SCHEMA: TableSchema = {
   ],
 };
 
+/**
+ * personal-graph に属する全 table 定義。`init-bq` / `migrate` から消費。
+ *
+ * @graph-connects none
+ */
 export const PERSONAL_GRAPH_TABLES: TableDefinition[] = [
   {
     name: PERSONS_TABLE,
