@@ -21,6 +21,8 @@
     "@google-cloud/bigquery": "catalog:",
     "@self/embedding": "workspace:*",
     "@self/otel": "workspace:*",
+    "glob": "catalog:",
+    "ts-morph": "catalog:",
     "uuid": "catalog:"
   },
   "devDependencies": {
