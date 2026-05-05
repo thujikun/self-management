@@ -14,10 +14,15 @@
       "args": ["--silent", "exec", "tsx", "apps/mcp/ryan-graph/bin/ryan-graph.ts"],
       "_comment": "個人 product graph (BigQuery + gemini-embedding-2)。direnv の env (GOOGLE_APPLICATION_CREDENTIALS / GOOGLE_CLOUD_PROJECT) を継承して動く"
     },
-    "xmcp": {
+    "xmcp-en": {
       "type": "http",
       "url": "http://127.0.0.1:8765/mcp",
-      "_comment": "個人 X API server (launchd で稼働中)"
+      "_comment": "個人 X API server (@ryantsuji, English account, launchd com.user.xmcp-en)"
+    },
+    "xmcp-jp": {
+      "type": "http",
+      "url": "http://127.0.0.1:8766/mcp",
+      "_comment": "個人 X API server (@RyanAircloset, Japanese account, launchd com.user.xmcp-jp)"
     },
     "cortex-auth": {
       "type": "http",

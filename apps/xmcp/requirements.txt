@@ -1,0 +1,7 @@
+fastmcp
+httpx
+python-dotenv
+requests-oauthlib
+google-cloud-secret-manager
+xai-sdk
+xdk

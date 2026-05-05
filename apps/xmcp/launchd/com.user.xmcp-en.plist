@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.xmcp-en</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>-i</string>
+        <string>-c</string>
+        <string>cd /Users/ryan/Workspace/self-management/apps/xmcp &amp;&amp; source .venv/bin/activate &amp;&amp; X_ACCOUNT=ryantsuji MCP_PORT=8765 exec python server.py</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/ryan/Library/Logs/xmcp-en.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/ryan/Library/Logs/xmcp-en.log</string>
+    <key>WorkingDirectory</key>
+    <string>/Users/ryan/Workspace/self-management/apps/xmcp</string>
+</dict>
+</plist>

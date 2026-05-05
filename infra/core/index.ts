@@ -287,6 +287,61 @@ new gcp.secretmanager.SecretIamMember("graph-otlp-token-accessor", {
   member: pulumi.interpolate`serviceAccount:${graphSa.email}`,
 });
 
+/**
+ * xmcp (X API MCP server) の OAuth credentials。
+ *
+ * 構成:
+ * - `xmcp-app-credentials`: X dev app の consumer key/secret + bearer token (両アカウント共通)
+ * - `xmcp-user-{account}`: 各 X user account の OAuth1 access_token + access_token_secret
+ *
+ * Secret 値は OAuth1 flow (browser interactive) で取得した値を Ryan が手動で
+ * `gcloud secrets versions add` で投入する。Pulumi は container と IAM (graph-app SA に
+ * secretAccessor) のみ管理 (token は infra ではなく user credential なので state に乗せない)。
+ *
+ * @graph-connects secret-manager [writes_to] xmcp app credentials secret container
+ */
+const xmcpAppSecret = new gcp.secretmanager.Secret(
+  "xmcp-app-credentials",
+  {
+    secretId: "xmcp-app-credentials",
+    replication: { auto: {} },
+  },
+  { dependsOn: [apiServices["secretmanager"]] },
+);
+
+/** @graph-connects iam [writes_to] graph-app SA に xmcp app secret の read 権限 */
+new gcp.secretmanager.SecretIamMember("graph-xmcp-app-accessor", {
+  secretId: xmcpAppSecret.id,
+  role: "roles/secretmanager.secretAccessor",
+  member: pulumi.interpolate`serviceAccount:${graphSa.email}`,
+});
+
+/**
+ * xmcp の対象 X account 一覧。新規追加時はここに足す + Pulumi up で secret container 作成。
+ *
+ * @graph-connects none
+ */
+export const XMCP_ACCOUNTS = ["ryantsuji", "ryanaircloset"] as const;
+
+for (const account of XMCP_ACCOUNTS) {
+  const userSecret = new gcp.secretmanager.Secret(
+    `xmcp-user-${account}`,
+    {
+      secretId: `xmcp-user-${account}`,
+      replication: { auto: {} },
+    },
+    { dependsOn: [apiServices["secretmanager"]] },
+  );
+  new gcp.secretmanager.SecretIamMember(`graph-xmcp-user-${account}-accessor`, {
+    secretId: userSecret.id,
+    role: "roles/secretmanager.secretAccessor",
+    member: pulumi.interpolate`serviceAccount:${graphSa.email}`,
+  });
+}
+
+/** @graph-connects none */
+export const xmcpAppSecretId = xmcpAppSecret.id;
+
 /** @graph-connects none */
 export const datasetId = ryanDataset.datasetId;
 /** @graph-connects none */
