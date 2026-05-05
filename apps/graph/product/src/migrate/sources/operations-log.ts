@@ -41,7 +41,7 @@ const DEFAULT_PATH = join(REPO_ROOT, "operations/log.md");
  *
  * @graph-connects none
  */
-function parseDateFromTitle(title: string): string | null {
+export function parseDateFromTitle(title: string): string | null {
   // YYYY-MM-DD HH:MM JST
   const dt = title.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})\s+JST/);
   if (dt) {
@@ -62,7 +62,7 @@ function parseDateFromTitle(title: string): string | null {
 }
 
 /** @graph-connects none */
-function slugify(title: string): string {
+export function slugify(title: string): string {
   return title
     .toLowerCase()
     .replace(/[^\w\s-]/g, "")
@@ -76,7 +76,7 @@ function slugify(title: string): string {
  *
  * @graph-connects none
  */
-function splitH2Sections(md: string): Array<{ title: string; body: string }> {
+export function splitH2Sections(md: string): Array<{ title: string; body: string }> {
   const lines = md.split("\n");
   const sections: Array<{ title: string; body: string }> = [];
   let current: { title: string; body: string[] } | null = null;

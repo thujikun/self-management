@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * `@graph-*` JSDoc タグ整合性の pre-commit guard。
+ * `@graph-*` JSDoc タグ整合性 guard の pure library。
  *
  * cortex の `@cortex/eslint-plugin-graph` (require-graph-business / require-graph-connects /
  * valid-graph-stack 等) を、self-management の規模に合わせて軽量な単一スクリプトで再実装。
@@ -13,15 +13,14 @@
  * 3. `@graph-stack` の値は `STACKS` 一覧に登録済みでなければならない
  * 4. `@graph-domain` の値は `DOMAINS` 一覧に登録済みでなければならない
  *
- * 引数なし時は staged TS ファイル、引数ありで個別 path 検証。
+ * CLI は `check-graph-tags.cli.ts` 経由。本ファイルは pure helper のみで副作用なし。
  *
  * @graph-stack core
  * @graph-domain infra
- * @graph-business cortex の eslint-plugin-graph を軽量再実装した pre-commit guard。@graph-stack/@graph-domain/@graph-business をファイル先頭、@graph-connects を全トップレベル宣言に強制し、stack/domain 値の一覧との整合も検証する
+ * @graph-business cortex の eslint-plugin-graph を軽量再実装した pre-commit guard の純粋ライブラリ部。@graph-stack/@graph-domain/@graph-business をファイル先頭、@graph-connects を全トップレベル宣言に強制し、stack/domain 値の一覧との整合も検証する
  * @graph-connects none
  */
 
-import { execSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 
 /**
@@ -29,39 +28,26 @@ import { readFileSync, existsSync } from "node:fs";
  *
  * @graph-connects none
  */
-const STACKS = new Set(["core", "ryan-product-graph"]);
+export const STACKS = new Set(["core", "ryan-product-graph"]);
 
 /**
  * 既知 domain 一覧。新規 domain を追加する場合はここに足す。
  *
  * @graph-connects none
  */
-const DOMAINS = new Set(["infra", "graph", "x-runtime", "content-pipeline", "release-management"]);
+export const DOMAINS = new Set(["infra", "graph", "x-runtime", "content-pipeline", "release-management"]);
 
 /**
  * 対象拡張子。.test.ts は除外。
  *
  * @graph-connects none
  */
-const TARGET_RE = /^(apps|packages|infra)\/.+\.tsx?$/;
+export const TARGET_RE = /^(apps|packages|infra)\/.+\.tsx?$/;
 
 /** @graph-connects none */
-const EXCLUDE_RE = /\.(test|spec|d)\.tsx?$/;
+export const EXCLUDE_RE = /\.(test|spec|d)\.tsx?$/;
 
-/**
- * staged ファイル一覧。
- *
- * @graph-connects none
- */
-function stagedFiles(): string[] {
-  const out = execSync("git diff --cached --name-only --diff-filter=ACMR", { encoding: "utf8" });
-  return out
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-interface FileError {
+export interface FileError {
   file: string;
   msg: string;
 }
@@ -74,7 +60,7 @@ interface FileError {
  *
  * @graph-connects none
  */
-function extractFileJsdoc(src: string): Record<string, string> | null {
+export function extractFileJsdoc(src: string): Record<string, string> | null {
   const m = src.match(/^\s*\/\*\*([\s\S]*?)\*\//);
   if (!m) return null;
   const block = m[1];
@@ -91,7 +77,7 @@ function extractFileJsdoc(src: string): Record<string, string> | null {
  *
  * @graph-connects none
  */
-function checkFileLevelTags(file: string, src: string, errors: FileError[]): void {
+export function checkFileLevelTags(file: string, src: string, errors: FileError[]): void {
   const tags = extractFileJsdoc(src);
   if (!tags) {
     errors.push({ file, msg: "missing file-level JSDoc with @graph-* tags" });
@@ -129,7 +115,7 @@ function checkFileLevelTags(file: string, src: string, errors: FileError[]): voi
  *
  * @graph-connects none
  */
-function checkDeclarationConnects(file: string, src: string, errors: FileError[]): void {
+export function checkDeclarationConnects(file: string, src: string, errors: FileError[]): void {
   const lines = src.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const ln = lines[i];
@@ -172,13 +158,11 @@ function checkDeclarationConnects(file: string, src: string, errors: FileError[]
 }
 
 /**
- * メイン。staged または引数指定の対象ファイルを iterate して検証。
+ * 候補ファイルを対象 path フィルタにかけて検証実行。違反 error 配列を返す純粋ロジック。
  *
  * @graph-connects none
  */
-function main(): void {
-  const args = process.argv.slice(2);
-  const candidates = args.length > 0 ? args : stagedFiles();
+export function runGraphTagsCheck(candidates: string[]): FileError[] {
   const targets = candidates.filter(
     (f) => TARGET_RE.test(f) && !EXCLUDE_RE.test(f) && existsSync(f),
   );
@@ -189,16 +173,5 @@ function main(): void {
     checkFileLevelTags(file, src, errors);
     checkDeclarationConnects(file, src, errors);
   }
-
-  if (errors.length === 0) return;
-
-  console.error("❌ @graph-* タグ整合性違反:");
-  for (const e of errors) console.error(`  ${e.file}: ${e.msg}`);
-  console.error(
-    "\nファイル先頭の JSDoc に @graph-stack / @graph-domain / @graph-business / @graph-connects、" +
-      "全トップレベル宣言に @graph-connects (接続なしなら none) を付けてください。",
-  );
-  process.exit(1);
+  return errors;
 }
-
-main();

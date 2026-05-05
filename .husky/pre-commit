@@ -20,7 +20,7 @@ bash scripts/hooks/secret-check.sh $FILES
 bash scripts/hooks/check-no-ignore.sh $FILES
 
 # 3. ファイル行数上限 (コメント・空行除外、CAP=500)
-pnpm exec tsx scripts/hooks/check-line-count.ts $FILES
+pnpm exec tsx scripts/hooks/check-line-count.cli.ts $FILES
 
 # 4. @graph-* タグ整合性
-pnpm exec tsx scripts/hooks/check-graph-tags.ts $FILES
+pnpm exec tsx scripts/hooks/check-graph-tags.cli.ts $FILES

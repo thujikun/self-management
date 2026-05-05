@@ -32,14 +32,14 @@ const DEFAULT_DIR = join(
   ".claude/projects/-Users-ryan-Workspace-x/memory",
 );
 
-interface MemoryFrontmatter {
+export interface MemoryFrontmatter {
   name?: string;
   description?: string;
   type?: "user" | "feedback" | "project" | "reference";
 }
 
 /** @graph-connects none */
-function parseFrontmatter(md: string): { fm: MemoryFrontmatter; body: string } {
+export function parseFrontmatter(md: string): { fm: MemoryFrontmatter; body: string } {
   if (!md.startsWith("---\n")) return { fm: {}, body: md };
   const end = md.indexOf("\n---\n", 4);
   if (end < 0) return { fm: {}, body: md };

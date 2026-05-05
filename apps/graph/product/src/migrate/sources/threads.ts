@@ -48,7 +48,7 @@ const THREAD_SUMMARIES: Record<string, string> = {
     "DB Graph thread (5本、2026-05-04 JST 23:14 投稿)。airCloset の 991 BQ tables / 15 schemas を natural language で誰でも query できる MCP server を $10/月 で構築した話。dictionary materialization が hard part、knowledge と access を分離する設計、Gemini で全 991 表 description を first-pass 生成し human review で long-tail を埋める運用、GCP OIDC → AWS STS → VPC Lambda の zero-static-creds auth chain、variant 検出で daily rebuild $0.10-0.20。dev.to 元記事へのリンクで thread を締める構成。",
 };
 
-interface Frontmatter {
+export interface Frontmatter {
   thread_name?: string;
   short_name?: string;
   conversation_id?: string;
@@ -67,7 +67,7 @@ interface Frontmatter {
  *
  * @graph-connects none
  */
-function parseFrontmatter(md: string): { fm: Frontmatter; body: string } {
+export function parseFrontmatter(md: string): { fm: Frontmatter; body: string } {
   if (!md.startsWith("---\n")) return { fm: {}, body: md };
   const end = md.indexOf("\n---\n", 4);
   if (end < 0) return { fm: {}, body: md };
@@ -103,13 +103,13 @@ function parseFrontmatter(md: string): { fm: Frontmatter; body: string } {
           const itemHead = lines[i].slice(3).trim();
           const item: Record<string, string> = {};
           if (itemHead) {
-            // 単行式: "  - key: value"
-            const sub = itemHead.match(/^([a-z_]+):\s*(.+)$/);
+            // 単行式: `  - key: value`。key は quoted numeric (例: "1") も許容。
+            const sub = itemHead.match(/^["']?([\w]+)["']?:\s*(.+)$/);
             if (sub) item[sub[1]] = sub[2].replace(/^["']|["']$/g, "");
           }
           i++;
           while (i < lines.length && lines[i].startsWith("    ") && !lines[i].startsWith("  -")) {
-            const sub = lines[i].trim().match(/^([a-z_]+):\s*(.+)$/);
+            const sub = lines[i].trim().match(/^["']?([\w]+)["']?:\s*(.+)$/);
             if (sub) item[sub[1]] = sub[2].replace(/^["']|["']$/g, "");
             i++;
           }
@@ -129,7 +129,7 @@ function parseFrontmatter(md: string): { fm: Frontmatter; body: string } {
  *
  * @graph-connects none
  */
-function extractTweetChain(fm: Frontmatter): { conversationId: string | null; chain: Array<{ tweet: number; id: string }> } {
+export function extractTweetChain(fm: Frontmatter): { conversationId: string | null; chain: Array<{ tweet: number; id: string }> } {
   if (fm.chain && Array.isArray(fm.chain)) {
     return {
       conversationId: fm.conversation_id ?? null,
