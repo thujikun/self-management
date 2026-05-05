@@ -107,6 +107,65 @@ describe("parseX", () => {
     vi.restoreAllMocks();
   });
 
+  it("default で referenced_tweets から content→content edges を派生", async () => {
+    const loadCreds = vi.fn().mockResolvedValue(fakeCreds);
+    let calls = 0;
+    const fetcher = vi.fn().mockImplementation(() => {
+      // 1 件目: replied_to を持つ own post
+      const data = calls++ === 0
+        ? [{
+            id: "tweet1",
+            text: "reply",
+            created_at: "2026-01-01T00:00:00Z",
+            referenced_tweets: [{ type: "replied_to", id: "original" }],
+          }]
+        : [];
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: async () => "",
+        json: async () => ({ data, meta: {} }),
+      });
+    });
+    const result = await parseX(loadCreds as (a: string) => Promise<XCreds>, {
+      fetcher: fetcher as FetchFn,
+      skipEngagements: true,
+    });
+    // authored edge (1 件) + replied_to edge (1 件)
+    expect(result.edges).toHaveLength(2);
+    const types = result.edges.map((e) => e.edge_type).sort();
+    expect(types).toEqual(["authored", "replied_to"]);
+  });
+
+  it("skipReferencedEdges=true で referenced edge を作らない", async () => {
+    const loadCreds = vi.fn().mockResolvedValue(fakeCreds);
+    let calls = 0;
+    const fetcher = vi.fn().mockImplementation(() => {
+      const data = calls++ === 0
+        ? [{
+            id: "tweet1",
+            text: "reply",
+            created_at: "2026-01-01T00:00:00Z",
+            referenced_tweets: [{ type: "replied_to", id: "original" }],
+          }]
+        : [];
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: async () => "",
+        json: async () => ({ data, meta: {} }),
+      });
+    });
+    const result = await parseX(loadCreds as (a: string) => Promise<XCreds>, {
+      fetcher: fetcher as FetchFn,
+      skipEngagements: true,
+      skipReferencedEdges: true,
+    });
+    // authored edge のみ (1 件)
+    expect(result.edges).toHaveLength(1);
+    expect(result.edges[0].edge_type).toBe("authored");
+  });
+
   it("falls back to default loadXCreds (Secret Manager) when no loadCreds is provided", async () => {
     process.env.GOOGLE_CLOUD_PROJECT = "ryan-self-management";
     const appJson = JSON.stringify({
