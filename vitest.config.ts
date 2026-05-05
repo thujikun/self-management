@@ -34,10 +34,14 @@ export default defineConfig({
         "**/dist/**",
         "**/node_modules/**",
       ],
-      // ratchet: 現在の実カバレッジを下回らないように設定。テストが増えるごとに上げる。
+      // 閾値は **each-file 基準** で強制 (Ryan ルール: 全体平均では 1 ファイル 100% で
+      // 他をごまかせるため不採用)。`perFile: true` で coverage.include の各ファイルが
+      // 独立に threshold を満たす必要がある。
+      //
+      // 初期は 0 から開始し、テストを追加するたびに ratchet 方式で上げる。
       // cortex 同型ルール: 「閾値を下げる代わりにテストを追加する」(下げる変更は禁止)。
-      // 初期値はテストインフラ整備直後で 1% 弱、安全域として 0 を切り、徐々に上げる。
       thresholds: {
+        perFile: true,
         lines: 0,
         functions: 0,
         branches: 0,
