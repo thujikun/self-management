@@ -3,10 +3,16 @@
  *
  * self-management 自身の technical structure を統合。
  * code (Function/Module/Class) + db (BQ Table/Column/Schema) + docs + infra (Stack/CronSchedule/PubSubTopic) + Domain。
+ *
+ * @graph-stack ryan-product-graph
+ * @graph-domain graph
+ * @graph-business self-management mono-repo 自身の技術構造 (関数・モジュール・テーブル・ドキュメント・インフラ・ドメイン) を 1 graph に統合する schema 定義。cortex の product-graph と同型 (1-table-with-discriminator)
+ * @graph-connects bigquery [writes_to] product_graph_nodes / product_graph_edges 2 テーブルを定義
  */
 
 import type { TableSchema } from "@google-cloud/bigquery";
 import {
+  COMMON_EMBEDDING_FIELDS,
   COMMON_TIMESTAMP_FIELDS,
   type BaseRowFields,
   type TableDefinition,
@@ -15,6 +21,8 @@ import {
 /**
  * product-graph 内の node 種別。1 table + discriminator pattern (cortex 同型)。
  * 新 type を追加する場合はこの list に足す。
+ *
+ * @graph-connects none
  */
 export const PRODUCT_NODE_TYPES = [
   // code
@@ -52,6 +60,8 @@ export type ProductNodeType = (typeof PRODUCT_NODE_TYPES)[number];
 
 /**
  * product-graph 内 edge 種別。
+ *
+ * @graph-connects none
  */
 export const PRODUCT_EDGE_TYPES = [
   // code relations
@@ -76,9 +86,12 @@ export const PRODUCT_EDGE_TYPES = [
 
 export type ProductEdgeType = (typeof PRODUCT_EDGE_TYPES)[number];
 
+/** @graph-connects none */
 export const PRODUCT_GRAPH_NODES_TABLE = "product_graph_nodes";
+/** @graph-connects none */
 export const PRODUCT_GRAPH_EDGES_TABLE = "product_graph_edges";
 
+/** @graph-connects none */
 const PRODUCT_GRAPH_NODES_SCHEMA: TableSchema = {
   fields: [
     { name: "node_id", type: "STRING", mode: "REQUIRED" },
@@ -90,10 +103,12 @@ const PRODUCT_GRAPH_NODES_SCHEMA: TableSchema = {
     { name: "stack", type: "STRING", mode: "NULLABLE" }, // 所属 Pulumi stack
     { name: "domain", type: "STRING", mode: "NULLABLE" }, // 所属 source code domain
     { name: "metadata", type: "JSON", mode: "NULLABLE" },
+    ...COMMON_EMBEDDING_FIELDS,
     ...COMMON_TIMESTAMP_FIELDS,
   ],
 };
 
+/** @graph-connects none */
 const PRODUCT_GRAPH_EDGES_SCHEMA: TableSchema = {
   fields: [
     { name: "edge_id", type: "STRING", mode: "REQUIRED" },
@@ -106,6 +121,11 @@ const PRODUCT_GRAPH_EDGES_SCHEMA: TableSchema = {
   ],
 };
 
+/**
+ * product-graph に属する全 table 定義。`init-bq` / `migrate` から消費。
+ *
+ * @graph-connects none
+ */
 export const PRODUCT_GRAPH_TABLES: TableDefinition[] = [
   {
     name: PRODUCT_GRAPH_NODES_TABLE,

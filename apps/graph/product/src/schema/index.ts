@@ -8,6 +8,11 @@
  *
  * cross-graph edges (例: release_note → product_graph_nodes) は edges 側のテーブル
  * (release_edges) に格納。src_kind / tgt_kind が `NODE_TABLES` の値で polymorphic 参照。
+ *
+ * @graph-stack ryan-product-graph
+ * @graph-domain graph
+ * @graph-business 個人グラフ schema の barrel export と全テーブル一覧 ALL_TABLES の組み立て。3 sub-graph を 1 つの SSoT として束ねる入口
+ * @graph-connects shared [calls] 共通定数・型を re-export
  */
 
 export * from "./shared.js";
@@ -22,6 +27,8 @@ import type { TableDefinition } from "./shared.js";
 
 /**
  * BQ table 全部 (init-bq.ts が消費)。
+ *
+ * @graph-connects none
  */
 export const ALL_TABLES: readonly TableDefinition[] = [
   ...PRODUCT_GRAPH_TABLES,
