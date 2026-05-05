@@ -112,6 +112,21 @@ describe("createServer", () => {
     expect(JSON.parse(out.content[0].text)[0].id).toBe("r");
   });
 
+  it("CallTool: limit が string で来ても number に coerce する (MCP transport 互換)", async () => {
+    const { createServer } = await import("./server.js");
+    const server = createServer();
+    const handler = (
+      server as unknown as {
+        _requestHandlers: Map<string, (req: unknown) => Promise<unknown>>;
+      }
+    )._requestHandlers.get("tools/call");
+    const out = (await handler!({
+      method: "tools/call",
+      params: { name: "list_recent", arguments: { kind: "release_notes", limit: "5" } },
+    })) as { content: Array<{ text: string }> };
+    expect(JSON.parse(out.content[0].text)[0].id).toBe("r");
+  });
+
   it("CallTool: 未知 tool → throw", async () => {
     const { createServer } = await import("./server.js");
     const server = createServer();
