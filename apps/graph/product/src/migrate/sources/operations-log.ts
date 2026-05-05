@@ -32,12 +32,6 @@ const REPO_ROOT = fileURLToPath(new URL("../../../../../../", import.meta.url));
 /** @graph-connects none */
 const DEFAULT_PATH = join(REPO_ROOT, "operations/log.md");
 
-interface Section {
-  title: string;
-  body: string;
-  released_at: string; // ISO 8601 (date-only OK; BQ TIMESTAMP は midnight UTC で扱う)
-}
-
 /**
  * H2 タイトル先頭の日付を ISO 8601 に正規化。
  * - "2026-05-04 23:46 JST - thread posted: dbgraph"  → "2026-05-04T14:46:00Z"
