@@ -19,22 +19,27 @@ import { loadXCreds, type XCreds } from "./auth.js";
 import type { FetchFn } from "./client.js";
 import { parseAllEngagements, type EngagementType } from "./engagements.js";
 import { parseAllOwnPosts } from "./posts.js";
+import { buildReferencedEdges } from "./references.js";
 
 export type LoadCredsFn = (account: string) => Promise<XCreds>;
 
 export interface ParseXOptions {
   maxPages?: number;
   fetcher?: FetchFn;
-  /** 取り込む engagement type を限定 (default: 全 4 種) */
+  /** 取り込む engagement type を限定 (default: 全 supported 種) */
   engagementTypes?: EngagementType[];
   /** true なら own posts のみで engagement を skip (rate limit 節約用) */
   skipEngagements?: boolean;
+  /** true なら referenced_tweets edges 生成を skip (default: 生成する) */
+  skipReferencedEdges?: boolean;
 }
 
 /**
  * 両アカウントの own posts + engagements を fetch して単一 ParseResult に flatten。
+ * 最後に referenced_tweets metadata から content → content edges (replied_to / quoted /
+ * references) を派生させて graph を密につなげる。
  *
- * @graph-connects x-api [reads_from] own posts + 4 engagement endpoint (両アカウント)
+ * @graph-connects x-api [reads_from] own posts + engagement endpoint (両アカウント)
  */
 export async function parseX(
   loadCreds: LoadCredsFn = (account) => loadXCreds(account),
@@ -49,10 +54,15 @@ export async function parseX(
         types: opts.engagementTypes,
       });
   const all = [...ownResults, ...engagementResults];
+  const allNodes = all.flatMap((r) => r.nodes);
+  const baseEdges = all.flatMap((r) => r.edges);
+  const referencedEdges = opts.skipReferencedEdges
+    ? []
+    : buildReferencedEdges(allNodes);
   return {
     source: "x",
-    nodes: all.flatMap((r) => r.nodes),
-    edges: all.flatMap((r) => r.edges),
+    nodes: allNodes,
+    edges: [...baseEdges, ...referencedEdges],
   };
 }
 
