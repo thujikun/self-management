@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * 各ファイルの「コード行数」が CAP を超えていないかを検証する pre-commit guard。
+ * 各ファイルの「コード行数」が CAP を超えていないかを検証する pure library。
  *
  * グローバル CLAUDE.md ルール: 「コード行 500 行 (コメント行・空行を除く)」。
  * 超える場合はファイル分割を計画に含めること。
@@ -13,37 +13,22 @@
  *
  * 対象拡張子: .ts .tsx .js .jsx .mjs .cjs .sh .py
  *
- * 引数なし時は staged ファイルを対象に取る。引数あり時は引数のファイルパスを使う。
- * `CAP` env で閾値を override 可能 (デフォルト 500)。
+ * CLI 実行は `check-line-count.cli.ts` 経由。本ファイルは pure helper のみで副作用なし。
  *
  * @graph-stack core
  * @graph-domain infra
- * @graph-business グローバル CLAUDE.md の「ファイル 500 行制限」を pre-commit で機械強制する guard。コメント行を除外した実コード行のみカウントし、超過ファイルを exit 1 で commit ブロック
+ * @graph-business グローバル CLAUDE.md の「ファイル 500 行制限」を pre-commit で機械強制する guard の純粋ライブラリ部。コメント行を除外した実コード行のみカウントし、CLI 側で違反時に exit 1 する設計
  * @graph-connects none
  */
 
-import { execSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { extname } from "node:path";
 
 /** @graph-connects none */
-const CAP = Number(process.env.CAP ?? "500");
+export const DEFAULT_CAP = 500;
 
 /** @graph-connects none */
-const TARGET_EXT = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".sh", ".py"]);
-
-/**
- * staged 状態の changed-file 一覧を返す。
- *
- * @graph-connects none
- */
-function stagedFiles(): string[] {
-  const out = execSync("git diff --cached --name-only --diff-filter=ACMR", { encoding: "utf8" });
-  return out
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
+export const TARGET_EXT = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".sh", ".py"]);
 
 /**
  * 指定ファイルの「コード行」を数える (空行・コメント行を除外)。
@@ -54,7 +39,7 @@ function stagedFiles(): string[] {
  *
  * @graph-connects none
  */
-function countCodeLines(path: string): number {
+export function countCodeLines(path: string): number {
   if (!existsSync(path)) return 0;
   const src = readFileSync(path, "utf8");
   const ext = extname(path);
@@ -68,7 +53,6 @@ function countCodeLines(path: string): number {
     if (inBlock) {
       if (line.includes("*/")) {
         inBlock = false;
-        // ブロック終端と同じ行にコード本体があるかは一旦考慮しない (エッジケース)
       }
       continue;
     }
@@ -98,28 +82,25 @@ function countCodeLines(path: string): number {
 }
 
 /**
- * メイン: 対象ファイルを iterate し、超過があれば exit 1。
+ * 対象ファイル群に対し行数チェックを実行し、超過したファイル数を返す。
+ * 副作用は console.error のみ (process.exit はしない)。
  *
  * @graph-connects none
  */
-function main(): void {
-  const args = process.argv.slice(2);
-  const files = (args.length > 0 ? args : stagedFiles()).filter((f) => TARGET_EXT.has(extname(f)));
-
-  let failed = false;
-  for (const f of files) {
+export function runLineCountCheck(files: string[], cap: number = DEFAULT_CAP): number {
+  const targets = files.filter((f) => TARGET_EXT.has(extname(f)));
+  let overCount = 0;
+  for (const f of targets) {
     const n = countCodeLines(f);
-    if (n > CAP) {
-      console.error(`❌ ${f}: ${n} code lines > cap=${CAP} (split the file)`);
-      failed = true;
+    if (n > cap) {
+      console.error(`❌ ${f}: ${n} code lines > cap=${cap} (split the file)`);
+      overCount++;
     }
   }
-  if (failed) {
+  if (overCount > 0) {
     console.error(
       `\n超過ファイルがあります。グローバル CLAUDE.md ルール「コード行 500 行 (コメント・空行除く)」遵守のため分割してください。`,
     );
-    process.exit(1);
   }
+  return overCount;
 }
-
-main();

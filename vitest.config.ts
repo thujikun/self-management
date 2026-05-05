@@ -33,19 +33,29 @@ export default defineConfig({
         "**/*.spec.ts",
         "**/dist/**",
         "**/node_modules/**",
+        // SDK ラッパー: BigQuery / Vertex AI への外部 HTTP 呼び出しが本体で、
+        // 純粋ロジック部分は parser 側 (operations-log/threads/memory/strategy) で
+        // 既にテスト対象。ここの unit test は real-API 統合テストか E2E でやる。
+        "apps/graph/product/src/migrate/common/bq-merge.ts",
+        "apps/graph/product/src/migrate/common/embedding.ts",
+        // 中間 type 定義のみ (実行時ロジックなし)
+        "apps/graph/product/src/migrate/common/types.ts",
+        // CLI entry-point: process.argv / staged file 取得 / process.exit のみ。
+        // 純粋ロジックは sibling lib で網羅テスト済み。
+        "scripts/hooks/*.cli.ts",
       ],
       // 閾値は **each-file 基準** で強制 (Ryan ルール: 全体平均では 1 ファイル 100% で
       // 他をごまかせるため不採用)。`perFile: true` で coverage.include の各ファイルが
       // 独立に threshold を満たす必要がある。
       //
-      // 初期は 0 から開始し、テストを追加するたびに ratchet 方式で上げる。
       // cortex 同型ルール: 「閾値を下げる代わりにテストを追加する」(下げる変更は禁止)。
+      // 初期から 90% で開始 (Ryan ルール、2026-05-05): 最初から整えないと運用できない。
       thresholds: {
         perFile: true,
-        lines: 0,
-        functions: 0,
-        branches: 0,
-        statements: 0,
+        lines: 90,
+        functions: 90,
+        branches: 90,
+        statements: 90,
       },
     },
   },
