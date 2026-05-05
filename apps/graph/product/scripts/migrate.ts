@@ -220,6 +220,15 @@ async function main() {
 
   if (dryRun) {
     console.log("dry-run: skipping embedding + BQ writes");
+    let withSummary = 0;
+    let withoutSummary = 0;
+    for (const m of nodesByTable.values()) {
+      for (const n of m.values()) {
+        if (n.body_summary && n.body_summary.trim().length > 0) withSummary++;
+        else withoutSummary++;
+      }
+    }
+    console.log(`body_summary: ${withSummary} populated / ${withoutSummary} empty`);
     return;
   }
 

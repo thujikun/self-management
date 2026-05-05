@@ -46,6 +46,10 @@ export async function parseStrategyDoc(path: string = DEFAULT_PATH): Promise<Par
   const externalId = "x-account-strategy";
   const id = deterministicId(SOURCE, externalId);
 
+  // body_summary: 戦略 doc の核を 1 段落で凝縮 (embedding 検索用 input)
+  const summary =
+    "@ryantsuji 英語 X アカウント運用戦略。dev.to 6 記事の英訳ベースで日本発 AI infra CTO というポジションを英語圏に確立する。週 2 本 (火・木 JST 20:00) の thread + light daily engagement、フォロー対象は sub-200 follower phase 1 → 500-5000 follower の sweet spot を中心に reciprocation 期待で増やす。voice ルール: praise-first / em-dash 0-1 / self-promo pivot 禁止 / casual register / Ryan の rough draft を私が grammar 最小修正する分業。";
+
   const nodes: NodeInput[] = [
     {
       kind: "decisions",
@@ -57,6 +61,7 @@ export async function parseStrategyDoc(path: string = DEFAULT_PATH): Promise<Par
         decided_at: decidedAt,
         scope: { domain: "x-account", role: "strategy" },
       },
+      body_summary: summary,
       metadata: {
         source: SOURCE,
         source_file: "x-account-strategy.md",

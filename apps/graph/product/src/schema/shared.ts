@@ -80,11 +80,13 @@ export interface BaseRowFields {
  * 現在の embedding model 名 (BQ row に書き込むラベル + Vertex AI に投げる model_id)。
  * 切替時はここ + `migrate/common/embedding.ts` の publisher 設定を更新。
  *
- * `gemini-embedding-2` (gen 2、3072 次元、8192 input token、multimodal)。
+ * `gemini-embedding-2` (3072 次元、8192 input token、multimodal text+image+audio+video+pdf)。
  * https://docs.cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/embedding-2
  *
- * 注意: 提供 region は `global` / `us` / `europe` のみ。`asia-northeast1` 不可。
- * dataset と同じ region で揃えられないので `global` 経由で呼ぶ。
+ * 注意:
+ * - 提供 region は `global` のみ確認済 (`us-central1` は HTTP 404)。`asia-northeast1` 不可。
+ * - 旧世代 (gemini-embedding-001 / text-embedding-005) と違い `:predict` ではなく
+ *   `:embedContent` endpoint を使う (Gemini API 系 schema)。
  *
  * @graph-connects none
  */

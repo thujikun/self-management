@@ -78,6 +78,11 @@ export async function parseMemory(dir: string = DEFAULT_DIR): Promise<ParseResul
     const fileStat = await stat(path);
     const seenAt = fileStat.mtime.toISOString();
 
+    // body_summary は frontmatter description (= 自分が書いたメモの 1 行要約)
+    // + 本文の 1 段落目を結合。embedding 用 input としてはこれで十分濃い。
+    const firstPara = body.split(/\n\s*\n/)[0]?.trim() ?? "";
+    const summary = [fm.description, firstPara].filter(Boolean).join(" — ").slice(0, 600);
+
     if (fm.type === "user" || fm.type === "feedback") {
       // decision として登録
       const id = deterministicId(SOURCE, externalId);
@@ -91,6 +96,7 @@ export async function parseMemory(dir: string = DEFAULT_DIR): Promise<ParseResul
           decided_at: seenAt,
           scope: { kind: fm.type, file: externalId },
         },
+        body_summary: summary,
         metadata: {
           source: SOURCE,
           source_file: `memory/${file}`,
@@ -120,6 +126,7 @@ export async function parseMemory(dir: string = DEFAULT_DIR): Promise<ParseResul
           name: fm.name ?? externalId,
           description: fm.description ?? null,
         },
+        body_summary: summary,
         metadata: {
           source: SOURCE,
           source_file: `memory/${file}`,
