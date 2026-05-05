@@ -27,6 +27,7 @@ export default defineConfig({
         "apps/**/src/**/*.ts",
         "packages/**/src/**/*.ts",
         "scripts/hooks/**/*.ts",
+        "infra/**/*.ts",
       ],
       exclude: [
         "**/*.test.ts",
@@ -43,6 +44,8 @@ export default defineConfig({
         // CLI entry-point: process.argv / staged file 取得 / process.exit のみ。
         // 純粋ロジックは sibling lib で網羅テスト済み。
         "scripts/hooks/*.cli.ts",
+        // Pulumi の Pulumi.yaml / Pulumi.<stack>.yaml は code ではない
+        "**/Pulumi.*.yaml",
       ],
       // 閾値は **each-file 基準** で強制 (Ryan ルール: 全体平均では 1 ファイル 100% で
       // 他をごまかせるため不採用)。`perFile: true` で coverage.include の各ファイルが
