@@ -33,6 +33,7 @@ import { parseOperationsLog } from "../src/migrate/sources/operations-log.js";
 import { parseThreads } from "../src/migrate/sources/threads.js";
 import { parseStrategyDoc } from "../src/migrate/sources/strategy.js";
 import { parseMemory } from "../src/migrate/sources/memory.js";
+import { parseX } from "../src/migrate/sources/x/index.js";
 
 /** @graph-connects opentelemetry [calls] graph-migrate サービスとして OTel 起動 + structured logger */
 const log = createLogger("graph-migrate");
@@ -46,9 +47,9 @@ const noEmbed = args.has("--no-embed");
 /** @graph-connects none */
 const sourceFilter = [...args].find((a) => a.startsWith("--source="))?.slice("--source=".length);
 
-type SourceName = "operations-log" | "threads" | "strategy" | "memory";
+type SourceName = "operations-log" | "threads" | "strategy" | "memory" | "x";
 /** @graph-connects none */
-const ALL_SOURCES: SourceName[] = ["operations-log", "threads", "strategy", "memory"];
+const ALL_SOURCES: SourceName[] = ["operations-log", "threads", "strategy", "memory", "x"];
 
 /** @graph-connects none */
 async function runParsers(): Promise<ParseResult[]> {
@@ -69,6 +70,7 @@ async function runParsers(): Promise<ParseResult[]> {
           threads: parseThreads,
           strategy: parseStrategyDoc,
           memory: parseMemory,
+          x: parseX,
         })[t](),
     );
     log.info({ source: t, nodes: r.nodes.length, edges: r.edges.length }, "parsed source");
