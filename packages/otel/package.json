@@ -1,0 +1,37 @@
+{
+  "name": "@self/otel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "self-management OTel integration: pino logger + Grafana Cloud OTLP exporters",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./logger": "./src/logger.ts",
+    "./init": "./src/init.ts",
+    "./span": "./src/span.ts"
+  },
+  "scripts": {
+    "test": "echo 'see root vitest'"
+  },
+  "dependencies": {
+    "@google-cloud/secret-manager": "^6.1.0",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/api-logs": "^0.207.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.65.0",
+    "@opentelemetry/context-async-hooks": "^2.7.1",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.207.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.207.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.207.0",
+    "@opentelemetry/resources": "^2.1.0",
+    "@opentelemetry/sdk-logs": "^0.207.0",
+    "@opentelemetry/sdk-metrics": "^2.1.0",
+    "@opentelemetry/sdk-node": "^0.207.0",
+    "@opentelemetry/sdk-trace-node": "^2.1.0",
+    "@opentelemetry/semantic-conventions": "^1.30.0",
+    "pino": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.0"
+  }
+}

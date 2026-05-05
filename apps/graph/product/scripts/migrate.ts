@@ -24,6 +24,7 @@
  * @graph-connects bigquery [writes_to] 全 node/edge テーブルへ idempotent UPSERT で書き込み
  */
 
+import { createLogger, initOtel, shutdownOtel, withSpan } from "@self/otel";
 import { embedBatch } from "../src/migrate/common/embedding.js";
 import { deterministicEdgeId } from "../src/migrate/common/id.js";
 import { mergeRows } from "../src/migrate/common/bq-merge.js";
@@ -33,6 +34,9 @@ import { parseOperationsLog } from "../src/migrate/sources/operations-log.js";
 import { parseThreads } from "../src/migrate/sources/threads.js";
 import { parseStrategyDoc } from "../src/migrate/sources/strategy.js";
 import { parseMemory } from "../src/migrate/sources/memory.js";
+
+/** @graph-connects opentelemetry [calls] graph-migrate サービスとして OTel 起動 + structured logger */
+const log = createLogger("graph-migrate");
 
 /** @graph-connects none */
 const args = new Set(process.argv.slice(2));
@@ -57,14 +61,18 @@ async function runParsers(): Promise<ParseResult[]> {
   }
   const results: ParseResult[] = [];
   for (const t of targets) {
-    process.stdout.write(`parse ${t} ... `);
-    const r = await ({
-      "operations-log": parseOperationsLog,
-      threads: parseThreads,
-      strategy: parseStrategyDoc,
-      memory: parseMemory,
-    })[t]();
-    console.log(`${r.nodes.length} nodes, ${r.edges.length} edges`);
+    const r = await withSpan(
+      `migrate.parse.${t}`,
+      { source: t },
+      () =>
+        ({
+          "operations-log": parseOperationsLog,
+          threads: parseThreads,
+          strategy: parseStrategyDoc,
+          memory: parseMemory,
+        })[t](),
+    );
+    log.info({ source: t, nodes: r.nodes.length, edges: r.edges.length }, "parsed source");
     results.push(r);
   }
   return results;
@@ -110,7 +118,7 @@ function dedupeAndGroup(results: ParseResult[]) {
  */
 async function attachEmbeddings(nodesByTable: Map<string, Map<string, NodeInput>>) {
   if (noEmbed) {
-    console.log("--no-embed: skipping embedding generation");
+    log.info("--no-embed: skipping embedding generation");
     return;
   }
   const all: Array<{ tableName: string; node: NodeInput }> = [];
@@ -122,24 +130,27 @@ async function attachEmbeddings(nodesByTable: Map<string, Map<string, NodeInput>
     }
   }
   if (all.length === 0) {
-    console.log("embedding: no nodes with body_summary");
+    log.info("embedding: no nodes with body_summary");
     return;
   }
-  console.log(`embedding: ${all.length} nodes via ${EMBEDDING_MODEL}`);
+  log.info({ count: all.length, model: EMBEDDING_MODEL }, "embedding start");
   const CHUNK = 100;
   for (let i = 0; i < all.length; i += CHUNK) {
     const chunk = all.slice(i, i + CHUNK);
     const texts = chunk.map((c) => c.node.body_summary!);
-    const vecs = await embedBatch(texts);
+    const vecs = await withSpan(
+      "migrate.embed.batch",
+      { batch_size: chunk.length, offset: i },
+      () => embedBatch(texts),
+    );
     for (let j = 0; j < chunk.length; j++) {
       const fieldKey = "embedding";
       const modelKey = "embedding_model";
       chunk[j].node.fields[fieldKey] = vecs[j];
       chunk[j].node.fields[modelKey] = EMBEDDING_MODEL;
     }
-    process.stdout.write(`  embedded ${Math.min(i + CHUNK, all.length)}/${all.length}\r`);
+    log.info({ done: Math.min(i + CHUNK, all.length), total: all.length }, "embedding progress");
   }
-  console.log();
 }
 
 /**
@@ -210,16 +221,16 @@ function edgeToRow(edge: EdgeInput): Record<string, unknown> {
  * @graph-connects bigquery [writes_to] 全 node/edge テーブルへ idempotent UPSERT
  */
 async function main() {
-  console.log(`mode: ${dryRun ? "DRY RUN" : "WRITE"}${noEmbed ? " (no-embed)" : ""}`);
+  await initOtel({ serviceName: "graph-migrate" });
+  log.info({ dryRun, noEmbed, sourceFilter: sourceFilter ?? "all" }, "migrate start");
+
   const results = await runParsers();
   const { nodesByTable, edgesByTable } = dedupeAndGroup(results);
 
-  console.log("--- summary ---");
-  for (const [t, m] of nodesByTable) console.log(`nodes ${t}: ${m.size}`);
-  for (const [t, m] of edgesByTable) console.log(`edges ${t}: ${m.size}`);
+  for (const [t, m] of nodesByTable) log.info({ table: t, count: m.size }, "nodes summary");
+  for (const [t, m] of edgesByTable) log.info({ table: t, count: m.size }, "edges summary");
 
   if (dryRun) {
-    console.log("dry-run: skipping embedding + BQ writes");
     let withSummary = 0;
     let withoutSummary = 0;
     for (const m of nodesByTable.values()) {
@@ -228,27 +239,38 @@ async function main() {
         else withoutSummary++;
       }
     }
-    console.log(`body_summary: ${withSummary} populated / ${withoutSummary} empty`);
+    log.info({ withSummary, withoutSummary }, "dry-run: skipping embedding + BQ writes");
     return;
   }
 
   await attachEmbeddings(nodesByTable);
 
-  console.log("--- writing to BQ ---");
   for (const [tableName, m] of nodesByTable) {
     const rows = [...m.values()].map(nodeToRow);
-    const result = await mergeRows(tableName, rows);
-    console.log(`  ${tableName}: merged ${result.merged}`);
+    const result = await withSpan(
+      "migrate.bq.merge.nodes",
+      { table: tableName, rows: rows.length },
+      () => mergeRows(tableName, rows),
+    );
+    log.info({ table: tableName, merged: result.merged }, "merged nodes");
   }
   for (const [tableName, m] of edgesByTable) {
     const rows = [...m.values()].map(edgeToRow);
-    const result = await mergeRows(tableName, rows);
-    console.log(`  ${tableName}: merged ${result.merged}`);
+    const result = await withSpan(
+      "migrate.bq.merge.edges",
+      { table: tableName, rows: rows.length },
+      () => mergeRows(tableName, rows),
+    );
+    log.info({ table: tableName, merged: result.merged }, "merged edges");
   }
-  console.log("done.");
+  log.info("migration done");
 }
 
-main().catch((e) => {
-  console.error("migration failed:", e);
-  process.exit(1);
-});
+main()
+  .catch((e) => {
+    log.error({ err: e instanceof Error ? e.message : String(e) }, "migration failed");
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await shutdownOtel();
+  });
