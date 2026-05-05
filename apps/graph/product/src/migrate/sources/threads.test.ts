@@ -223,7 +223,7 @@ sample body content
   it("posted_at_utc / posted_at どちらも無いと published_at は null", async () => {
     await writeFile(
       join(dir, "no-date.md"),
-      `---\nthread_name: x\nconversation_id: \"42\"\n---\nbody\n`,
+      `---\nthread_name: x\nconversation_id: "42"\n---\nbody\n`,
       "utf8",
     );
     const result = await parseThreads(dir);
@@ -234,7 +234,7 @@ sample body content
   it("posted_at だけ (utc なし) → ISO 化", async () => {
     await writeFile(
       join(dir, "iso.md"),
-      `---\nthread_name: x\nconversation_id: \"43\"\nposted_at: 2026-05-04T23:14:00+09:00\n---\nbody\n`,
+      `---\nthread_name: x\nconversation_id: "43"\nposted_at: 2026-05-04T23:14:00+09:00\n---\nbody\n`,
       "utf8",
     );
     const result = await parseThreads(dir);
