@@ -31,11 +31,22 @@ describe("buildPerTableSelect", () => {
     expect(sql).toContain("ARRAY_LENGTH(embedding) > 0");
   });
 
-  it("product_graph_nodes → description AS body_summary (column 名は alias で揃える)", async () => {
+  it("product_graph_nodes → description AS body_summary", async () => {
     const { buildPerTableSelect } = await import("./search-nodes.js");
     const sql = buildPerTableSelect("product_graph_nodes");
-    // 内部 column は description だが alias は body_summary で出力 column 名統一
     expect(sql).toContain("description AS body_summary");
+  });
+
+  it("persons → bio AS body_summary (body_summary 列が無い table の summary fallback)", async () => {
+    const { buildPerTableSelect } = await import("./search-nodes.js");
+    const sql = buildPerTableSelect("persons");
+    expect(sql).toContain("bio AS body_summary");
+  });
+
+  it("decisions → rationale_md AS body_summary", async () => {
+    const { buildPerTableSelect } = await import("./search-nodes.js");
+    const sql = buildPerTableSelect("decisions");
+    expect(sql).toContain("rationale_md AS body_summary");
   });
 });
 
