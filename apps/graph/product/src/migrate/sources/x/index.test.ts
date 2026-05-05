@@ -23,7 +23,7 @@ const fakeCreds: XCreds = {
 afterEach(() => clearSecretCache());
 
 describe("parseX", () => {
-  it("merges both accounts into a single ParseResult with source='x'", async () => {
+  it("skipEngagements=true で own posts のみ取り込む", async () => {
     const loadCreds = vi.fn().mockResolvedValue(fakeCreds);
     let calls = 0;
     const fetcher = vi.fn().mockImplementation(() => {
@@ -47,14 +47,13 @@ describe("parseX", () => {
 
     const result = await parseX(loadCreds as (a: string) => Promise<XCreds>, {
       fetcher: fetcher as FetchFn,
+      skipEngagements: true,
     });
 
     expect(result.source).toBe("x");
     // 2 person seeds + 2 tweets = 4 nodes
     expect(result.nodes).toHaveLength(4);
-    // 2 authored edges
     expect(result.edges).toHaveLength(2);
-    // 両アカウント分が flatten されてる
     const externalIds = result.nodes
       .filter((n) => n.kind === "contents")
       .map((n) => n.fields.external_id);
@@ -62,10 +61,53 @@ describe("parseX", () => {
       expect.arrayContaining(["ryantsuji-1", "ryanaircloset-1"]),
     );
     expect(loadCreds).toHaveBeenCalledTimes(2);
+    // 2 own posts call のみ (engagement 各 endpoint は呼ばない)
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("default で own posts + 全 engagement type を fetch (2*3 = 6 endpoint hit)", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const loadCreds = vi.fn().mockResolvedValue(fakeCreds);
+    const fetcher = vi.fn().mockReturnValue(
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: async () => "",
+        json: async () => ({ data: [], meta: {} }),
+      }),
+    );
+    const result = await parseX(loadCreds as (a: string) => Promise<XCreds>, {
+      fetcher: fetcher as FetchFn,
+    });
+    expect(result.source).toBe("x");
+    // own posts × 2 accounts = 2、engagement (mention + like) × 2 accounts = 4、合計 6
+    expect(fetcher).toHaveBeenCalledTimes(6);
+    // person seeds 2 個のみ (data は全部空)
+    expect(result.nodes.filter((n) => n.kind === "persons")).toHaveLength(2);
+    vi.restoreAllMocks();
+  });
+
+  it("engagementTypes で取り込む type を限定できる", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const loadCreds = vi.fn().mockResolvedValue(fakeCreds);
+    const fetcher = vi.fn().mockReturnValue(
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: async () => "",
+        json: async () => ({ data: [], meta: {} }),
+      }),
+    );
+    await parseX(loadCreds as (a: string) => Promise<XCreds>, {
+      fetcher: fetcher as FetchFn,
+      engagementTypes: ["like"],
+    });
+    // own posts × 2 = 2、like × 2 accounts = 2、合計 4
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    vi.restoreAllMocks();
   });
 
   it("falls back to default loadXCreds (Secret Manager) when no loadCreds is provided", async () => {
-    // 両アカウント分の secret を cache に inject (project は GOOGLE_CLOUD_PROJECT=ryan-self-management)
     process.env.GOOGLE_CLOUD_PROJECT = "ryan-self-management";
     const appJson = JSON.stringify({
       X_OAUTH_CONSUMER_KEY: "CK",
@@ -88,7 +130,10 @@ describe("parseX", () => {
       }),
     );
 
-    const result = await parseX(undefined, { fetcher: fetcher as FetchFn });
+    const result = await parseX(undefined, {
+      fetcher: fetcher as FetchFn,
+      skipEngagements: true,
+    });
     // 2 person seeds (両アカウント)、tweet 0
     expect(result.nodes).toHaveLength(2);
     expect(result.edges).toHaveLength(0);
