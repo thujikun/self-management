@@ -96,22 +96,27 @@ export async function mergeRows(
   });
 
   try {
-    // 2. staging に insert
-    try {
-      await staging.insert(rows, { raw: false, skipInvalidRows: false });
-    } catch (insertErr) {
-      // PartialFailureError の中身を全部出して原因特定
-      const e = insertErr as { errors?: Array<{ row: unknown; errors: unknown }>; message?: string };
-      if (e.errors && Array.isArray(e.errors) && e.errors.length > 0) {
-        const summary = e.errors.slice(0, 3).map((re, idx) => ({
-          row_index: idx,
-          row_keys: re.row ? Object.keys(re.row as object) : [],
-          errors: re.errors,
-        }));
-        console.error(`bq-merge: insert into ${stagingName} failed for ${e.errors.length} rows. First 3:`);
-        console.error(JSON.stringify(summary, null, 2));
+    // 2. staging に chunked insert (BQ Streaming Insert は 10MB / request 制限あり、
+    //    embedding 3072-dim を含む row では 100 row 単位でも数 MB に達するため小分けにする)
+    const INSERT_CHUNK = 50;
+    for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
+      const chunk = rows.slice(i, i + INSERT_CHUNK);
+      try {
+        await staging.insert(chunk, { raw: false, skipInvalidRows: false });
+      } catch (insertErr) {
+        // PartialFailureError の中身を全部出して原因特定
+        const e = insertErr as { errors?: Array<{ row: unknown; errors: unknown }>; message?: string };
+        if (e.errors && Array.isArray(e.errors) && e.errors.length > 0) {
+          const summary = e.errors.slice(0, 3).map((re, idx) => ({
+            row_index: i + idx,
+            row_keys: re.row ? Object.keys(re.row as object) : [],
+            errors: re.errors,
+          }));
+          console.error(`bq-merge: insert into ${stagingName} failed for ${e.errors.length} rows. First 3:`);
+          console.error(JSON.stringify(summary, null, 2));
+        }
+        throw insertErr;
       }
-      throw insertErr;
     }
 
     // 3. MERGE
