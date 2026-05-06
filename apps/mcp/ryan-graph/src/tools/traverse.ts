@@ -32,8 +32,10 @@ export interface TraverseEdge {
 
 /**
  * 1 hop 分の edges を取る。direction で 出向 / 入向 / 双方向。
+ * 3 graph 全部 (personal_edges / release_edges / product_graph_edges) を UNION して
+ * cross-graph traversal を可能にする。
  *
- * @graph-connects bigquery [reads_from] personal_edges / release_edges を 1 hop 取得
+ * @graph-connects bigquery [reads_from] personal_edges / release_edges / product_graph_edges を 1 hop 取得
  */
 export async function fetchOneHop(
   fromKind: string,
@@ -55,6 +57,10 @@ export async function fetchOneHop(
       SELECT 'release_edges', edge_type, src_kind, src_id, tgt_kind, tgt_id
       FROM \`${PROJECT_ID}.ryan.release_edges\`
       WHERE src_kind = @k AND src_id = @i ${cond}
+      UNION ALL
+      SELECT 'product_graph_edges', edge_type, src_kind, src_id, tgt_kind, tgt_id
+      FROM \`${PROJECT_ID}.ryan.product_graph_edges\`
+      WHERE src_kind = @k AND src_id = @i ${cond}
     `);
   }
   if (direction === "in" || direction === "both") {
@@ -65,6 +71,10 @@ export async function fetchOneHop(
       UNION ALL
       SELECT 'release_edges', edge_type, src_kind, src_id, tgt_kind, tgt_id
       FROM \`${PROJECT_ID}.ryan.release_edges\`
+      WHERE tgt_kind = @k AND tgt_id = @i ${cond}
+      UNION ALL
+      SELECT 'product_graph_edges', edge_type, src_kind, src_id, tgt_kind, tgt_id
+      FROM \`${PROJECT_ID}.ryan.product_graph_edges\`
       WHERE tgt_kind = @k AND tgt_id = @i ${cond}
     `);
   }
