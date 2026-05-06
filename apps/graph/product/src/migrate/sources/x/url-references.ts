@@ -68,6 +68,38 @@ export async function loadUrlIndexFromBq(
 }
 
 /**
+ * BQ から source='x' な既存 contents (body_md 含む) を取得して NodeInput[] と
+ * して返す。Phase 4i の post-process を `--source=zenn` 等メモリに X tweet が
+ * 入らない実行モードでも idempotent に効かせるため。
+ *
+ * @graph-connects bigquery [reads_from] SELECT content_id, body_md, url FROM contents WHERE source='x'
+ */
+export async function loadXTweetsAsContents(
+  client: BqQueryClient = defaultBqClient(),
+): Promise<NodeInput[]> {
+  const sql = `
+    SELECT content_id, body_md, url
+    FROM \`${PROJECT_ID}.${BQ_DATASET}.contents\`
+    WHERE source = 'x' AND body_md IS NOT NULL AND body_md != ''
+  `;
+  const [job] = await client.createQueryJob({ query: sql, location: LOCATION });
+  const [rows] = await job.getQueryResults();
+  const out: NodeInput[] = [];
+  for (const row of rows) {
+    const id = row.content_id;
+    const body = row.body_md;
+    if (typeof id !== "string" || typeof body !== "string") continue;
+    const url = typeof row.url === "string" ? row.url : null;
+    out.push({
+      kind: "contents",
+      id,
+      fields: { content_id: id, source: "x", url, body_md: body },
+    });
+  }
+  return out;
+}
+
+/**
  * URL を正規化 (origin + path、末尾 slash と末尾句読点を除去)。
  * クエリ文字列は除外して、bookmark / share でズレやすい部分を吸収。
  *

@@ -45,6 +45,7 @@ import {
   buildUrlReferenceEdges,
   collectTcoUrls,
   loadUrlIndexFromBq,
+  loadXTweetsAsContents,
   resolveTcoUrls,
 } from "../src/migrate/sources/x/url-references.js";
 import { parseCode } from "../src/migrate/sources/code/index.js";
@@ -276,31 +277,33 @@ async function main() {
   const { nodesByTable, edgesByTable } = dedupeAndGroup(results);
 
   // Phase 4i: 既存 BQ contents の URL を含めた index で X tweet body の URL → article
-  // への references edge を生成 (--source=x incremental でも他 source の article と
-  // 結べるように)。dry-run でも edge 数だけは出す。
-  const allContents = [...(nodesByTable.get("contents") ?? new Map()).values()];
+  // への references edge を生成。in-memory contents (今回 ingest 分) に加え、BQ の
+  // 既存 X tweet も loadXTweetsAsContents で補充して idempotent に動作する
+  // (--source=zenn 等で X tweet が in-memory に無くても全 X tweet を再評価)。
   let urlEdgeCount = 0;
   let tcoResolvedCount = 0;
-  if (allContents.length > 0) {
-    try {
-      const externalIndex = await loadUrlIndexFromBq();
-      const tcoUrls = collectTcoUrls(allContents);
-      const tcoMap = tcoUrls.length > 0 ? await resolveTcoUrls(tcoUrls) : new Map();
-      tcoResolvedCount = tcoMap.size;
-      const urlEdges = buildUrlReferenceEdges(allContents, externalIndex, tcoMap);
-      const personalEdges = edgesByTable.get("personal_edges") ?? new Map();
-      for (const e of urlEdges) {
-        const id = deterministicEdgeId(e.edge_type, e.src_kind, e.src_id, e.tgt_kind, e.tgt_id);
-        if (!personalEdges.has(id)) personalEdges.set(id, e);
-      }
-      edgesByTable.set("personal_edges", personalEdges);
-      urlEdgeCount = urlEdges.length;
-    } catch (err) {
-      log.warn(
-        { err: err instanceof Error ? err.message : String(err) },
-        "url-references: skipped",
-      );
+  try {
+    const externalIndex = await loadUrlIndexFromBq();
+    const inMemoryContents = [...(nodesByTable.get("contents") ?? new Map()).values()];
+    const bqXTweets = await loadXTweetsAsContents();
+    const seen = new Set<string>(inMemoryContents.map((c) => c.id));
+    const merged = [...inMemoryContents, ...bqXTweets.filter((c) => !seen.has(c.id))];
+    const tcoUrls = collectTcoUrls(merged);
+    const tcoMap = tcoUrls.length > 0 ? await resolveTcoUrls(tcoUrls) : new Map();
+    tcoResolvedCount = tcoMap.size;
+    const urlEdges = buildUrlReferenceEdges(merged, externalIndex, tcoMap);
+    const personalEdges = edgesByTable.get("personal_edges") ?? new Map();
+    for (const e of urlEdges) {
+      const id = deterministicEdgeId(e.edge_type, e.src_kind, e.src_id, e.tgt_kind, e.tgt_id);
+      if (!personalEdges.has(id)) personalEdges.set(id, e);
     }
+    edgesByTable.set("personal_edges", personalEdges);
+    urlEdgeCount = urlEdges.length;
+  } catch (err) {
+    log.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "url-references: skipped",
+    );
   }
   log.info({ urlEdges: urlEdgeCount, tcoResolved: tcoResolvedCount }, "url references built");
 
