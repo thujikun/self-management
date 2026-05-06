@@ -41,10 +41,13 @@ describe("SCRAPE_ADAPTERS table", () => {
     expect(Object.keys(SCRAPE_ADAPTERS).sort()).toEqual(["quotes", "retweets", "search"]);
   });
 
-  it("default adapters are all notImplemented (Phase 5a baseline)", () => {
-    for (const k of Object.keys(SCRAPE_ADAPTERS) as Array<keyof typeof SCRAPE_ADAPTERS>) {
-      expect(SCRAPE_ADAPTERS[k]).toBe(notImplementedAdapter);
-    }
+  it("retweets / quotes are still notImplemented (Phase 5b baseline)", () => {
+    expect(SCRAPE_ADAPTERS.retweets).toBe(notImplementedAdapter);
+    expect(SCRAPE_ADAPTERS.quotes).toBe(notImplementedAdapter);
+  });
+
+  it("search is no longer notImplemented (Phase 5b)", () => {
+    expect(SCRAPE_ADAPTERS.search).not.toBe(notImplementedAdapter);
   });
 });
 

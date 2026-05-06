@@ -12,6 +12,7 @@
  */
 
 import type { ParseResult } from "../common/types.js";
+import { searchAdapter } from "./search.js";
 import type { ScrapeAdapter, ScrapeContext, ScrapeKind } from "./types.js";
 
 /**
@@ -33,7 +34,7 @@ export const notImplementedAdapter: ScrapeAdapter = ({ graphqlJson: _g, context 
  * @graph-connects none
  */
 export const SCRAPE_ADAPTERS: Record<ScrapeKind, ScrapeAdapter> = {
-  search: notImplementedAdapter,
+  search: searchAdapter,
   retweets: notImplementedAdapter,
   quotes: notImplementedAdapter,
 };
