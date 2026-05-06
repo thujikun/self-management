@@ -463,6 +463,9 @@ new gcp.cloudscheduler.Job(
     region: location,
     schedule: "0 0 * * *",
     timeZone: "Etc/UTC",
+    // 一時停止 (X API Free tier credits 枯渇対策)。since_id-based incremental に
+    // refactor するまで paused 維持、refactor 後 resume する想定
+    paused: true,
     httpTarget: {
       httpMethod: "POST",
       uri: pulumi.interpolate`https://run.googleapis.com/v2/projects/${projectId}/locations/${location}/jobs/${graphMigrateJob.name}:run`,

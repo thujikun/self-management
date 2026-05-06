@@ -224,6 +224,23 @@ describe("parseOwnPosts", () => {
     expect(url).toContain("max_results=100");
   });
 
+  it("attaches since_id to query string when opts.sinceId is set", async () => {
+    const fetcher = vi.fn().mockReturnValue(fakeOk({ data: [], meta: {} }));
+    await parseOwnPosts(ryantsuji, creds, {
+      fetcher: fetcher as FetchFn,
+      sinceId: "1234567890",
+    });
+    const url = fetcher.mock.calls[0][0] as string;
+    expect(url).toContain("since_id=1234567890");
+  });
+
+  it("omits since_id when not set", async () => {
+    const fetcher = vi.fn().mockReturnValue(fakeOk({ data: [], meta: {} }));
+    await parseOwnPosts(ryantsuji, creds, { fetcher: fetcher as FetchFn });
+    const url = fetcher.mock.calls[0][0] as string;
+    expect(url).not.toContain("since_id");
+  });
+
   it("respects maxPages opts (stops early)", async () => {
     const fetcher = vi.fn().mockImplementation(() =>
       fakeOk({
@@ -242,6 +259,23 @@ describe("parseOwnPosts", () => {
 });
 
 describe("parseAllOwnPosts", () => {
+  it("calls sinceIdProvider per account and forwards as since_id query param", async () => {
+    const loadCreds = vi.fn().mockResolvedValue(creds);
+    const sinceIdProvider = vi.fn().mockImplementation((a: string) =>
+      Promise.resolve(a === "ryantsuji" ? "111" : null),
+    );
+    const fetcher = vi.fn().mockReturnValue(fakeOk({ data: [], meta: {} }));
+    await parseAllOwnPosts(loadCreds as (a: string) => Promise<XCreds>, {
+      fetcher: fetcher as FetchFn,
+      sinceIdProvider,
+    });
+    // 1st call (ryantsuji) → since_id=111、2nd call (ryanaircloset) → no since_id
+    expect((fetcher.mock.calls[0][0] as string)).toContain("since_id=111");
+    expect((fetcher.mock.calls[1][0] as string)).not.toContain("since_id");
+    expect(sinceIdProvider).toHaveBeenCalledWith("ryantsuji");
+    expect(sinceIdProvider).toHaveBeenCalledWith("ryanaircloset");
+  });
+
   it("invokes loadCreds for each account and concatenates ParseResult[]", async () => {
     const loadCreds = vi.fn().mockResolvedValue(creds);
     const fetcher = vi.fn().mockReturnValue(fakeOk({ data: [], meta: {} }));

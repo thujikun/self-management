@@ -81,17 +81,26 @@ const USER_FIELDS = "name,username,description";
  * @graph-connects x-api [reads_from] 該当 endpoint を cursor pagination
  * @graph-connects secret-manager [reads_from] OAuth2 type の場合 xmcp-user-{account}-oauth2 から Bearer 取得
  */
+export interface ParseEngagementsOptions {
+  maxPages?: number;
+  fetcher?: FetchFn;
+  /** OAuth2 用: Bearer 取得を inject (test 時に SM を回避) */
+  bearerProvider?: (account: string) => Promise<string>;
+  project?: string;
+  /** mention 用 since_id (それ以外の type では無視) */
+  sinceId?: string;
+}
+
+/**
+ * 1 アカウント × 1 engagement type 分の ingest。
+ *
+ * @graph-connects x-api [reads_from] /2/users/:id/{mentions, liked_tweets, bookmarks} を fetch
+ */
 export async function parseEngagements(
   account: XAccountConfig,
   creds: XCreds,
   type: EngagementType,
-  opts: {
-    maxPages?: number;
-    fetcher?: FetchFn;
-    /** OAuth2 用: Bearer 取得を inject (test 時に SM を回避) */
-    bearerProvider?: (account: string) => Promise<string>;
-    project?: string;
-  } = {},
+  opts: ParseEngagementsOptions = {},
 ): Promise<ParseResult> {
   const config = ENGAGEMENT_CONFIGS[type];
   const personId = personIdFor(account);
@@ -105,6 +114,8 @@ export async function parseEngagements(
     expansions: "author_id",
     "user.fields": USER_FIELDS,
   };
+  // since_id は X API v2 でも mention のみサポート (liked / bookmark は非対応)
+  if (opts.sinceId && type === "mention") query.since_id = opts.sinceId;
 
   const pages =
     config.auth === "oauth2"
@@ -152,23 +163,42 @@ export async function parseEngagements(
  *
  * @graph-connects x-api [reads_from] 全アカウント × 4 engagement endpoint
  */
+export interface ParseAllEngagementsOptions {
+  maxPages?: number;
+  fetcher?: FetchFn;
+  types?: EngagementType[];
+  bearerProvider?: (account: string) => Promise<string>;
+  project?: string;
+  /** account ごとの mention since_id provider。null なら全件 (初回 ingest) */
+  mentionSinceIdProvider?: (account: string) => Promise<string | null>;
+  /** liked / bookmark 用の maxPages override (since_id 非対応なので件数で抑える) */
+  noSinceIdMaxPages?: number;
+}
+
+/**
+ * 全アカウント × 全 engagement type を順次 fetch して ParseResult[] を返す。
+ *
+ * @graph-connects x-api [reads_from] 全アカウント × engagement endpoint
+ */
 export async function parseAllEngagements(
   loadCreds: (account: string) => Promise<XCreds>,
-  opts: {
-    maxPages?: number;
-    fetcher?: FetchFn;
-    types?: EngagementType[];
-    bearerProvider?: (account: string) => Promise<string>;
-    project?: string;
-  } = {},
+  opts: ParseAllEngagementsOptions = {},
 ): Promise<ParseResult[]> {
   const types: EngagementType[] = opts.types ?? ["mention", "like", "bookmark"];
   const out: ParseResult[] = [];
   for (const account of X_ACCOUNTS) {
     const creds = await loadCreds(account.account);
     for (const type of types) {
+      const perCallOpts: ParseEngagementsOptions = { ...opts };
+      if (type === "mention" && opts.mentionSinceIdProvider) {
+        perCallOpts.sinceId = (await opts.mentionSinceIdProvider(account.account)) ?? undefined;
+      }
+      // liked / bookmark は since_id 非対応なので maxPages で件数を抑える
+      if ((type === "like" || type === "bookmark") && opts.noSinceIdMaxPages !== undefined) {
+        perCallOpts.maxPages = opts.noSinceIdMaxPages;
+      }
       try {
-        const r = await parseEngagements(account, creds, type, opts);
+        const r = await parseEngagements(account, creds, type, perCallOpts);
         out.push(r);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
