@@ -30,3 +30,27 @@ export interface ScrapeContext {
  * ParseResult を返す。pure 関数のため fixture-based test 容易。
  */
 export type ScrapeAdapter = (input: ScrapeContext) => ParseResult;
+
+/** DOM scrape で取った 1 件分の tweet (handle / text / created_at)。 */
+export interface SearchScrapeTweet {
+  tweet_id: string;
+  user_handle: string;
+  user_display: string | null;
+  text: string;
+  created_at: string;
+}
+
+/**
+ * `search` adapter の input shape。chrome mcp で X 検索ページの DOM から
+ * 抜いた tweet 配列 + 検索対象 article の content_id を渡す。`graphqlJson`
+ * フィールドにこの object を入れる前提 (型 alias を残しつつ DOM 由来の構造化 input
+ * を扱えるよう拡張)。
+ */
+export interface SearchScrapeData {
+  /** X 検索 raw query (例: 記事 slug の hash 部分 "2731787582881a") */
+  rawQuery: string;
+  /** 検索対象記事の content_id (= deterministicId("zenn", external_id) 等)。
+   *  ここに references edge を張る。 */
+  articleContentId: string;
+  tweets: SearchScrapeTweet[];
+}
