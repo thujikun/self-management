@@ -32,12 +32,13 @@ export function isNonEmptyText(s: string | undefined | null): s is string {
 }
 
 /**
- * default username (Ryan の dev.to handle、URL slug の auto-generated suffix 込み)。
+ * default username (Ryan の dev.to handle)。2026-05-06 に
+ * `ryosuke_tsuji_f08e20fdca1` から `ryantsuji` に rename。
  *
  * @graph-connects none
  */
 export function defaultDevtoUsername(): string {
-  return "ryosuke_tsuji_f08e20fdca1";
+  return "ryantsuji";
 }
 
 /**
