@@ -292,6 +292,43 @@ new gcp.secretmanager.SecretIamMember("graph-otlp-token-accessor", {
 });
 
 /**
+ * Grafana 公式 mcp-grafana binary 用の token を保管する Secret container。
+ *
+ * mcp-grafana は **Stack instance の API** (`https://<stack>.grafana.net/api/...`)
+ * を呼ぶため、Cloud-level の Access Policy Token (`glc_`) ではなく Stack-scoped
+ * Service Account Token (`sat_xxx` 形式) が必要。Stack 内 SA 作成 API は Cloud
+ * admin token の scope 外なので、ここでは Pulumi は **secret container と IAM のみ
+ * 管理** し、SA + token 自体は Ryan が Grafana UI で 1 回作って `gcloud secrets
+ * versions add grafana-mcp-token --data-file=-` で投入する運用にする (xmcp 系と
+ * 同じパターン)。
+ *
+ * `.envrc` から `gcloud secrets versions access` で取り出して `GRAFANA_API_KEY`
+ * env var にして mcp-grafana binary を起動する (`.mcp.json` の grafana-personal)。
+ *
+ * @graph-connects secret-manager [writes_to] grafana-mcp-token secret container
+ */
+const mcpTokenSecret = new gcp.secretmanager.Secret(
+  "grafana-mcp-token",
+  {
+    secretId: "grafana-mcp-token",
+    replication: { auto: {} },
+  },
+  { dependsOn: [apiServices["secretmanager"]] },
+);
+
+/** @graph-connects iam [writes_to] graph-app SA に MCP token secret の read 権限を付与 */
+new gcp.secretmanager.SecretIamMember("graph-mcp-token-accessor", {
+  secretId: mcpTokenSecret.id,
+  role: "roles/secretmanager.secretAccessor",
+  member: pulumi.interpolate`serviceAccount:${graphSa.email}`,
+});
+
+/** @graph-connects none */
+export const grafanaMcpTokenSecretId = mcpTokenSecret.id;
+/** @graph-connects none */
+export const grafanaStackUrl = grafanaStack.url;
+
+/**
  * xmcp (X API MCP server) の OAuth credentials。
  *
  * 構成:
