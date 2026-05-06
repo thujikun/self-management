@@ -167,6 +167,9 @@ importers:
       '@google-cloud/bigquery':
         specifier: 'catalog:'
         version: 8.3.0
+      '@google-cloud/secret-manager':
+        specifier: 'catalog:'
+        version: 6.1.2
       '@self/embedding':
         specifier: workspace:*
         version: link:../../../packages/embedding

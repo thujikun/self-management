@@ -36,18 +36,16 @@ function fakeOk(body: unknown): ReturnType<FetchFn> {
 }
 
 describe("ENGAGEMENT_CONFIGS", () => {
-  it.each<[EngagementType, string, string, string]>([
-    ["mention", "/2/users/U/mentions", "mentioned_in", "mention"],
-    ["like", "/2/users/U/liked_tweets", "engaged_with", "like"],
-  ])("%s → path/edge/engagement", (type, expectedPath, edge, eng) => {
+  it.each<[EngagementType, string, string, string, "oauth1" | "oauth2"]>([
+    ["mention", "/2/users/U/mentions", "mentioned_in", "mention", "oauth1"],
+    ["like", "/2/users/U/liked_tweets", "engaged_with", "like", "oauth1"],
+    ["bookmark", "/2/users/U/bookmarks", "engaged_with", "bookmark", "oauth2"],
+  ])("%s → path/edge/engagement/auth", (type, expectedPath, edge, eng, auth) => {
     const c = ENGAGEMENT_CONFIGS[type];
     expect(c.path("U")).toBe(expectedPath);
     expect(c.edgeType).toBe(edge);
     expect(c.engagement).toBe(eng);
-  });
-
-  it("only includes mention + like (bookmark/repost deferred per API constraints)", () => {
-    expect(Object.keys(ENGAGEMENT_CONFIGS).sort()).toEqual(["like", "mention"]);
+    expect(c.auth).toBe(auth);
   });
 });
 
@@ -142,6 +140,48 @@ describe("parseEngagements", () => {
     expect(r.nodes).toEqual([]);
     expect(r.edges).toEqual([]);
   });
+
+  it("bookmark falls back to default getOAuth2Bearer when no bearerProvider (uses SM cache)", async () => {
+    const { _setSecretCacheForTest, clearSecretCache } = await import("@self/otel/secret");
+    const { _setOAuth2CacheForTest, clearOAuth2Cache } = await import("./oauth2.js");
+    clearSecretCache();
+    clearOAuth2Cache();
+    process.env.GOOGLE_CLOUD_PROJECT = "test-bookmark-default";
+    _setOAuth2CacheForTest("ryantsuji", {
+      accessToken: "from-cache",
+      refreshToken: "rt",
+      expiresAt: Math.floor(Date.now() / 1000) + 600,
+    });
+    const fetcher = vi.fn().mockReturnValue(fakeOk({ data: [], meta: {} }));
+    await parseEngagements(ryantsuji, fakeCreds, "bookmark", {
+      fetcher: fetcher as FetchFn,
+      project: "test-bookmark-default",
+    });
+    const init = fetcher.mock.calls[0][1] as { headers: Record<string, string> };
+    expect(init.headers.Authorization).toBe("Bearer from-cache");
+    clearOAuth2Cache();
+  });
+
+  it("bookmark uses OAuth2 Bearer auth via bearerProvider injection", async () => {
+    const fetcher = vi.fn().mockReturnValue(
+      fakeOk({
+        data: [{ id: "b1", text: "bookmarked", author_id: "u1" }],
+        includes: { users: [{ id: "u1", username: "Ext" }] },
+        meta: {},
+      }),
+    );
+    const bearerProvider = vi.fn().mockResolvedValue("BEARER123");
+    const r = await parseEngagements(ryantsuji, fakeCreds, "bookmark", {
+      fetcher: fetcher as FetchFn,
+      bearerProvider,
+    });
+    expect(bearerProvider).toHaveBeenCalledWith("ryantsuji");
+    const init = fetcher.mock.calls[0][1] as { headers: Record<string, string> };
+    expect(init.headers.Authorization).toBe("Bearer BEARER123");
+    expect(r.edges).toHaveLength(1);
+    const props = r.edges[0].properties as { engagement: string };
+    expect(props.engagement).toBe("bookmark");
+  });
 });
 
 describe("parseAllEngagements", () => {
@@ -170,14 +210,16 @@ describe("parseAllEngagements", () => {
     expect(loadCreds).toHaveBeenCalledTimes(2);
   });
 
-  it("defaults to all supported types (mention + like) when types option not provided", async () => {
+  it("defaults to all 3 supported types (mention + like + bookmark) when types not provided", async () => {
     const loadCreds = vi.fn().mockResolvedValue(fakeCreds);
     const fetcher = vi.fn().mockReturnValue(fakeOk({ data: [], meta: {} }));
+    const bearerProvider = vi.fn().mockResolvedValue("BEAR");
     const out = await parseAllEngagements(loadCreds as (a: string) => Promise<XCreds>, {
       fetcher: fetcher as FetchFn,
+      bearerProvider,
     });
-    // 2 accounts × 2 types = 4 results
-    expect(out).toHaveLength(4);
+    // 2 accounts × 3 types = 6 results
+    expect(out).toHaveLength(6);
   });
 
   it("isolates failures: 1 type error → empty result for that combo, others continue", async () => {

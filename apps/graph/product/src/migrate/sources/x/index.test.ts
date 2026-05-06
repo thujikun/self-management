@@ -65,7 +65,7 @@ describe("parseX", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
-  it("default で own posts + 全 engagement type を fetch (2*3 = 6 endpoint hit)", async () => {
+  it("default で own posts + 全 engagement type (mention/like/bookmark) を fetch (2*4 = 8 endpoint hit)", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const loadCreds = vi.fn().mockResolvedValue(fakeCreds);
     const fetcher = vi.fn().mockReturnValue(
@@ -76,13 +76,14 @@ describe("parseX", () => {
         json: async () => ({ data: [], meta: {} }),
       }),
     );
+    const bearerProvider = vi.fn().mockResolvedValue("BEAR");
     const result = await parseX(loadCreds as (a: string) => Promise<XCreds>, {
       fetcher: fetcher as FetchFn,
+      bearerProvider,
     });
     expect(result.source).toBe("x");
-    // own posts × 2 accounts = 2、engagement (mention + like) × 2 accounts = 4、合計 6
-    expect(fetcher).toHaveBeenCalledTimes(6);
-    // person seeds 2 個のみ (data は全部空)
+    // own posts × 2 = 2、(mention + like + bookmark) × 2 = 6、合計 8
+    expect(fetcher).toHaveBeenCalledTimes(8);
     expect(result.nodes.filter((n) => n.kind === "persons")).toHaveLength(2);
     vi.restoreAllMocks();
   });
@@ -164,6 +165,52 @@ describe("parseX", () => {
     // authored edge のみ (1 件)
     expect(result.edges).toHaveLength(1);
     expect(result.edges[0].edge_type).toBe("authored");
+  });
+
+  it("skipBackReferences=false で own tweet 数 × 2 endpoint 分の back-refs fetch が走る", async () => {
+    const loadCreds = vi.fn().mockResolvedValue(fakeCreds);
+    let call = 0;
+    const fetcher = vi.fn().mockImplementation(() => {
+      const n = call++;
+      // 0,1: own posts (2 accounts) → 各 1 tweet
+      if (n < 2) {
+        const account = n === 0 ? "ryantsuji" : "ryanaircloset";
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => "",
+          json: async () => ({
+            data: [
+              {
+                id: `${account}-tweet`,
+                text: "x",
+                created_at: "2026-01-01T00:00:00Z",
+              },
+            ],
+            meta: {},
+          }),
+        });
+      }
+      // それ以降は back-refs 用の retweeted_by / quote_tweets に空 response
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: async () => "",
+        json: async () => ({ data: [], includes: {} }),
+      });
+    });
+    const bearerProvider = vi.fn().mockResolvedValue("BEAR");
+    const result = await parseX(loadCreds as (a: string) => Promise<XCreds>, {
+      fetcher: fetcher as FetchFn,
+      skipEngagements: true,
+      skipBackReferences: false,
+      bearerProvider,
+      backRefsThrottleMs: 0,
+      backRefsMaxTweets: 10,
+    });
+    // own posts: 2 calls、back-refs: 2 own tweets × 2 endpoints = 4 calls = 6 total
+    expect(fetcher).toHaveBeenCalledTimes(6);
+    expect(result.source).toBe("x");
   });
 
   it("falls back to default loadXCreds (Secret Manager) when no loadCreds is provided", async () => {

@@ -8,6 +8,9 @@
  *   pnpm graph:migrate -- --no-embed          # embedding 生成を skip
  *   pnpm graph:migrate -- --source=x --incremental    # X のみ最近 ~200 件のみ取得 (cron 用)
  *   pnpm graph:migrate -- --source=x --max-pages=5    # X のページ数を明示指定
+ *   pnpm graph:migrate -- --source=x --with-back-refs --back-refs-max=50
+ *                                                     # 自分の tweet への外部 engagement
+ *                                                     # (retweet/quote of me) を fetch (OAuth2 必須)
  *
  * フロー:
  * 1. 各 parser を呼び出し ParseResult を集める
@@ -50,6 +53,12 @@ const noEmbed = args.has("--no-embed");
 /** @graph-connects none */
 const incremental = args.has("--incremental");
 /** @graph-connects none */
+const withBackRefs = args.has("--with-back-refs");
+/** @graph-connects none */
+const backRefsMaxArg = [...args].find((a) => a.startsWith("--back-refs-max="))?.slice("--back-refs-max=".length);
+/** @graph-connects none */
+const backRefsMax = backRefsMaxArg ? Number(backRefsMaxArg) : undefined;
+/** @graph-connects none */
 const sourceFilter = [...args].find((a) => a.startsWith("--source="))?.slice("--source=".length);
 /** @graph-connects none */
 const maxPagesArg = [...args].find((a) => a.startsWith("--max-pages="))?.slice("--max-pages=".length);
@@ -79,7 +88,12 @@ async function runParsers(): Promise<ParseResult[]> {
           threads: parseThreads,
           strategy: parseStrategyDoc,
           memory: parseMemory,
-          x: () => parseX(undefined, maxPages !== undefined ? { maxPages } : undefined),
+          x: () =>
+            parseX(undefined, {
+              ...(maxPages !== undefined ? { maxPages } : {}),
+              ...(withBackRefs ? { skipBackReferences: false } : {}),
+              ...(backRefsMax !== undefined ? { backRefsMaxTweets: backRefsMax } : {}),
+            }),
           code: () => parseCode(),
         })[t](),
     );
