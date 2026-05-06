@@ -39,6 +39,12 @@ export function timeOrderColumn(kind: NodeTable): string {
       return "occurred_at";
     case "contents":
       return "COALESCE(published_at, first_seen_at)";
+    case "engagement_decisions":
+      return "decided_at";
+    case "time_buckets":
+      return "start_date";
+    case "learnings":
+      return "realized_at";
     default:
       return "first_seen_at";
   }

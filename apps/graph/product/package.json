@@ -15,6 +15,9 @@
     "grant-dataset-writer": "tsx scripts/grant-dataset-writer.ts",
     "migrate": "tsx scripts/migrate.ts",
     "ingest-scrape": "tsx scripts/ingest-scrape.ts",
+    "x-log": "tsx scripts/x-log.ts",
+    "decision-add": "tsx scripts/decision-add.ts",
+    "learning-add": "tsx scripts/learning-add.ts",
     "build-graph": "tsx scripts/build-graph.ts",
     "test": "echo 'no tests yet'"
   },

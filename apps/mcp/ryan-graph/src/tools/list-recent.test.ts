@@ -26,6 +26,9 @@ describe("timeOrderColumn", () => {
     ["topics", "first_seen_at"],
     ["persons", "first_seen_at"],
     ["product_graph_nodes", "first_seen_at"],
+    ["engagement_decisions", "decided_at"],
+    ["time_buckets", "start_date"],
+    ["learnings", "realized_at"],
   ])("%s → %s", async (kind, expected) => {
     const { timeOrderColumn } = await import("./list-recent.js");
     expect(timeOrderColumn(kind as Parameters<typeof timeOrderColumn>[0])).toBe(expected);

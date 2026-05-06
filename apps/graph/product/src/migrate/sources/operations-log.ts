@@ -18,7 +18,7 @@
  * @graph-connects operations-log [reads_from] operations/log.md ファイルを読み取り
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deterministicId } from "../common/id.js";
@@ -31,6 +31,8 @@ const SOURCE = "operations-log";
 const REPO_ROOT = fileURLToPath(new URL("../../../../../../", import.meta.url));
 /** @graph-connects none */
 const DEFAULT_PATH = join(REPO_ROOT, "operations/log.md");
+/** @graph-connects none */
+const DEFAULT_DIR = join(REPO_ROOT, "operations");
 
 /**
  * H2 タイトル先頭の日付を ISO 8601 に正規化。
@@ -94,12 +96,35 @@ export function splitH2Sections(md: string): Array<{ title: string; body: string
 }
 
 /**
- * operations/log.md を読んで release_note ノード配列に変換する parser entry。
+ * `operations/` ディレクトリから log.md と log.archive.*.md を全部読み込んで結合 markdown を返す。
  *
- * @graph-connects operations-log [reads_from] operations/log.md を読み込み release_notes に変換
+ * @graph-connects none
+ */
+export async function loadAllLogMarkdown(dir: string = DEFAULT_DIR): Promise<string> {
+  const entries = await readdir(dir).catch(() => [] as string[]);
+  const archives = entries
+    .filter((f) => /^log\.archive\.\d{4}-\d{2}\.md$/.test(f))
+    .sort(); // YYYY-MM 順で安定
+  const parts: string[] = [];
+  // archive を時系列順に先、最後に log.md (= 最新)
+  for (const f of archives) {
+    parts.push(await readFile(join(dir, f), "utf8"));
+  }
+  const logPath = join(dir, "log.md");
+  parts.push(await readFile(logPath, "utf8").catch(() => ""));
+  return parts.join("\n");
+}
+
+/**
+ * operations/log.md + log.archive.*.md を読んで release_note ノード配列に変換する parser entry。
+ *
+ * @graph-connects operations-log [reads_from] operations/log.md + 過去 archive を読み込み release_notes に変換
  */
 export async function parseOperationsLog(path: string = DEFAULT_PATH): Promise<ParseResult> {
-  const md = await readFile(path, "utf8");
+  // path が DEFAULT_PATH なら ディレクトリ走査で archive も含める。
+  // 明示 path 指定時は単一ファイルのみ (test 用 escape hatch)。
+  const md =
+    path === DEFAULT_PATH ? await loadAllLogMarkdown(DEFAULT_DIR) : await readFile(path, "utf8");
   const sections = splitH2Sections(md);
   const nodes: NodeInput[] = [];
 

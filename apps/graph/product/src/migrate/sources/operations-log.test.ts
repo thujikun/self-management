@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  loadAllLogMarkdown,
   parseDateFromTitle,
   parseOperationsLog,
   slugify,
@@ -160,5 +161,59 @@ describe("parseOperationsLog (integration with fixture file)", () => {
     await writeFile(path, "## 学び\nlessons\n", "utf8");
     const result = await parseOperationsLog(path);
     expect(result.nodes).toEqual([]);
+  });
+});
+
+describe("loadAllLogMarkdown", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "ops-log-loadall-"));
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("log.md + archive ファイルを順に結合 (archive → log.md の順)", async () => {
+    await writeFile(join(dir, "log.md"), "## 2026-05-06 main\nmain body\n", "utf8");
+    await writeFile(
+      join(dir, "log.archive.2026-04.md"),
+      "## 2026-04-01 old\nold body\n",
+      "utf8",
+    );
+    await writeFile(
+      join(dir, "log.archive.2026-03.md"),
+      "## 2026-03-01 older\nolder body\n",
+      "utf8",
+    );
+    const md = await loadAllLogMarkdown(dir);
+    // 古い順 (2026-03 → 2026-04 → log.md)
+    const i03 = md.indexOf("older body");
+    const i04 = md.indexOf("old body");
+    const iMain = md.indexOf("main body");
+    expect(i03).toBeGreaterThan(-1);
+    expect(i03).toBeLessThan(i04);
+    expect(i04).toBeLessThan(iMain);
+  });
+
+  it("log.md だけ存在 (archive なし) でも動く", async () => {
+    await writeFile(join(dir, "log.md"), "## 2026-05-06 only\nbody\n", "utf8");
+    const md = await loadAllLogMarkdown(dir);
+    expect(md).toContain("## 2026-05-06 only");
+  });
+
+  it("ディレクトリが存在しない場合は空 (archives なし + log.md なしで空文字列)", async () => {
+    const md = await loadAllLogMarkdown(join(dir, "nonexistent"));
+    expect(md).toBe("");
+  });
+
+  it("無関係な .md ファイルは無視 (log.archive.* pattern のみ)", async () => {
+    await writeFile(join(dir, "log.md"), "## 2026-05-06 main\nmain\n", "utf8");
+    await writeFile(join(dir, "other.md"), "## 2025-01-01 noise\nnoise\n", "utf8");
+    await writeFile(join(dir, "log.archive.invalid.md"), "## 2025-01-01 invalid\ninvalid\n", "utf8");
+    const md = await loadAllLogMarkdown(dir);
+    expect(md).toContain("main");
+    expect(md).not.toContain("noise");
+    expect(md).not.toContain("invalid");
   });
 });

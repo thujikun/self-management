@@ -69,6 +69,9 @@ export const NODE_TABLES = [
   "events",
   "release_notes",
   "product_graph_nodes",
+  "time_buckets",
+  "engagement_decisions",
+  "learnings",
 ] as const;
 
 export type NodeTable = (typeof NODE_TABLES)[number];
@@ -86,6 +89,9 @@ export const PK_COLUMN: Record<NodeTable, string> = {
   events: "event_id",
   release_notes: "release_note_id",
   product_graph_nodes: "node_id",
+  time_buckets: "bucket_id",
+  engagement_decisions: "engagement_id",
+  learnings: "learning_id",
 };
 
 /**
@@ -101,6 +107,10 @@ export const TITLE_EXPR: Record<NodeTable, string> = {
   events: "title",
   release_notes: "title",
   product_graph_nodes: "name",
+  time_buckets: "label",
+  engagement_decisions:
+    "CONCAT(action_type, IFNULL(CONCAT(' @', target_handle), ''))",
+  learnings: "insight",
 };
 
 /**
@@ -117,4 +127,7 @@ export const SUMMARY_EXPR: Record<NodeTable, string> = {
   events: "description",
   release_notes: "body_summary",
   product_graph_nodes: "description",
+  time_buckets: "summary",
+  engagement_decisions: "rationale",
+  learnings: "context",
 };

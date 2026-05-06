@@ -67,6 +67,10 @@ export const PERSONAL_EDGE_TYPES = [
   "decision_about", // decision → any (cross-graph 含む)
   "mentioned_in", // person → content (登壇 / 記事内の言及)
   "participated_in", // person → event
+
+  // temporal anchoring (biz-graph と同思想)
+  "occurred_on", // any activity → time_buckets (granularity=day)
+  "rolls_up_to", // time_buckets → time_buckets (day → week → month)
 ] as const;
 
 export type PersonalEdgeType = (typeof PERSONAL_EDGE_TYPES)[number];
@@ -82,7 +86,36 @@ export const TOPICS_TABLE = "topics";
 /** @graph-connects none */
 export const EVENTS_TABLE = "events";
 /** @graph-connects none */
+export const TIME_BUCKETS_TABLE = "time_buckets";
+/** @graph-connects none */
+export const ENGAGEMENT_DECISIONS_TABLE = "engagement_decisions";
+/** @graph-connects none */
+export const LEARNINGS_TABLE = "learnings";
+/** @graph-connects none */
 export const PERSONAL_EDGES_TABLE = "personal_edges";
+
+/**
+ * `time_buckets.granularity` の許容値。
+ *
+ * @graph-connects none
+ */
+export const TIME_BUCKET_GRANULARITIES = ["day", "week", "month"] as const;
+export type TimeBucketGranularity = (typeof TIME_BUCKET_GRANULARITIES)[number];
+
+/**
+ * `engagement_decisions.action_type` の許容値。
+ *
+ * @graph-connects none
+ */
+export const ENGAGEMENT_ACTION_TYPES = [
+  "posted", // 我々が post / reply / quote した
+  "dropped", // draft したが投稿しなかった
+  "follow", // フォローした
+  "unfollow",
+  "like",
+  "skip", // 検討して反応しないと判断した
+] as const;
+export type EngagementActionType = (typeof ENGAGEMENT_ACTION_TYPES)[number];
 
 /** @graph-connects none */
 const PERSONS_SCHEMA: TableSchema = {
@@ -156,6 +189,79 @@ const EVENTS_SCHEMA: TableSchema = {
   ],
 };
 
+/**
+ * 時間軸 anchor。granularity で day / week / month を区別、parent_bucket_id で階層化。
+ * 全ての activity (engagement_decisions / decisions / contents の published_at 等) は
+ * occurred_on edge で day node に anchor、day → week → month は rolls_up_to で繋ぐ。
+ *
+ * @graph-connects none
+ */
+const TIME_BUCKETS_SCHEMA: TableSchema = {
+  fields: [
+    { name: "bucket_id", type: "STRING", mode: "REQUIRED" }, // "day:YYYY-MM-DD" | "week:YYYY-Www" | "month:YYYY-MM"
+    { name: "granularity", type: "STRING", mode: "REQUIRED" },
+    { name: "start_date", type: "DATE", mode: "REQUIRED" },
+    { name: "end_date", type: "DATE", mode: "REQUIRED" },
+    { name: "label", type: "STRING", mode: "NULLABLE" },
+    { name: "parent_bucket_id", type: "STRING", mode: "NULLABLE" }, // day → week, week → month, month → null
+    { name: "summary", type: "STRING", mode: "NULLABLE" }, // 後追い振り返りで埋める
+    { name: "metadata", type: "JSON", mode: "NULLABLE" }, // {action_count, top_topic, ...}
+    ...COMMON_EMBEDDING_FIELDS,
+    ...COMMON_TIMESTAMP_FIELDS,
+  ],
+};
+
+/**
+ * cross-session に効く insight (失敗例 / 成功例の振り返り)。decisions が「個別判断」を
+ * 記録するのに対し、learnings は「将来も再利用可能な原則 / 適用ルール」を捉える。
+ *
+ * @graph-connects none
+ */
+const LEARNINGS_SCHEMA: TableSchema = {
+  fields: [
+    { name: "learning_id", type: "STRING", mode: "REQUIRED" },
+    { name: "insight", type: "STRING", mode: "REQUIRED" }, // 短い洞察文
+    { name: "context", type: "STRING", mode: "NULLABLE" }, // 何があって学んだか
+    { name: "domain", type: "STRING", mode: "NULLABLE" }, // x-engagement | infra | tooling | ...
+    { name: "applicability", type: "STRING", mode: "NULLABLE" }, // 何に適用すべきか
+    { name: "realized_at", type: "TIMESTAMP", mode: "REQUIRED" },
+    { name: "metadata", type: "JSON", mode: "NULLABLE" },
+    ...COMMON_EMBEDDING_FIELDS,
+    ...COMMON_TIMESTAMP_FIELDS,
+  ],
+};
+
+/**
+ * Engagement 判断ログ。X / 他 platform で post / drop / follow / like / skip した記録。
+ * voice check / draft iteration / rationale を構造化保持して semantic search 可能にする。
+ *
+ * @graph-connects none
+ */
+const ENGAGEMENT_DECISIONS_SCHEMA: TableSchema = {
+  fields: [
+    { name: "engagement_id", type: "STRING", mode: "REQUIRED" },
+    { name: "platform", type: "STRING", mode: "REQUIRED" }, // "x" | "linkedin" | "hn" | ...
+    { name: "account", type: "STRING", mode: "NULLABLE" }, // "ryantsuji" | "ryanaircloset"
+    { name: "action_type", type: "STRING", mode: "REQUIRED" }, // posted / dropped / follow / unfollow / like / skip
+    { name: "posted_post_id", type: "STRING", mode: "NULLABLE" }, // 我々の post id (action_type=posted のみ)
+    { name: "posted_post_type", type: "STRING", mode: "NULLABLE" }, // original | reply | quote | thread
+    { name: "target_post_id", type: "STRING", mode: "NULLABLE" },
+    { name: "target_user_id", type: "STRING", mode: "NULLABLE" },
+    { name: "target_handle", type: "STRING", mode: "NULLABLE" },
+    { name: "target_followers", type: "INT64", mode: "NULLABLE" },
+    { name: "our_text", type: "STRING", mode: "NULLABLE" }, // posted/dropped の draft / 本文
+    { name: "voice_check", type: "JSON", mode: "NULLABLE" }, // {em_dash, isnt_x_its_y, praise, self_promo, ...}
+    { name: "draft_iters", type: "INT64", mode: "NULLABLE" },
+    { name: "strategy_tier", type: "STRING", mode: "NULLABLE" }, // tier_1 | tier_2 | tier_3 | reciprocation
+    { name: "rationale", type: "STRING", mode: "NULLABLE" },
+    { name: "decided_at", type: "TIMESTAMP", mode: "REQUIRED" },
+    { name: "conversation_id", type: "STRING", mode: "NULLABLE" },
+    { name: "metadata", type: "JSON", mode: "NULLABLE" },
+    ...COMMON_EMBEDDING_FIELDS,
+    ...COMMON_TIMESTAMP_FIELDS,
+  ],
+};
+
 /** @graph-connects none */
 const PERSONAL_EDGES_SCHEMA: TableSchema = {
   fields: [
@@ -214,6 +320,30 @@ export const PERSONAL_GRAPH_TABLES: TableDefinition[] = [
     },
   },
   {
+    name: TIME_BUCKETS_TABLE,
+    options: {
+      schema: TIME_BUCKETS_SCHEMA,
+      timePartitioning: { type: "DAY", field: "start_date" },
+      clustering: { fields: ["granularity"] },
+    },
+  },
+  {
+    name: ENGAGEMENT_DECISIONS_TABLE,
+    options: {
+      schema: ENGAGEMENT_DECISIONS_SCHEMA,
+      timePartitioning: { type: "DAY", field: "decided_at" },
+      clustering: { fields: ["platform", "action_type"] },
+    },
+  },
+  {
+    name: LEARNINGS_TABLE,
+    options: {
+      schema: LEARNINGS_SCHEMA,
+      timePartitioning: { type: "DAY", field: "realized_at" },
+      clustering: { fields: ["domain"] },
+    },
+  },
+  {
     name: PERSONAL_EDGES_TABLE,
     options: {
       schema: PERSONAL_EDGES_SCHEMA,
@@ -263,6 +393,45 @@ export interface EventRow extends BaseRowFields {
   description: string | null;
   occurred_at: string;
   location: string | null;
+}
+
+export interface TimeBucketRow extends BaseRowFields {
+  bucket_id: string;
+  granularity: TimeBucketGranularity;
+  start_date: string; // YYYY-MM-DD
+  end_date: string;
+  label: string | null;
+  parent_bucket_id: string | null;
+  summary: string | null;
+}
+
+export interface LearningRow extends BaseRowFields {
+  learning_id: string;
+  insight: string;
+  context: string | null;
+  domain: string | null;
+  applicability: string | null;
+  realized_at: string;
+}
+
+export interface EngagementDecisionRow extends BaseRowFields {
+  engagement_id: string;
+  platform: string;
+  account: string | null;
+  action_type: EngagementActionType;
+  posted_post_id: string | null;
+  posted_post_type: string | null;
+  target_post_id: string | null;
+  target_user_id: string | null;
+  target_handle: string | null;
+  target_followers: number | null;
+  our_text: string | null;
+  voice_check: Record<string, unknown> | null;
+  draft_iters: number | null;
+  strategy_tier: string | null;
+  rationale: string | null;
+  decided_at: string;
+  conversation_id: string | null;
 }
 
 export interface PersonalEdgeRow {
