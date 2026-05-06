@@ -1,20 +1,27 @@
 /**
- * chrome mcp で取った X GraphQL JSON を adapter 経由で ParseResult 化 → BQ MERGE。
+ * chrome mcp で取った X scrape data を adapter 経由で ParseResult 化 → BQ MERGE。
  *
- * usage:
- *   pnpm graph:ingest-scrape -- --kind=search --input=/tmp/scrape.json [--no-embed] [--dry-run]
+ * usage (search kind, Phase 5b):
+ *   pnpm graph:ingest-scrape -- \
+ *     --kind=search \
+ *     --input=/tmp/tweets.json \
+ *     --article-source=zenn \
+ *     --article-external-id=550620 \
+ *     --raw-query=2731787582881a \
+ *     [--no-embed] [--dry-run]
  *
- * input JSON は `{ graphqlJson: <obj>, context?: <obj> }` 形式 (= ScrapeContext)。
- * adapter が ParseResult 返す → 既存 migrate orchestrator と同じ流れで dedupe +
- * embedding + mergeRows。
+ * input JSON は SearchScrapeTweet 配列 (chrome mcp 経由で DOM から抽出した tweet 配列)。
+ * CLI が articleContentId を deterministicId で計算して SearchScrapeData を組み立て、
+ * adapter に渡す → 既存 migrate orchestrator と同じ流れで dedupe + embedding + mergeRows。
  *
- * Phase 5a 時点では adapter 全部 stub なので呼んでも throw する。Phase 5b 以降で
- * 実 adapter を `registerScrapeAdapter` で差し替えると動く。
+ * 旧 I/F (`{graphqlJson:..., context:...}` ScrapeContext) も `--raw-context` flag で
+ * 動く (retweets / quotes 等で GraphQL JSON を直接食わせる将来用)。
  *
  * @graph-stack ryan-product-graph
  * @graph-domain graph
- * @graph-business chrome scraper の ingest entry。stdin/file から ScrapeContext JSON
- * を読み adapter 通して既存 BQ パイプラインに流す。Phase 5a は scaffolding のみ
+ * @graph-business chrome scraper の ingest entry。input JSON + CLI 引数から
+ * ScrapeContext を組み立て adapter に流して BQ MERGE。search kind では tweet 配列
+ * + articleContentId/rawQuery を別引数で指定する運用 mode を提供
  * @graph-connects bigquery [writes_to] adapter が返す ParseResult を MERGE
  */
 
@@ -22,31 +29,94 @@ import { readFileSync } from "node:fs";
 import { embedBatch, EMBEDDING_MODEL } from "@self/embedding";
 import { createLogger, initOtel, shutdownOtel, withSpan } from "@self/otel";
 import { mergeRows } from "../src/migrate/common/bq-merge.js";
-import { deterministicEdgeId } from "../src/migrate/common/id.js";
+import { deterministicEdgeId, deterministicId } from "../src/migrate/common/id.js";
 import type { EdgeInput, NodeInput } from "../src/migrate/common/types.js";
 import { dispatchScrape } from "../src/migrate/sources/x-scrape/dispatcher.js";
-import type { ScrapeContext, ScrapeKind } from "../src/migrate/sources/x-scrape/types.js";
+import type {
+  ScrapeContext,
+  ScrapeKind,
+  SearchScrapeData,
+  SearchScrapeTweet,
+} from "../src/migrate/sources/x-scrape/types.js";
 
 /** @graph-connects opentelemetry [calls] graph-ingest-scrape として OTel 起動 */
 const log = createLogger("graph-ingest-scrape");
 
+interface CliArgs {
+  kind: ScrapeKind;
+  input: string;
+  noEmbed: boolean;
+  dryRun: boolean;
+  /** search 専用: 検索対象記事の source ("zenn" | "devto" 等) */
+  articleSource: string | null;
+  /** search 専用: 検索対象記事の external_id */
+  articleExternalId: string | null;
+  /** search 専用: X 検索 raw query */
+  rawQuery: string | null;
+  /** 旧 I/F: input を ScrapeContext (graphqlJson + context) としてそのまま食う */
+  rawContext: boolean;
+}
+
 /** @graph-connects none */
-function parseArgs(): { kind: ScrapeKind; input: string; noEmbed: boolean; dryRun: boolean } {
-  const args = new Set(process.argv.slice(2));
-  const kindArg = [...args].find((a) => a.startsWith("--kind="))?.slice("--kind=".length);
-  const inputArg = [...args].find((a) => a.startsWith("--input="))?.slice("--input=".length);
+export function parseArgs(argv: string[] = process.argv.slice(2)): CliArgs {
+  const args = new Set(argv);
+  const get = (prefix: string): string | null =>
+    [...args].find((a) => a.startsWith(prefix))?.slice(prefix.length) ?? null;
+  const kindArg = get("--kind=");
+  const inputArg = get("--input=");
   if (!kindArg || !["search", "retweets", "quotes"].includes(kindArg)) {
     throw new Error(`--kind={search|retweets|quotes} required (got: ${kindArg ?? "none"})`);
   }
   if (!inputArg) {
     throw new Error("--input=/path/to/scrape.json required");
   }
-  return {
+  const cli: CliArgs = {
     kind: kindArg as ScrapeKind,
     input: inputArg,
     noEmbed: args.has("--no-embed"),
     dryRun: args.has("--dry-run"),
+    articleSource: get("--article-source="),
+    articleExternalId: get("--article-external-id="),
+    rawQuery: get("--raw-query="),
+    rawContext: args.has("--raw-context"),
   };
+  if (cli.kind === "search" && !cli.rawContext) {
+    if (!cli.articleSource || !cli.articleExternalId || !cli.rawQuery) {
+      throw new Error(
+        "search kind requires --article-source / --article-external-id / --raw-query (or pass --raw-context to load full ScrapeContext from --input)",
+      );
+    }
+  }
+  return cli;
+}
+
+/**
+ * CLI 引数 + input JSON から ScrapeContext を組み立てる。`--raw-context` 時は input
+ * を ScrapeContext そのものとして読み、そうでなければ search 用に SearchScrapeData
+ * を組み立てる。
+ *
+ * @graph-connects none
+ */
+export function buildScrapeContext(cli: CliArgs, raw: string): ScrapeContext {
+  if (cli.rawContext) {
+    return JSON.parse(raw) as ScrapeContext;
+  }
+  if (cli.kind !== "search") {
+    throw new Error(
+      `kind=${cli.kind} requires --raw-context (pre-Phase-5c kinds use raw ScrapeContext input)`,
+    );
+  }
+  const tweets = JSON.parse(raw) as SearchScrapeTweet[];
+  if (!Array.isArray(tweets)) {
+    throw new Error("search input must be a JSON array of SearchScrapeTweet");
+  }
+  const articleContentId = deterministicId(cli.articleSource!, cli.articleExternalId!);
+  const data: SearchScrapeData = {
+    rawQuery: cli.rawQuery!,
+    articleContentId,
+    tweets,
+  };
+  return { graphqlJson: data };
 }
 
 /** @graph-connects none */
@@ -112,11 +182,12 @@ function edgeToRow(edge: EdgeInput): Record<string, unknown> {
 /** @graph-connects bigquery [writes_to] adapter ParseResult を MERGE */
 async function main(): Promise<void> {
   await initOtel({ serviceName: "graph-ingest-scrape" });
-  const { kind, input, noEmbed, dryRun } = parseArgs();
+  const cli = parseArgs();
+  const { kind, input, noEmbed, dryRun } = cli;
   log.info({ kind, input, noEmbed, dryRun }, "ingest-scrape start");
 
   const raw = readFileSync(input, "utf8");
-  const ctx = JSON.parse(raw) as ScrapeContext;
+  const ctx = buildScrapeContext(cli, raw);
   const result = await withSpan(`ingest-scrape.adapter.${kind}`, { kind }, async () =>
     dispatchScrape(kind, ctx),
   );
