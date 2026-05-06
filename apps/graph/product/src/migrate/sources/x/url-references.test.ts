@@ -17,6 +17,7 @@ import {
   defaultBqClient,
   extractUrls,
   loadUrlIndexFromBq,
+  loadXTweetsAsContents,
   normalizeUrl,
   resolveTcoUrls,
   type BqQueryClient,
@@ -231,14 +232,15 @@ describe("buildUrlReferenceEdges with tco resolution", () => {
   });
 });
 
+function makeMockClient(rows: Array<Record<string, unknown>>): BqQueryClient {
+  return {
+    createQueryJob: vi.fn(async () => [
+      { getQueryResults: async () => [rows] },
+    ] as Awaited<ReturnType<BqQueryClient["createQueryJob"]>>),
+  };
+}
+
 describe("loadUrlIndexFromBq", () => {
-  function makeMockClient(rows: Array<Record<string, unknown>>): BqQueryClient {
-    return {
-      createQueryJob: vi.fn(async () => [
-        { getQueryResults: async () => [rows] },
-      ] as Awaited<ReturnType<BqQueryClient["createQueryJob"]>>),
-    };
-  }
 
   it("returns normalized URL → content_id index from BQ rows", async () => {
     const client = makeMockClient([
@@ -260,5 +262,33 @@ describe("loadUrlIndexFromBq", () => {
     const idx = await loadUrlIndexFromBq(client);
     expect(idx.size).toBe(1);
     expect(idx.get("https://valid")).toBe("c-valid");
+  });
+});
+
+describe("loadXTweetsAsContents", () => {
+  it("returns NodeInput[] for x-source rows with body_md", async () => {
+    const client = makeMockClient([
+      { content_id: "t1", body_md: "tweet body 1", url: "https://x.com/u/status/1" },
+      { content_id: "t2", body_md: "tweet body 2", url: null },
+    ]);
+    const out = await loadXTweetsAsContents(client);
+    expect(out).toHaveLength(2);
+    expect(out[0].kind).toBe("contents");
+    expect(out[0].id).toBe("t1");
+    expect(out[0].fields.source).toBe("x");
+    expect(out[0].fields.body_md).toBe("tweet body 1");
+    expect(out[0].fields.url).toBe("https://x.com/u/status/1");
+    expect(out[1].fields.url).toBeNull();
+  });
+
+  it("skips rows missing content_id or body_md", async () => {
+    const client = makeMockClient([
+      { content_id: null, body_md: "x", url: null },
+      { content_id: "t1", body_md: null, url: null },
+      { content_id: "t2", body_md: "ok", url: "https://x.com" },
+    ]);
+    const out = await loadXTweetsAsContents(client);
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe("t2");
   });
 });
