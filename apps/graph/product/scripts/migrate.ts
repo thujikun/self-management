@@ -50,6 +50,7 @@ import {
 import { parseCode } from "../src/migrate/sources/code/index.js";
 import { parseZenn } from "../src/migrate/sources/zenn.js";
 import { parseDevto } from "../src/migrate/sources/devto.js";
+import { parseSameEntity } from "../src/migrate/sources/same-entity.js";
 
 /** @graph-connects opentelemetry [calls] graph-migrate サービスとして OTel 起動 + structured logger */
 const log = createLogger("graph-migrate");
@@ -302,6 +303,28 @@ async function main() {
     }
   }
   log.info({ urlEdges: urlEdgeCount, tcoResolved: tcoResolvedCount }, "url references built");
+
+  // Phase 4j: BQ 上の embedding を使って cross-source 翻訳ペア (Zenn ↔ dev.to 等)
+  // を `same_entity` edge として自動検出。閾値: sim ≥ 0.73 AND days_diff ≤ 2
+  // (実測で翻訳 6/6 ヒット / false positive 0 になる値)。embedding がまだ無い
+  // 状態 (dry-run --no-embed の初回 ingest 等) では rows 0 で no-op。
+  let sameEntityEdgeCount = 0;
+  try {
+    const sameEntity = await parseSameEntity();
+    const personalEdges = edgesByTable.get("personal_edges") ?? new Map();
+    for (const e of sameEntity.edges) {
+      const id = deterministicEdgeId(e.edge_type, e.src_kind, e.src_id, e.tgt_kind, e.tgt_id);
+      if (!personalEdges.has(id)) personalEdges.set(id, e);
+    }
+    edgesByTable.set("personal_edges", personalEdges);
+    sameEntityEdgeCount = sameEntity.edges.length;
+  } catch (err) {
+    log.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "same-entity: skipped",
+    );
+  }
+  log.info({ sameEntityEdges: sameEntityEdgeCount }, "same-entity edges built");
 
   for (const [t, m] of nodesByTable) log.info({ table: t, count: m.size }, "nodes summary");
   for (const [t, m] of edgesByTable) log.info({ table: t, count: m.size }, "edges summary");
