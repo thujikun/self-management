@@ -463,9 +463,10 @@ new gcp.cloudscheduler.Job(
     region: location,
     schedule: "0 0 * * *",
     timeZone: "Etc/UTC",
-    // 一時停止 (X API Free tier credits 枯渇対策)。since_id-based incremental に
-    // refactor するまで paused 維持、refactor 後 resume する想定
-    paused: true,
+    // since_id-based incremental + pay-as-you-go credits 投入済 (Phase 4g)。
+    // 日次 00:00 UTC で graph-migrate Job を実行 → 新規 tweet + URL refs +
+    // same_entity edge を BQ に反映する
+    paused: false,
     httpTarget: {
       httpMethod: "POST",
       uri: pulumi.interpolate`https://run.googleapis.com/v2/projects/${projectId}/locations/${location}/jobs/${graphMigrateJob.name}:run`,
