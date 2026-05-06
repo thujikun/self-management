@@ -73,8 +73,8 @@ describe("isNonEmptyText", () => {
 });
 
 describe("defaultDevtoUsername", () => {
-  it("returns 'thujikun'", () => {
-    expect(defaultDevtoUsername()).toBe("thujikun");
+  it("returns Ryan's dev.to handle", () => {
+    expect(defaultDevtoUsername()).toBe("ryosuke_tsuji_f08e20fdca1");
   });
 });
 
@@ -232,9 +232,9 @@ describe("parseDevto", () => {
     expect(call).toBe(2); // list 1 page (only 1 article < per_page) + 1 body fetch
   });
 
-  it("uses default username 'thujikun' when not provided", async () => {
+  it("uses default dev.to username when not provided", async () => {
     const fetcher = vi.fn().mockReturnValue(fakeOk([]));
     await parseDevto({ fetcher: fetcher as FetchFn });
-    expect(fetcher.mock.calls[0][0]).toContain("username=thujikun");
+    expect(fetcher.mock.calls[0][0]).toContain("username=ryosuke_tsuji_f08e20fdca1");
   });
 });
