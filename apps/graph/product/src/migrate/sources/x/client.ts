@@ -26,6 +26,48 @@ export type FetchFn = (url: string, init?: { headers?: Record<string, string> })
 }>;
 
 /**
+ * default fetcher (本番は `globalThis.fetch`、test では vi.spyOn で stub 可能)。
+ *
+ * @graph-connects none
+ */
+export function defaultFetcher(): FetchFn {
+  return globalThis.fetch as unknown as FetchFn;
+}
+
+/**
+ * URL に query string を組み立てる helper。空 query なら base URL を返す。
+ *
+ * @graph-connects none
+ */
+export function buildUrl(path: string, query: Record<string, string>): string {
+  const url = `${X_API_BASE}${path}`;
+  const qs = new URLSearchParams(query).toString();
+  return qs ? `${url}?${qs}` : url;
+}
+
+/**
+ * pagination_token をマージして query を生成。
+ *
+ * @graph-connects none
+ */
+export function mergePaginationToken(
+  query: Record<string, string>,
+  token: string | undefined,
+): Record<string, string> {
+  if (!token) return { ...query };
+  return { ...query, pagination_token: token };
+}
+
+/**
+ * Bearer Authorization header を組み立てる単純な helper。
+ *
+ * @graph-connects none
+ */
+export function bearerAuthHeader(bearer: string): string {
+  return `Bearer ${bearer}`;
+}
+
+/**
  * GET `${X_API_BASE}${path}?...query` を OAuth1 で sign して叩く。
  *
  * @graph-connects x-api [reads_from] 任意の v2 endpoint
@@ -34,12 +76,11 @@ export async function xFetch<T>(
   creds: XCreds,
   path: string,
   query: Record<string, string> = {},
-  fetcher: FetchFn = globalThis.fetch as unknown as FetchFn,
+  fetcher: FetchFn = defaultFetcher(),
 ): Promise<T> {
   const url = `${X_API_BASE}${path}`;
   const auth = buildOAuth1Header("GET", url, creds, query);
-  const qs = new URLSearchParams(query).toString();
-  const fullUrl = qs ? `${url}?${qs}` : url;
+  const fullUrl = buildUrl(path, query);
   const res = await fetcher(fullUrl, { headers: { Authorization: auth } });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -56,28 +97,75 @@ export interface XPage<T> {
 }
 
 /**
- * cursor 付きの v2 endpoint を全 page なめる async generator。
- * `meta.next_token` が無くなったら終了。
+ * cursor 付きの v2 endpoint を全 page なめて配列で返す。
+ * `meta.next_token` が無くなったら終了 (max 件数で打切り可)。
  *
  * @graph-connects x-api [reads_from] cursor-paginated endpoints
  */
-export async function* xPaginate<T>(
+export async function xPaginate<T>(
   creds: XCreds,
   path: string,
   query: Record<string, string> = {},
   opts: { maxPages?: number; fetcher?: FetchFn } = {},
-): AsyncGenerator<XPage<T>> {
-  const fetcher = opts.fetcher ?? (globalThis.fetch as unknown as FetchFn);
+): Promise<XPage<T>[]> {
+  const fetcher = opts.fetcher ?? defaultFetcher();
   const max = opts.maxPages ?? Infinity;
+  const pages: XPage<T>[] = [];
   let token: string | undefined;
-  let pages = 0;
-  while (pages < max) {
-    const q: Record<string, string> = { ...query };
-    if (token) q.pagination_token = token;
+  while (pages.length < max) {
+    const q = mergePaginationToken(query, token);
     const res = await xFetch<XPage<T>>(creds, path, q, fetcher);
-    yield { data: res.data ?? [], meta: res.meta, includes: res.includes };
+    pages.push({ data: res.data ?? [], meta: res.meta, includes: res.includes });
     token = res.meta?.next_token;
-    pages++;
     if (!token) break;
   }
+  return pages;
 }
+
+/**
+ * OAuth 2.0 user-context Bearer 認証で GET。bookmark / engagement endpoint で使う。
+ *
+ * @graph-connects x-api [reads_from] OAuth2 Bearer で v2 endpoint
+ */
+export async function xFetchBearer<T>(
+  bearer: string,
+  path: string,
+  query: Record<string, string> = {},
+  fetcher: FetchFn = defaultFetcher(),
+): Promise<T> {
+  const fullUrl = buildUrl(path, query);
+  const res = await fetcher(fullUrl, {
+    headers: { Authorization: bearerAuthHeader(bearer) },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`X API ${res.status} ${path}: ${body.slice(0, 500)}`);
+  }
+  return (await res.json()) as T;
+}
+
+/**
+ * OAuth2 Bearer 版の cursor pagination (配列返し)。
+ *
+ * @graph-connects x-api [reads_from] OAuth2 Bearer で paginate
+ */
+export async function xPaginateBearer<T>(
+  bearer: string,
+  path: string,
+  query: Record<string, string> = {},
+  opts: { maxPages?: number; fetcher?: FetchFn } = {},
+): Promise<XPage<T>[]> {
+  const fetcher = opts.fetcher ?? defaultFetcher();
+  const max = opts.maxPages ?? Infinity;
+  const pages: XPage<T>[] = [];
+  let token: string | undefined;
+  while (pages.length < max) {
+    const q = mergePaginationToken(query, token);
+    const res = await xFetchBearer<XPage<T>>(bearer, path, q, fetcher);
+    pages.push({ data: res.data ?? [], meta: res.meta, includes: res.includes });
+    token = res.meta?.next_token;
+    if (!token) break;
+  }
+  return pages;
+}
+

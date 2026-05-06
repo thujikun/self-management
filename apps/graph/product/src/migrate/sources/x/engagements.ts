@@ -1,38 +1,37 @@
 /**
  * 外部 tweet を取り込む engagement parser。
  *
- * 現状サポート:
- * - **mentions**: 自分が @mention された tweet (`/2/users/:id/mentions`) → mentioned_in edge
- * - **liked**: 自分が like した tweet (`/2/users/:id/liked_tweets`) → engaged_with(like) edge
+ * サポート type:
+ * - **mention** (OAuth1): 自分が @mention された tweet → mentioned_in edge
+ * - **like** (OAuth1): 自分が like した tweet → engaged_with(like) edge
+ * - **bookmark** (OAuth2): 自分が bookmark した private リスト → engaged_with(bookmark) edge
  *
- * 未サポート (TODO):
- * - **bookmark**: `/2/users/:id/bookmarks` は OAuth 2.0 User Context 必須、現状の OAuth 1.0a
- *   credentials では 403。OAuth2 flow を xmcp に追加してから対応 (別 phase)
- * - **repost**: X API v2 には "reposts of me" 単一 endpoint 無し (v1.1 のみ)。v2 では
- *   `/2/tweets/:id/retweeted_by` を own posts ごとに iterate する必要あり、edge 拡充の
- *   Phase 4c で対応
+ * bookmark は X API 仕様上 OAuth 2.0 User Context 必須 (OAuth1 では 403) なので
+ * `oauth2.ts` 経由で Bearer を取得して xPaginateBearer で叩く分岐を持つ。
  *
- * 各 parser は同じ pagination + author seed + content/edge 生成パターンを共有するため、
- * `parseEngagements(account, creds, type)` で type 切替する設計。
+ * 未サポート: repost-of-me / quote-of-me (back-references.ts で per-tweet iterate)。
  *
  * @graph-stack ryan-product-graph
  * @graph-domain graph
- * @graph-business 外部 tweet 系 endpoint (mentions/liked) を共通化した engagement parser。各 type の path / edge_type / engagement 種別だけ table 駆動で切替。author seed は external-tweets.ts に委譲。bookmark/repost は API 制約で別 phase
- * @graph-connects x-api [reads_from] /2/users/:id/{mentions, liked_tweets}
+ * @graph-business 外部 tweet 系 endpoint (mention / like / bookmark) を共通化した engagement parser。各 type の path / edge_type / engagement 種別 + 認証方式 (OAuth1/OAuth2) を table 駆動で切替。author seed は external-tweets.ts に委譲
+ * @graph-connects x-api [reads_from] /2/users/:id/{mentions, liked_tweets, bookmarks}
  * @graph-connects bigquery [writes_to] contents (外部 tweet) + persons (外部 author seed) + personal_edges (engaged_with / mentioned_in)
  */
 
 import type { EdgeInput, NodeInput, ParseResult } from "../common/types.js";
 import { personIdFor, X_ACCOUNTS, type XAccountConfig } from "./accounts.js";
 import type { XCreds } from "./auth.js";
-import { xPaginate, type FetchFn } from "./client.js";
+import { xPaginate, xPaginateBearer, type FetchFn } from "./client.js";
 import {
   externalTweetsToNodes,
   type XTweetWithAuthor,
   type XUserRaw,
 } from "./external-tweets.js";
+import { getOAuth2Bearer } from "./oauth2.js";
 
-export type EngagementType = "mention" | "like";
+export type EngagementType = "mention" | "like" | "bookmark";
+
+export type EngagementAuth = "oauth1" | "oauth2";
 
 interface EngagementConfig {
   /** path builder (account.userId を受けて X API path を返す) */
@@ -41,6 +40,8 @@ interface EngagementConfig {
   edgeType: "mentioned_in" | "engaged_with";
   /** edge.properties.engagement に入れる種別文字列 */
   engagement: string;
+  /** 認証方式 (OAuth1 = 既存 user creds、OAuth2 = bookmark 等で必須) */
+  auth: EngagementAuth;
 }
 
 /** @graph-connects none */
@@ -49,11 +50,19 @@ export const ENGAGEMENT_CONFIGS: Record<EngagementType, EngagementConfig> = {
     path: (uid) => `/2/users/${uid}/mentions`,
     edgeType: "mentioned_in",
     engagement: "mention",
+    auth: "oauth1",
   },
   like: {
     path: (uid) => `/2/users/${uid}/liked_tweets`,
     edgeType: "engaged_with",
     engagement: "like",
+    auth: "oauth1",
+  },
+  bookmark: {
+    path: (uid) => `/2/users/${uid}/bookmarks`,
+    edgeType: "engaged_with",
+    engagement: "bookmark",
+    auth: "oauth2",
   },
 };
 
@@ -66,13 +75,23 @@ const USER_FIELDS = "name,username,description";
 /**
  * 1 アカウント × 1 engagement type 分の ingest。
  *
+ * 認証は config.auth が "oauth1" なら既存 OAuth1 creds、"oauth2" なら getOAuth2Bearer
+ * で取得した Bearer を使う。bookmark は OAuth2 必須。
+ *
  * @graph-connects x-api [reads_from] 該当 endpoint を cursor pagination
+ * @graph-connects secret-manager [reads_from] OAuth2 type の場合 xmcp-user-{account}-oauth2 から Bearer 取得
  */
 export async function parseEngagements(
   account: XAccountConfig,
   creds: XCreds,
   type: EngagementType,
-  opts: { maxPages?: number; fetcher?: FetchFn } = {},
+  opts: {
+    maxPages?: number;
+    fetcher?: FetchFn;
+    /** OAuth2 用: Bearer 取得を inject (test 時に SM を回避) */
+    bearerProvider?: (account: string) => Promise<string>;
+    project?: string;
+  } = {},
 ): Promise<ParseResult> {
   const config = ENGAGEMENT_CONFIGS[type];
   const personId = personIdFor(account);
@@ -87,7 +106,19 @@ export async function parseEngagements(
     "user.fields": USER_FIELDS,
   };
 
-  for await (const page of xPaginate<XTweetWithAuthor>(creds, path, query, opts)) {
+  const pages =
+    config.auth === "oauth2"
+      ? await xPaginateBearer<XTweetWithAuthor>(
+          await (opts.bearerProvider ?? ((a) => getOAuth2Bearer(a, { project: opts.project })))(
+            account.account,
+          ),
+          path,
+          query,
+          opts,
+        )
+      : await xPaginate<XTweetWithAuthor>(creds, path, query, opts);
+
+  for (const page of pages) {
     const authors = ((page.includes?.users as XUserRaw[] | undefined) ?? []).filter(
       (u): u is XUserRaw => Boolean(u && u.id && u.username),
     );
@@ -123,9 +154,15 @@ export async function parseEngagements(
  */
 export async function parseAllEngagements(
   loadCreds: (account: string) => Promise<XCreds>,
-  opts: { maxPages?: number; fetcher?: FetchFn; types?: EngagementType[] } = {},
+  opts: {
+    maxPages?: number;
+    fetcher?: FetchFn;
+    types?: EngagementType[];
+    bearerProvider?: (account: string) => Promise<string>;
+    project?: string;
+  } = {},
 ): Promise<ParseResult[]> {
-  const types: EngagementType[] = opts.types ?? ["mention", "like"];
+  const types: EngagementType[] = opts.types ?? ["mention", "like", "bookmark"];
   const out: ParseResult[] = [];
   for (const account of X_ACCOUNTS) {
     const creds = await loadCreds(account.account);

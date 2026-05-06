@@ -341,6 +341,26 @@ for (const account of XMCP_ACCOUNTS) {
     role: "roles/secretmanager.secretAccessor",
     member: pulumi.interpolate`serviceAccount:${graphSa.email}`,
   });
+  // OAuth 2.0 user-context (bookmark / repost-of-me 等で必須、OAuth1 では 403 になる endpoint 用)
+  const userOauth2Secret = new gcp.secretmanager.Secret(
+    `xmcp-user-${account}-oauth2`,
+    {
+      secretId: `xmcp-user-${account}-oauth2`,
+      replication: { auto: {} },
+    },
+    { dependsOn: [apiServices["secretmanager"]] },
+  );
+  new gcp.secretmanager.SecretIamMember(`graph-xmcp-user-${account}-oauth2-accessor`, {
+    secretId: userOauth2Secret.id,
+    role: "roles/secretmanager.secretAccessor",
+    member: pulumi.interpolate`serviceAccount:${graphSa.email}`,
+  });
+  // graph-app SA は version 追加権限も必要 (TS 側で refresh 後に書き戻すため)
+  new gcp.secretmanager.SecretIamMember(`graph-xmcp-user-${account}-oauth2-version-adder`, {
+    secretId: userOauth2Secret.id,
+    role: "roles/secretmanager.secretVersionAdder",
+    member: pulumi.interpolate`serviceAccount:${graphSa.email}`,
+  });
 }
 
 /** @graph-connects none */

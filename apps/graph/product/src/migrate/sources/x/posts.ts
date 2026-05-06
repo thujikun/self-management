@@ -148,7 +148,7 @@ export async function parseOwnPosts(
   // exclude="" だと X 側で 422 になることがあるので key 自体を除く
   delete query.exclude;
 
-  for await (const page of xPaginate<XTweetRaw>(creds, path, query, opts)) {
+  for (const page of await xPaginate<XTweetRaw>(creds, path, query, opts)) {
     for (const tweet of page.data) {
       const node = tweetToContentNode(tweet, account, personId);
       nodes.push(node);

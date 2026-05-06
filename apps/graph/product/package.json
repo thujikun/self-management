@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@google-cloud/bigquery": "catalog:",
+    "@google-cloud/secret-manager": "catalog:",
     "@self/embedding": "workspace:*",
     "@self/otel": "workspace:*",
     "glob": "catalog:",

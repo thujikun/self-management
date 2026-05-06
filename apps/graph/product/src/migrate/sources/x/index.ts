@@ -15,6 +15,7 @@
  */
 
 import type { ParseResult } from "../common/types.js";
+import { extractOwnTweetRefs, parseBackReferences } from "./back-references.js";
 import { loadXCreds, type XCreds } from "./auth.js";
 import type { FetchFn } from "./client.js";
 import { parseAllEngagements, type EngagementType } from "./engagements.js";
@@ -32,6 +33,16 @@ export interface ParseXOptions {
   skipEngagements?: boolean;
   /** true なら referenced_tweets edges 生成を skip (default: 生成する) */
   skipReferencedEdges?: boolean;
+  /** false なら back-references (retweet/quote of me) を取得 (default: true = skip)。
+   *  rate limit 厳しいので opt-in。cron では maxTweets と組合せ */
+  skipBackReferences?: boolean;
+  /** back-references の max tweets (default: 50 = 安全な incremental サイズ) */
+  backRefsMaxTweets?: number;
+  /** back-references の throttle ms (default: 15000) */
+  backRefsThrottleMs?: number;
+  /** OAuth2 Bearer 取得を inject (test 用) */
+  bearerProvider?: (account: string) => Promise<string>;
+  project?: string;
 }
 
 /**
@@ -52,8 +63,26 @@ export async function parseX(
         maxPages: opts.maxPages,
         fetcher: opts.fetcher,
         types: opts.engagementTypes,
+        bearerProvider: opts.bearerProvider,
+        project: opts.project,
       });
-  const all = [...ownResults, ...engagementResults];
+
+  // own posts ParseResult から OwnTweetRef を抽出して back-references を取得
+  let backRefsResult: ParseResult | null = null;
+  if (opts.skipBackReferences === false) {
+    const ownNodes = ownResults.flatMap((r) => r.nodes);
+    const ownTweetRefs = extractOwnTweetRefs(ownNodes);
+    backRefsResult = await parseBackReferences(ownTweetRefs, {
+      fetcher: opts.fetcher,
+      bearerProvider: opts.bearerProvider,
+      project: opts.project,
+      maxTweets: opts.backRefsMaxTweets ?? 50,
+      throttleMs: opts.backRefsThrottleMs,
+    });
+  }
+
+  const all: ParseResult[] = [...ownResults, ...engagementResults];
+  if (backRefsResult) all.push(backRefsResult);
   const allNodes = all.flatMap((r) => r.nodes);
   const baseEdges = all.flatMap((r) => r.edges);
   const referencedEdges = opts.skipReferencedEdges
