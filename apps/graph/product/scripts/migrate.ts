@@ -42,6 +42,8 @@ import { parseStrategyDoc } from "../src/migrate/sources/strategy.js";
 import { parseMemory } from "../src/migrate/sources/memory.js";
 import { parseX } from "../src/migrate/sources/x/index.js";
 import { parseCode } from "../src/migrate/sources/code/index.js";
+import { parseZenn } from "../src/migrate/sources/zenn.js";
+import { parseDevto } from "../src/migrate/sources/devto.js";
 
 /** @graph-connects opentelemetry [calls] graph-migrate サービスとして OTel 起動 + structured logger */
 const log = createLogger("graph-migrate");
@@ -67,9 +69,18 @@ const maxPagesArg = [...args].find((a) => a.startsWith("--max-pages="))?.slice("
 /** @graph-connects none */
 const maxPages = maxPagesArg ? Number(maxPagesArg) : undefined;
 
-type SourceName = "operations-log" | "threads" | "strategy" | "memory" | "x" | "code";
+type SourceName = "operations-log" | "threads" | "strategy" | "memory" | "x" | "code" | "zenn" | "devto";
 /** @graph-connects none */
-const ALL_SOURCES: SourceName[] = ["operations-log", "threads", "strategy", "memory", "x", "code"];
+const ALL_SOURCES: SourceName[] = [
+  "operations-log",
+  "threads",
+  "strategy",
+  "memory",
+  "x",
+  "code",
+  "zenn",
+  "devto",
+];
 
 /** @graph-connects none */
 async function runParsers(): Promise<ParseResult[]> {
@@ -98,6 +109,8 @@ async function runParsers(): Promise<ParseResult[]> {
               ...(backRefsMax !== undefined ? { backRefsMaxTweets: backRefsMax } : {}),
             }),
           code: () => parseCode(),
+          zenn: () => parseZenn(),
+          devto: () => parseDevto(),
         })[t](),
     );
     log.info({ source: t, nodes: r.nodes.length, edges: r.edges.length }, "parsed source");
