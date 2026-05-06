@@ -74,7 +74,7 @@ describe("isNonEmptyText", () => {
 
 describe("defaultDevtoUsername", () => {
   it("returns Ryan's dev.to handle", () => {
-    expect(defaultDevtoUsername()).toBe("ryosuke_tsuji_f08e20fdca1");
+    expect(defaultDevtoUsername()).toBe("ryantsuji");
   });
 });
 
@@ -235,6 +235,6 @@ describe("parseDevto", () => {
   it("uses default dev.to username when not provided", async () => {
     const fetcher = vi.fn().mockReturnValue(fakeOk([]));
     await parseDevto({ fetcher: fetcher as FetchFn });
-    expect(fetcher.mock.calls[0][0]).toContain("username=ryosuke_tsuji_f08e20fdca1");
+    expect(fetcher.mock.calls[0][0]).toContain("username=ryantsuji");
   });
 });
