@@ -54,6 +54,7 @@ export const PERSONAL_EDGE_TYPES = [
   "replied_to", // content → content
   "quoted", // content → content
   "references", // content → any (cross-graph 含む)
+  "same_entity", // content → content (翻訳ペア等、言語違いの同一記事)
 
   // social (X follow / engagement)
   "follows", // person → person
