@@ -46,6 +46,7 @@ export default defineConfig({
         // CLI entry-point: process.argv / staged file 取得 / process.exit のみ。
         // 純粋ロジックは sibling lib で網羅テスト済み。
         "scripts/hooks/*.cli.ts",
+        "scripts/*.cli.ts",
         // Pulumi の Pulumi.yaml / Pulumi.<stack>.yaml は code ではない
         "**/Pulumi.*.yaml",
       ],

@@ -25,6 +25,9 @@ pnpm exec tsx scripts/hooks/check-line-count.cli.ts $FILES
 # 4. @graph-* タグ整合性
 pnpm exec tsx scripts/hooks/check-graph-tags.cli.ts $FILES
 
+# 4b. operations/log.md の古い entry が archive されているか (md 肥大化防止)
+pnpm exec tsx scripts/compact-log.cli.ts --check
+
 # 5. ESLint (max-warnings=0)
 # staged TS だけ走らせる (フルプロジェクト lint は CI 側で再度走る前提)
 TS_FILES=$(echo "$FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|cjs)$' || true)

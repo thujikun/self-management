@@ -59,7 +59,7 @@ describe("searchNodes", () => {
     vi.resetModules();
   });
 
-  it("kind 指定なし → 全 7 table の UNION ALL を組む、limit default=10、embed inject される", async () => {
+  it("kind 指定なし → 全 10 table の UNION ALL を組む、limit default=10、embed inject される", async () => {
     createQueryJobMock.mockResolvedValue([
       {
         getQueryResults: async () => [[{ kind: "contents", id: "c1", title: "t", body_summary: "s", cosine_distance: 0.1 }]],
@@ -73,9 +73,9 @@ describe("searchNodes", () => {
     const sqlArg = createQueryJobMock.mock.calls[0][0];
     expect(sqlArg.params.qvec).toEqual([0.1, 0.2]);
     expect(sqlArg.params.lim).toBe(10);
-    // 7 tables UNION
+    // 10 tables UNION
     const unionCount = (sqlArg.query.match(/UNION ALL/g) ?? []).length;
-    expect(unionCount).toBe(6); // 7 tables → 6 UNION ALL
+    expect(unionCount).toBe(9); // 10 tables → 9 UNION ALL
   });
 
   it("kind 指定あり → 1 table のみ", async () => {

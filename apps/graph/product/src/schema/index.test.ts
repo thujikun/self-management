@@ -32,15 +32,15 @@ describe("schema barrel", () => {
     expect(BQ_DATASET).toBe("ryan");
   });
 
-  it("ALL_TABLES = product (2) + release (2) + personal (6) = 10", () => {
-    expect(ALL_TABLES).toHaveLength(10);
+  it("ALL_TABLES = product (2) + release (2) + personal (9) = 13", () => {
+    expect(ALL_TABLES).toHaveLength(13);
     expect(PRODUCT_GRAPH_TABLES).toHaveLength(2);
     expect(RELEASE_NOTE_TABLES).toHaveLength(2);
-    expect(PERSONAL_GRAPH_TABLES).toHaveLength(6);
+    expect(PERSONAL_GRAPH_TABLES).toHaveLength(9);
   });
 
-  it("NODE_TABLES enum length 7 で全 node table をカバー", () => {
-    expect(NODE_TABLES).toHaveLength(7);
+  it("NODE_TABLES enum length 10 で全 node table をカバー", () => {
+    expect(NODE_TABLES).toHaveLength(10);
     expect(NODE_TABLES).toContain("persons");
     expect(NODE_TABLES).toContain("contents");
     expect(NODE_TABLES).toContain("decisions");
@@ -48,6 +48,9 @@ describe("schema barrel", () => {
     expect(NODE_TABLES).toContain("events");
     expect(NODE_TABLES).toContain("release_notes");
     expect(NODE_TABLES).toContain("product_graph_nodes");
+    expect(NODE_TABLES).toContain("time_buckets");
+    expect(NODE_TABLES).toContain("engagement_decisions");
+    expect(NODE_TABLES).toContain("learnings");
   });
 
   it("COMMON_TIMESTAMP_FIELDS / COMMON_EMBEDDING_FIELDS が定義されている", () => {

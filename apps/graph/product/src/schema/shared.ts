@@ -33,6 +33,9 @@ export const NODE_TABLES = [
   "events",
   "release_notes",
   "product_graph_nodes",
+  "time_buckets", // 時間軸 anchor (day / week / month)、biz-graph の initiative と同思想
+  "engagement_decisions", // X / 他 platform engagement の判断ログ (post / drop / follow / like)
+  "learnings", // cross-session に効く insight (failure / success の振り返り、運用ルール化前段)
 ] as const;
 
 export type NodeTable = (typeof NODE_TABLES)[number];

@@ -47,6 +47,9 @@ export async function fetchOneHop(
   const params: Record<string, unknown> = { k: fromKind, i: fromId };
   if (edgeType) params.et = edgeType;
 
+  // product_graph_edges は src_node_id / tgt_node_id 形式 (kind 列なし、両端とも常に
+  // product_graph_nodes)。literal 文字列で alias を作って UNION ALL 互換にし、@k が
+  // product_graph_nodes でない時は branch 全体が 0 行返るよう @k のチェックを WHERE に入れる。
   const parts: string[] = [];
   if (direction === "out" || direction === "both") {
     parts.push(`
@@ -58,9 +61,11 @@ export async function fetchOneHop(
       FROM \`${PROJECT_ID}.ryan.release_edges\`
       WHERE src_kind = @k AND src_id = @i ${cond}
       UNION ALL
-      SELECT 'product_graph_edges', edge_type, src_kind, src_id, tgt_kind, tgt_id
+      SELECT 'product_graph_edges', edge_type,
+             'product_graph_nodes' AS src_kind, src_node_id AS src_id,
+             'product_graph_nodes' AS tgt_kind, tgt_node_id AS tgt_id
       FROM \`${PROJECT_ID}.ryan.product_graph_edges\`
-      WHERE src_kind = @k AND src_id = @i ${cond}
+      WHERE @k = 'product_graph_nodes' AND src_node_id = @i ${cond}
     `);
   }
   if (direction === "in" || direction === "both") {
@@ -73,9 +78,11 @@ export async function fetchOneHop(
       FROM \`${PROJECT_ID}.ryan.release_edges\`
       WHERE tgt_kind = @k AND tgt_id = @i ${cond}
       UNION ALL
-      SELECT 'product_graph_edges', edge_type, src_kind, src_id, tgt_kind, tgt_id
+      SELECT 'product_graph_edges', edge_type,
+             'product_graph_nodes' AS src_kind, src_node_id AS src_id,
+             'product_graph_nodes' AS tgt_kind, tgt_node_id AS tgt_id
       FROM \`${PROJECT_ID}.ryan.product_graph_edges\`
-      WHERE tgt_kind = @k AND tgt_id = @i ${cond}
+      WHERE @k = 'product_graph_nodes' AND tgt_node_id = @i ${cond}
     `);
   }
   const sql = `${parts.join("\n      UNION ALL\n")}\n      LIMIT 100`;

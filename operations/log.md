@@ -199,8 +199,37 @@ X アカウント運用の時系列ログ。新しいエントリは末尾に追
 - @GeorgeBevis (OpalServe) は宣伝 post なので like も skip (Ryan ルール: 宣伝に like は不要)
 - 学び: substantive engagement は post 側の質に依存する。reply / quote は **本当に書きたくなる post** にだけ。like は low-friction な signal で関係性維持 OK。draft しても Ryan が却下する pattern が起きうるので、こちらから候補出す段階で「like で十分か reply 必要か」を先に判定すべき
 
+## 2026-05-07 00:04 JST - quote tweet to @dexhorthy "token grift" cascade
+- 元 post: id 2051659448293425342 (@dexhorthy, 17.8k followers, 5/5 22:45 JST、80 likes / 8.7k impressions)。note_tweet 全文は "Inputs → outputs → outcomes / KPIs → customer outcomes → task throughput → PRs → LOC → tokens" の cascade で「測れるものを上から順に」のメッセージ
+- our post: id 2052041746444701790, type=quoted
+- text: "this. tokens consumed ≠ KPI. for AI infra the metric is whether the human downstream moved faster on something the business cares about. token spent → human → outcome. that's the framework. drawing the arrow cleanly is the actually hard part though :)"
+- voice check: em-dash 0 / "isn't X — it's Y" 構造 0 / 1人称 (we 暗黙) / 具体名詞 (token / human / outcome) / 汎用 praise なし / self-promo URL 0 / soft close (":)") で humble さ追加
+- 戦略: dex の cascade を抽象化して "framework / arrow drawing" 軸へ昇華、最後に self-aware ("actually hard part though") で preachy 回避。Ryan の "AI as leverage on non-AI business" thesis ど真ん中
+- draft 反復: 初回 v1 は "you're just buying compute" で締めていたが Ryan 判断で `framework` 提示 + soft close の v2 に差し替え、preachy 度低減
+
+## 2026-05-07 00:09 JST - reply to @hwchase17 "feedback sources" post
+- 元 post: id 2051745420557303913 (@hwchase17, 102k followers, 5/5 19:26 JST、52 likes / 7.8k impressions)。「feedback can come from many sources: direct (thumbs up/down), indirect (code suggestions accepted), llm as judge, simpler code based signals」
+- our post: id 2052043099694838007, type=reply
+- text: "add one to the indirect bucket: tool call patterns. an agent retrying the same tool with the same args is telling you the previous response wasn't useful. shows up in tool logs before any user clicks thumbs-down. cheap signal, hard to gaslight."
+- voice check: em-dash 0 / "isn't X — it's Y" 構造 0 / 具体例 (same tool / same args / retrying) / 汎用 praise 無し / self-promo URL 0
+- 戦略: hwchase の indirect feedback list に 1 項目追加する形 (extend、not correct)。retry-burst pattern を抽象化して言語化、Ryan の 17 MCP fleet 運用知見をプロダクト名なしで提示
+- draft 反復: 初回 draft は "cheapest indirect signal we get" 起点で抽象的すぎ意味不明と Ryan 指摘 → v1 (1 文展開) に書き直して採用
+
+## 2026-05-07 00:00 JST - drop: dex 5/6 "how we're gonna know it's working" post への reply 案
+- 元 post: id 2052028649172521314 (@dexhorthy, 5/6 14:12 UTC、11 likes / 718 impressions)。「framework 共有してくれ」と募集
+- 当初 draft: BQ tool log + retry-burst の operational signal 中心
+- drop 判断: dex の質問は "AI 実験が価値出してるかの measurement framework" (outcome 評価) で、こちらの draft は agent 詰まり検知 (operational health) を返してた → 質問とのズレ。さらに outcome 軸は同 dex の 5/5 token grift QT (B) で既にカバー済 → 重複
+- 学び: post の元 thread 文脈と質問の意図を draft 前に分解する。「framework くれ」と書かれてても、framework=outcome 評価 vs operational signal vs trust signal で軸が違う。同じ著者の連投の中で重複しないよう post 群全体で論点を分担する
+
+## 2026-05-07 00:15 JST - daily action: 3 名フォロー
+- **@_PaperMoose_ (Ryan)** id 897875988222271488 — Tier 1 (sweet spot 1,269f): CTO @heynoah、ARC-AGI 2 evals 構築。post: "spin up real accounts in dev. run real tickets. assert outcomes, not intermediate calls. mocked tests pass while production breaks." (5/4)。Ryan の production-reality thesis と完全一致、CTO position も同格
+- **@boyuan_chen (Boyuan/Nemo Chen)** id 828709745670356993 — Tier 2 (sweet spot 1,035f): Research Lead @ Huawei Canada、LLM post-train。post: "Day-10 behavior may matter more than day-1 demos. EnterpriseOps Gym ... Continual Learning Bench" (5/4)。research × production の hybrid、continuous improvement 視点
+- **@armaninspace (Arman Anwar)** id 13874392 — Tier 3 (68,588f、sweet spot 外): "Builds thinking machines that print money", Statistical ML 系シニア。post: "The deeper role of agent observability is to power learning." (5/6)。今日の dex/hwchase observability 議論との timing 一致で large-account ML thought leader への接続
+- 全件 following:true 確認済
+- 戦略 doc の "1-3件/日" 範囲内 (3件)。前回 5/4 の 4件 overshoot 反省を踏まえて 1件減らした (#3 #armaninspace は来週 hold 候補だったが Ryan 判断で 3件 follow へ)
+
 ## 残作業 (引き続き)
-- inbound 反応観察 (DB Graph thread の reply / quote / like、4 名から follow-back、上記 like への反応)
+- inbound 反応観察 (B/C への reply・like、3 名から follow-back、DB Graph thread 後追い反応)
 - 5/7 木 20:00 JST: Parking Pattern thread (cortex 設計思想の核、未公開記事ベースで draft 必要)
 - P2 markdown → BQ migration 着手 (apps/graph/product/src/migrate)
 

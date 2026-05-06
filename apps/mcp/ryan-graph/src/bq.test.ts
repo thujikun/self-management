@@ -52,9 +52,12 @@ describe("bq constants", () => {
     }
   });
 
-  it("NODE_TABLES に 7 つの table 名が並ぶ", async () => {
+  it("NODE_TABLES に 10 つの table 名が並ぶ", async () => {
     const { NODE_TABLES } = await import("./bq.js");
-    expect(NODE_TABLES).toHaveLength(7);
+    expect(NODE_TABLES).toHaveLength(10);
+    expect(NODE_TABLES).toContain("time_buckets");
+    expect(NODE_TABLES).toContain("engagement_decisions");
+    expect(NODE_TABLES).toContain("learnings");
   });
 
   it("PK_COLUMN は全 NODE_TABLES key を網羅", async () => {
