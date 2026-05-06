@@ -21,8 +21,15 @@ import type { FetchFn } from "./client.js";
 import { parseAllEngagements, type EngagementType } from "./engagements.js";
 import { parseAllOwnPosts } from "./posts.js";
 import { buildReferencedEdges } from "./references.js";
+import {
+  defaultBqClient,
+  getLastSeenTweetId,
+  type BqQueryClient,
+  type IncrementalKind,
+} from "./since.js";
 
 export type LoadCredsFn = (account: string) => Promise<XCreds>;
+export type SinceIdProvider = (account: string, kind: IncrementalKind) => Promise<string | null>;
 
 export interface ParseXOptions {
   maxPages?: number;
@@ -43,6 +50,12 @@ export interface ParseXOptions {
   /** OAuth2 Bearer 取得を inject (test 用) */
   bearerProvider?: (account: string) => Promise<string>;
   project?: string;
+  /** true なら true incremental mode: own/mention は since_id、liked/bookmark は noSinceIdMaxPages で抑える */
+  incremental?: boolean;
+  /** since_id 取得 provider (default: BQ から `getLastSeenTweetId`、test では inject) */
+  sinceIdProvider?: SinceIdProvider;
+  /** incremental 時の liked / bookmark の maxPages cap (default: 1 = 100 件) */
+  noSinceIdMaxPages?: number;
 }
 
 /**
@@ -52,11 +65,35 @@ export interface ParseXOptions {
  *
  * @graph-connects x-api [reads_from] own posts + engagement endpoint (両アカウント)
  */
+/**
+ * default since_id provider factory。`BqQueryClient` を inject 可能で、本番では
+ * `defaultBqClient()`、test では mock を渡せる。
+ *
+ * @graph-connects bigquery [reads_from] contents 表から MAX(external_id) を引く
+ */
+export function buildDefaultSinceIdProvider(
+  client: BqQueryClient = defaultBqClient(),
+): SinceIdProvider {
+  return (a, k) => getLastSeenTweetId(a, k, client);
+}
+
+/**
+ * X 全 source の統合 parser entry。
+ *
+ * @graph-connects x-api [reads_from] own posts + engagement endpoint + back-references
+ */
 export async function parseX(
   loadCreds: LoadCredsFn = (account) => loadXCreds(account),
   opts: ParseXOptions = {},
 ): Promise<ParseResult> {
-  const ownResults = await parseAllOwnPosts(loadCreds, opts);
+  const sinceIdProvider: SinceIdProvider | undefined = opts.incremental
+    ? opts.sinceIdProvider ?? buildDefaultSinceIdProvider()
+    : undefined;
+  const ownResults = await parseAllOwnPosts(loadCreds, {
+    maxPages: opts.maxPages,
+    fetcher: opts.fetcher,
+    sinceIdProvider: sinceIdProvider ? (a) => sinceIdProvider(a, "own") : undefined,
+  });
   const engagementResults = opts.skipEngagements
     ? []
     : await parseAllEngagements(loadCreds, {
@@ -65,6 +102,8 @@ export async function parseX(
         types: opts.engagementTypes,
         bearerProvider: opts.bearerProvider,
         project: opts.project,
+        mentionSinceIdProvider: sinceIdProvider ? (a) => sinceIdProvider(a, "mention") : undefined,
+        noSinceIdMaxPages: opts.incremental ? opts.noSinceIdMaxPages ?? 1 : undefined,
       });
 
   // own posts ParseResult から OwnTweetRef を抽出して back-references を取得

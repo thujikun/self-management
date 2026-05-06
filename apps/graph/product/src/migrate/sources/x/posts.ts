@@ -120,19 +120,23 @@ export function personSeedNode(account: XAccountConfig, personId: string): NodeI
   };
 }
 
+export interface ParseOwnPostsOptions {
+  maxPages?: number;
+  fetcher?: FetchFn;
+  /** since_id (X v2 API): この id より新しい tweet のみ fetch (true incremental) */
+  sinceId?: string;
+}
+
 /**
- * own posts を 1 アカウント分 fetch して ParseResult を返す。
+ * own posts を 1 アカウント分 fetch して ParseResult を返す。sinceId を渡すと
+ * 「それ以降の新規 only」モードで動作 (Free tier read 節約)。
  *
- * @param account X_ACCOUNTS の 1 entry
- * @param creds 同 account の OAuth credentials
- * @param opts maxPages / fetcher を inject 可能
- *
- * @graph-connects x-api [reads_from] /2/users/{userId}/tweets を全 page fetch
+ * @graph-connects x-api [reads_from] /2/users/{userId}/tweets を fetch (since_id 対応)
  */
 export async function parseOwnPosts(
   account: XAccountConfig,
   creds: XCreds,
-  opts: { maxPages?: number; fetcher?: FetchFn } = {},
+  opts: ParseOwnPostsOptions = {},
 ): Promise<ParseResult> {
   const personId = personIdFor(account);
   const nodes: NodeInput[] = [personSeedNode(account, personId)];
@@ -143,10 +147,8 @@ export async function parseOwnPosts(
     max_results: "100",
     "tweet.fields":
       "created_at,conversation_id,referenced_tweets,in_reply_to_user_id,lang",
-    exclude: "", // 何も除外しない (replies/retweets 含む全部)
   };
-  // exclude="" だと X 側で 422 になることがあるので key 自体を除く
-  delete query.exclude;
+  if (opts.sinceId) query.since_id = opts.sinceId;
 
   for (const page of await xPaginate<XTweetRaw>(creds, path, query, opts)) {
     for (const tweet of page.data) {
@@ -167,19 +169,35 @@ export async function parseOwnPosts(
   return { source: `${POSTS_SOURCE}:${account.account}`, nodes, edges };
 }
 
+export interface ParseAllOwnPostsOptions {
+  maxPages?: number;
+  fetcher?: FetchFn;
+  /** account ごとに since_id を返す provider。null/undefined ならフル fetch */
+  sinceIdProvider?: (account: string) => Promise<string | null>;
+}
+
 /**
- * 両アカウントの own posts を一括 fetch (auth は loadXCreds に呼び出し側で任せる)。
+ * 両アカウントの own posts を一括 fetch。`sinceIdProvider` を渡すと真 incremental mode。
  *
- * @graph-connects x-api [reads_from] 両アカウントの /2/users/{userId}/tweets
+ * @graph-connects x-api [reads_from] 両アカウントの /2/users/{userId}/tweets (since_id 対応)
  */
 export async function parseAllOwnPosts(
   loadCreds: (account: string) => Promise<XCreds>,
-  opts: { maxPages?: number; fetcher?: FetchFn } = {},
+  opts: ParseAllOwnPostsOptions = {},
 ): Promise<ParseResult[]> {
   const out: ParseResult[] = [];
   for (const account of X_ACCOUNTS) {
     const creds = await loadCreds(account.account);
-    out.push(await parseOwnPosts(account, creds, opts));
+    const sinceId = opts.sinceIdProvider
+      ? (await opts.sinceIdProvider(account.account)) ?? undefined
+      : undefined;
+    out.push(
+      await parseOwnPosts(account, creds, {
+        maxPages: opts.maxPages,
+        fetcher: opts.fetcher,
+        sinceId,
+      }),
+    );
   }
   return out;
 }

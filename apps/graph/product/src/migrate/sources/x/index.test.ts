@@ -9,7 +9,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { _setSecretCacheForTest, clearSecretCache } from "@self/otel/secret";
-import { parseX } from "./index.js";
+import { buildDefaultSinceIdProvider, parseX } from "./index.js";
 import type { XCreds } from "./auth.js";
 import type { FetchFn } from "./client.js";
 
@@ -211,6 +211,54 @@ describe("parseX", () => {
     // own posts: 2 calls、back-refs: 2 own tweets × 2 endpoints = 4 calls = 6 total
     expect(fetcher).toHaveBeenCalledTimes(6);
     expect(result.source).toBe("x");
+  });
+
+  it("buildDefaultSinceIdProvider returns a SinceIdProvider that queries the injected BQ client", async () => {
+    const mockClient = {
+      createQueryJob: vi.fn(async () => [
+        { getQueryResults: async () => [[{ max_id: "999" }]] },
+      ] as Awaited<ReturnType<Parameters<typeof buildDefaultSinceIdProvider>[0] extends undefined ? never : Parameters<typeof buildDefaultSinceIdProvider>[0]["createQueryJob"]>>),
+    };
+    const provider = buildDefaultSinceIdProvider(mockClient);
+    const out = await provider("foo", "own");
+    expect(out).toBe("999");
+    expect(mockClient.createQueryJob).toHaveBeenCalled();
+  });
+
+  it("incremental mode passes since_id (own + mention) and caps liked/bookmark to noSinceIdMaxPages", async () => {
+    const loadCreds = vi.fn().mockResolvedValue(fakeCreds);
+    const sinceIdProvider = vi.fn().mockImplementation((account: string, kind: string) =>
+      Promise.resolve(`${account}-${kind}-id`),
+    );
+    const fetcher = vi.fn().mockReturnValue(
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: async () => "",
+        json: async () => ({ data: [], meta: {} }),
+      }),
+    );
+    const bearerProvider = vi.fn().mockResolvedValue("BEAR");
+    await parseX(loadCreds as (a: string) => Promise<XCreds>, {
+      fetcher: fetcher as FetchFn,
+      bearerProvider,
+      incremental: true,
+      sinceIdProvider,
+    });
+    // own posts × 2 → since_id=...own-id 付与
+    const urls = fetcher.mock.calls.map((c) => c[0] as string);
+    const ownUrls = urls.filter((u) => u.includes("/tweets?"));
+    for (const u of ownUrls) {
+      expect(u).toContain("since_id=");
+      expect(u).toMatch(/since_id=[\w-]+-own-id/);
+    }
+    // mention 用 URL も since_id 入る
+    const mentionUrls = urls.filter((u) => u.includes("/mentions?"));
+    for (const u of mentionUrls) {
+      expect(u).toContain("since_id=");
+    }
+    // sinceIdProvider が own+mention で各 account 分呼ばれる (= 2 accounts × 2 kinds = 4)
+    expect(sinceIdProvider).toHaveBeenCalledTimes(4);
   });
 
   it("falls back to default loadXCreds (Secret Manager) when no loadCreds is provided", async () => {

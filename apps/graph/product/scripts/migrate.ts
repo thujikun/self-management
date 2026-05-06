@@ -6,8 +6,10 @@
  *   pnpm graph:migrate -- --dry-run           # parse + 統計のみ、BQ には書かない
  *   pnpm graph:migrate -- --source=memory     # 単一 source のみ
  *   pnpm graph:migrate -- --no-embed          # embedding 生成を skip
- *   pnpm graph:migrate -- --source=x --incremental    # X のみ最近 ~200 件のみ取得 (cron 用)
- *   pnpm graph:migrate -- --source=x --max-pages=5    # X のページ数を明示指定
+ *   pnpm graph:migrate -- --source=x --incremental    # since_id-based 真 incremental
+ *                                                     # (own/mention は新規のみ、liked/bookmark は最新 100 件)
+ *                                                     # Free tier 持続可能 (~30-150 reads/日)
+ *   pnpm graph:migrate -- --source=x --max-pages=5    # X のページ数を明示指定 (incremental と排他)
  *   pnpm graph:migrate -- --source=x --with-back-refs --back-refs-max=50
  *                                                     # 自分の tweet への外部 engagement
  *                                                     # (retweet/quote of me) を fetch (OAuth2 必須)
@@ -63,7 +65,7 @@ const sourceFilter = [...args].find((a) => a.startsWith("--source="))?.slice("--
 /** @graph-connects none */
 const maxPagesArg = [...args].find((a) => a.startsWith("--max-pages="))?.slice("--max-pages=".length);
 /** @graph-connects none */
-const maxPages = maxPagesArg ? Number(maxPagesArg) : incremental ? 2 : undefined;
+const maxPages = maxPagesArg ? Number(maxPagesArg) : undefined;
 
 type SourceName = "operations-log" | "threads" | "strategy" | "memory" | "x" | "code";
 /** @graph-connects none */
@@ -91,6 +93,7 @@ async function runParsers(): Promise<ParseResult[]> {
           x: () =>
             parseX(undefined, {
               ...(maxPages !== undefined ? { maxPages } : {}),
+              ...(incremental ? { incremental: true } : {}),
               ...(withBackRefs ? { skipBackReferences: false } : {}),
               ...(backRefsMax !== undefined ? { backRefsMaxTweets: backRefsMax } : {}),
             }),
