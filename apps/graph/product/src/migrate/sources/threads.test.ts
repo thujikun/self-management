@@ -108,7 +108,7 @@ key:
 body`;
     const { fm } = parseFrontmatter(md);
     // parser は `  -` プレフィックスでないと item として認識しない → 結果は空 list
-    expect(fm.key as Array<unknown>).toEqual([]);
+    expect((fm as Record<string, unknown>).key).toEqual([]);
   });
 });
 
@@ -117,8 +117,8 @@ describe("extractTweetChain", () => {
     const result = extractTweetChain({
       conversation_id: "convo-1",
       chain: [
-        { tweet: 1, id: "t1", replied_to: null },
-        { tweet: 2, id: "t2", replied_to: "t1" },
+        { tweet: "1", id: "t1" },
+        { tweet: "2", id: "t2", replied_to: "t1" },
       ],
     });
     expect(result.conversationId).toBe("convo-1");

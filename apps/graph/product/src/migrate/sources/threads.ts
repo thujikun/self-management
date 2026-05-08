@@ -57,7 +57,9 @@ export interface Frontmatter {
   source?: string;
   source_article?: string;
   tweet_ids?: Array<Record<string, string>>;
-  chain?: Array<{ tweet: number; id: string; replied_to: string | null }>;
+  // parser は YAML 値を全部 string で扱うため、chain item も Record<string, string>。
+  // tweet → number 変換は extractTweetChain 側で実施。
+  chain?: Array<Record<string, string>>;
   verified?: boolean;
 }
 

@@ -19,7 +19,7 @@
  */
 
 import { deterministicId } from "../../common/id.js";
-import type { EdgeInput, NodeInput } from "../common/types.js";
+import type { EdgeInput, NodeInput } from "../../common/types.js";
 
 /**
  * X API の referenced_tweets.type → personal_edge_type の mapping。

@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import type { NodeInput } from "../common/types.js";
+import type { NodeInput } from "../../common/types.js";
 import {
   buildUrlIndex,
   buildUrlReferenceEdges,
