@@ -21,9 +21,12 @@ export default defineConfig({
       "scripts/**/*.{test,spec}.{ts,tsx}",
     ],
     // ts-morph in-memory project の cold-start (`apps/graph/.../code/parser.test.ts`)
-    // が full-suite 並列負荷時に default 5s に届かず flake するため 15s に拡張。
-    // 通常の unit test が 15s を超えるなら "実バグ" として扱う前提の上限。
-    testTimeout: 15000,
+    // が full-suite 並列負荷時に default 5s に届かず flake するため 30s に拡張。
+    // monorepo の依存数が増える (turbo / TanStack 系で +169 packages) と worker の
+    // import phase が線形悪化し、cold-start テストが届かなくなる。30s は通常の
+    // unit test 上限としては十分余裕で、これを超えるなら "実バグ" として扱う前提。
+    // pool: "threads" を試したが、共有状態を前提とするテストが破綻するため fork のまま。
+    testTimeout: 30000,
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
