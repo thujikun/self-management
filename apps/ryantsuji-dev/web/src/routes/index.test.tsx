@@ -1,18 +1,20 @@
 /**
  * `/` (landing page) のユニット test。
  *
- * Route export と placeholder copy ("coming soon" と syndication 行) を SSR で網羅。
- * router context が要らない範囲なので、`renderToString` で IndexPage を直接 render する。
+ * `IndexPage` は `Link` (router context 必要) を含むので、`RouterProvider` 経由で
+ * SSR してから landing copy を確認する。Route export 自体の実体化チェックも兼ねる。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business landing route の placeholder copy が壊れていないことを SSR で保証。Phase 1 (design discovery) 後の本実装に置き換わるまでの一時 guard。Route export 自体も object として存在することを確認
+ * @graph-business landing route の copy + /posts への入口リンクが壊れていないことを SSR で保証。Route export 自体も object として存在することを確認
  * @graph-connects none
  */
 
+import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { getRouter } from "../router.js";
 import { Route } from "./index.js";
 
 describe("/ — landing page", () => {
@@ -21,12 +23,15 @@ describe("/ — landing page", () => {
     expect(Route).not.toBeNull();
   });
 
-  it("IndexPage SSR が placeholder コピーを含む", () => {
-    const Component = Route.options.component;
-    if (!Component) throw new Error("Route.options.component is undefined");
-    const html = renderToString(<Component />);
+  it("IndexPage SSR が landing copy + /posts 入口を含む", async () => {
+    const router = getRouter({
+      history: createMemoryHistory({ initialEntries: ["/"] }),
+    });
+    await router.load();
+    const html = renderToString(<RouterProvider router={router} />);
     expect(html).toContain("ryantsuji.dev");
-    expect(html).toContain("coming soon");
+    expect(html).toContain("engineering / design / product");
+    expect(html).toContain('href="/posts"');
     expect(html).toContain("zenn.dev/ryantsuji");
     expect(html).toContain("dev.to/ryantsuji");
   });
