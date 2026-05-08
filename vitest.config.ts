@@ -15,17 +15,21 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: [
-      "apps/**/src/**/*.{test,spec}.ts",
-      "packages/**/src/**/*.{test,spec}.ts",
-      "infra/**/*.{test,spec}.ts",
-      "scripts/**/*.{test,spec}.ts",
+      "apps/**/src/**/*.{test,spec}.{ts,tsx}",
+      "packages/**/src/**/*.{test,spec}.{ts,tsx}",
+      "infra/**/*.{test,spec}.{ts,tsx}",
+      "scripts/**/*.{test,spec}.{ts,tsx}",
     ],
+    // ts-morph in-memory project の cold-start (`apps/graph/.../code/parser.test.ts`)
+    // が full-suite 並列負荷時に default 5s に届かず flake するため 15s に拡張。
+    // 通常の unit test が 15s を超えるなら "実バグ" として扱う前提の上限。
+    testTimeout: 15000,
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
       include: [
-        "apps/**/src/**/*.ts",
-        "packages/**/src/**/*.ts",
+        "apps/**/src/**/*.{ts,tsx}",
+        "packages/**/src/**/*.{ts,tsx}",
         "scripts/hooks/**/*.ts",
         "infra/**/*.ts",
       ],
@@ -49,6 +53,8 @@ export default defineConfig({
         "scripts/*.cli.ts",
         // Pulumi の Pulumi.yaml / Pulumi.<stack>.yaml は code ではない
         "**/Pulumi.*.yaml",
+        // TanStack Router 自動生成 routeTree (gitignore 済、自動付与ヘッダーで lint/type 抑制)
+        "**/routeTree.gen.ts",
       ],
       // 閾値は **each-file 基準** で強制 (Ryan ルール: 全体平均では 1 ファイル 100% で
       // 他をごまかせるため不採用)。`perFile: true` で coverage.include の各ファイルが

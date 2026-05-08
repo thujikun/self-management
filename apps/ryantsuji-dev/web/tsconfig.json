@@ -1,0 +1,20 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "outDir": "./.tsc-out",
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["@cloudflare/workers-types/2023-07-01", "vite/client"],
+    "paths": {
+      "~/*": ["./src/*"]
+    },
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["src/**/*", "vite.config.ts"],
+  "exclude": ["node_modules", ".output", "dist", ".tsc-out"]
+}

@@ -1,0 +1,12 @@
+node_modules
+.output
+dist
+.tsc-out
+.wrangler
+.dev.vars
+.env
+.env.local
+*.log
+
+# TanStack Router auto-generated route tree (regenerated on dev/build)
+src/routeTree.gen.ts

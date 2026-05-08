@@ -1,0 +1,8 @@
+config:
+  ryantsuji-dev:zoneName: ryantsuji.dev
+  # CF API token: 起動前に `pulumi config set --secret cloudflare:apiToken <token>` で設定
+  # token に必要な scope: Zone:Read, DNS:Edit, Workers Scripts:Edit (将来の Worker 連携用)
+
+  cloudflare:apiToken:
+    secure: v1:lvMb5SzfVjxL8j+e:Qw6JsZvsExt0k9vxy9ui9QAINvAKegUQf/4m69EFAIhrwZ8RAfVc3n3Ecgriv8k/3bWGmMBnE/Qd6A1umis+Mc1UFm00
+encryptionsalt: v1:6+UYcA94eco=:v1:iSyOSzMdMIYsYjUW:S5GD4g4z5PKWGRwLkx+sgCVMoH+RQg==
