@@ -1,0 +1,83 @@
+# self-management CI ワークフロー。
+#
+# guards (cheap guard) が pass した後、typecheck / lint / test / build を並列実行。
+# pre-commit hook と一部重複するが、web UI merge / hook bypass のリスクヘッジとして
+# CI 側でも全 guard を再実行する (CLAUDE.md ルール 1 と整合)。
+#
+# runner: ubuntu-latest (public repo は free 無制限)。
+# turbo remote cache は使わず、build job のみ actions/cache で .turbo/ を commit 跨ぎ復元。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  guards:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+      - name: Repo guards (secrets / no-ignore / line-count / graph-tags)
+        run: pnpm check:all
+        shell: bash
+      - name: operations/log.md compaction check
+        run: pnpm log:check
+        shell: bash
+
+  typecheck:
+    runs-on: ubuntu-latest
+    needs: guards
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+      - name: tsc -b (project references)
+        run: pnpm typecheck
+        shell: bash
+
+  lint:
+    runs-on: ubuntu-latest
+    needs: guards
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+      - name: ESLint (max-warnings=0)
+        run: pnpm lint
+        shell: bash
+      - name: Prettier check
+        run: pnpm format:check
+        shell: bash
+
+  test:
+    runs-on: ubuntu-latest
+    needs: guards
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+      - name: Vitest with per-file 90% coverage thresholds
+        run: pnpm test:coverage
+        shell: bash
+
+  build:
+    runs-on: ubuntu-latest
+    needs: guards
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+      - name: Restore turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
+      - name: Build (turbo run build)
+        run: pnpm build
+        shell: bash
