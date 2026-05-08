@@ -20,7 +20,7 @@ describe("renderMarkdown", () => {
   // ts-morph の prewarm パターンと同様、テスト本体の timeout を変えずに吸収する。
   beforeAll(async () => {
     await renderMarkdown(
-      ['---', 'title: "warmup"', 'publishedAt: "2026-05-08"', "---", "warm"].join("\n"),
+      ["---", 'title: "warmup"', 'publishedAt: "2026-05-08"', "---", "warm"].join("\n"),
     );
   }, 60_000);
 
