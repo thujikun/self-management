@@ -1,0 +1,10 @@
+name: self-management-ryantsuji-dev
+runtime:
+  name: nodejs
+  options:
+    packagemanager: pnpm
+description: |
+  Infrastructure for ryantsuji.dev (personal blog).
+  - Cloudflare zone (imported, registered via CF Registrar dashboard)
+  - DNS records (apex / www, wired to Workers once deployed)
+  - Workers route + custom domain binding (added after first wrangler deploy)

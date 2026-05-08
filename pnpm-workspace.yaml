@@ -36,7 +36,27 @@ catalog:
   # Pulumi (infra/)
   '@pulumi/gcp': ^9.22.0
   '@pulumi/pulumi': ^3.234.0
+  '@pulumi/cloudflare': ^6.15.0
   '@pulumiverse/grafana': ^2.29.0
+
+  # ryantsuji-dev — frontend / SSR
+  react: ^19.1.0
+  react-dom: ^19.1.0
+  '@types/react': ^19.1.0
+  '@types/react-dom': ^19.1.0
+  '@tanstack/react-router': ^1.169.0
+  '@tanstack/react-router-devtools': ^1.166.0
+  '@tanstack/router-plugin': ^1.167.0
+  '@tanstack/react-start': ^1.167.0
+  '@tanstack/react-query': ^5.100.0
+  '@tanstack/react-query-devtools': ^5.100.0
+
+  # ryantsuji-dev — backend (CF Workers + Hono)
+  hono: ^4.9.0
+  '@cloudflare/workers-types': ^4.20251016.0
+  wrangler: ^4.46.0
+  vite: ^7.2.0
+  '@vitejs/plugin-react': ^5.1.0
 
   # Validation / utils
   zod: ^3.24.0

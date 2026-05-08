@@ -28,14 +28,14 @@ import { readFileSync, existsSync } from "node:fs";
  *
  * @graph-connects none
  */
-export const STACKS = new Set(["core", "ryan-product-graph"]);
+export const STACKS = new Set(["core", "ryan-product-graph", "ryantsuji-dev"]);
 
 /**
  * 既知 domain 一覧。新規 domain を追加する場合はここに足す。
  *
  * @graph-connects none
  */
-export const DOMAINS = new Set(["infra", "graph", "x-runtime", "content-pipeline", "release-management"]);
+export const DOMAINS = new Set(["infra", "graph", "x-runtime", "content-pipeline", "release-management", "publishing"]);
 
 /**
  * 対象拡張子。.test.ts は除外。bin/ は CLI entry point として src/ 側のテスト済 lib を

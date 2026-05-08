@@ -1,0 +1,20 @@
+{
+  "name": "@self/infra-ryantsuji-dev",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ryantsuji.dev infra — Cloudflare zone, DNS records, Workers route bindings",
+  "main": "index.ts",
+  "scripts": {
+    "preview": "pulumi preview",
+    "up": "pulumi up",
+    "destroy": "pulumi destroy"
+  },
+  "dependencies": {
+    "@pulumi/cloudflare": "catalog:",
+    "@pulumi/pulumi": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
