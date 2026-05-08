@@ -12,6 +12,7 @@
 | **コードレビュー観点** | **[review-guidelines.md](./review-guidelines.md)** |
 | **ガイドライン (詳細)** | **[guidelines/README.md](./guidelines/README.md)** |
 | **build pipeline (turbo)** | **[build-pipeline.md](./build-pipeline.md)** |
+| spike 記録 | [spike/](./spike/) |
 | MCP サーバー仕様 (将来) | [mcp/README.md](./mcp/README.md) |
 | インフラ全体 | [infra/README.md](./infra/README.md) |
 | 自動生成 catalog | [generated/](./generated/) |
