@@ -20,7 +20,7 @@
  */
 
 import { deterministicId } from "../../common/id.js";
-import type { EdgeInput, NodeInput, ParseResult } from "../common/types.js";
+import type { EdgeInput, NodeInput, ParseResult } from "../../common/types.js";
 import { xFetchBearer, type FetchFn } from "./client.js";
 import {
   externalTweetToContentNode,

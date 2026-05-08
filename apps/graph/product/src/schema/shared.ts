@@ -45,7 +45,7 @@ export type NodeTable = (typeof NODE_TABLES)[number];
  *
  * @graph-connects none
  */
-export const COMMON_TIMESTAMP_FIELDS: TableSchema["fields"] = [
+export const COMMON_TIMESTAMP_FIELDS: NonNullable<TableSchema["fields"]> = [
   { name: "first_seen_at", type: "TIMESTAMP", mode: "REQUIRED" },
   { name: "updated_at", type: "TIMESTAMP", mode: "REQUIRED" },
 ];
@@ -59,7 +59,7 @@ export const COMMON_TIMESTAMP_FIELDS: TableSchema["fields"] = [
  *
  * @graph-connects none
  */
-export const COMMON_EMBEDDING_FIELDS: TableSchema["fields"] = [
+export const COMMON_EMBEDDING_FIELDS: NonNullable<TableSchema["fields"]> = [
   {
     name: "embedding",
     type: "FLOAT64",

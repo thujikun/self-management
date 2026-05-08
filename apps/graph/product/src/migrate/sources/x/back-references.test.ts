@@ -21,7 +21,7 @@ import {
   type OwnTweetRef,
 } from "./back-references.js";
 import type { FetchFn } from "./client.js";
-import type { NodeInput } from "../common/types.js";
+import type { NodeInput } from "../../common/types.js";
 
 function fakeOk(body: unknown): ReturnType<FetchFn> {
   return Promise.resolve({

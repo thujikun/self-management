@@ -17,7 +17,7 @@
 
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import type { NodeInput, ParseResult } from "../common/types.js";
+import type { NodeInput, ParseResult } from "../../common/types.js";
 import {
   generateExplicitEdges,
   symbolNodeId,

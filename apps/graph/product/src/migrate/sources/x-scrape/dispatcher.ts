@@ -11,7 +11,7 @@
  * @graph-connects none
  */
 
-import type { ParseResult } from "../common/types.js";
+import type { ParseResult } from "../../common/types.js";
 import { searchAdapter } from "./search.js";
 import type { ScrapeAdapter, ScrapeContext, ScrapeKind } from "./types.js";
 

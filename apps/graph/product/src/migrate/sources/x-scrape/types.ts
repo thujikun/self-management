@@ -12,7 +12,7 @@
  * @graph-connects none
  */
 
-import type { ParseResult } from "../common/types.js";
+import type { ParseResult } from "../../common/types.js";
 
 /** scraper が扱う kind (= ingest 種別)。 */
 export type ScrapeKind = "search" | "retweets" | "quotes";

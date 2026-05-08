@@ -13,7 +13,7 @@
  */
 
 import { deterministicId } from "../../common/id.js";
-import type { NodeInput } from "../common/types.js";
+import type { NodeInput } from "../../common/types.js";
 import { PERSON_SOURCE } from "./accounts.js";
 import { tweetSubtype, type XTweetRaw } from "./posts.js";
 

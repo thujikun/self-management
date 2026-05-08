@@ -14,7 +14,7 @@
  * @graph-connects secret-manager [reads_from] xmcp-app-credentials + xmcp-user-{account} (default loadCreds)
  */
 
-import type { ParseResult } from "../common/types.js";
+import type { ParseResult } from "../../common/types.js";
 import { extractOwnTweetRefs, parseBackReferences } from "./back-references.js";
 import { loadXCreds, type XCreds } from "./auth.js";
 import type { FetchFn } from "./client.js";
