@@ -7,7 +7,8 @@
   "scripts": {
     "preview": "pulumi preview",
     "up": "pulumi up",
-    "destroy": "pulumi destroy"
+    "destroy": "pulumi destroy",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@pulumi/gcp": "catalog:",
