@@ -8,7 +8,7 @@
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business post loader の構造保証。listPosts が新着順 + draft 除外で返ること、getPostSource が slug → 全文 を返し未知 slug で null を返すこと、frontmatter parse error を露出させること
+ * @graph-business post loader の構造保証。listPosts が新着順 + draft 除外で返ること、getPostSource が published post 本文を返し draft / 未知 slug で null を返すこと
  * @graph-connects none
  */
 
@@ -20,19 +20,18 @@ describe("listPosts", () => {
   it("少なくとも 1 件の post を新着順 (publishedAt 降順) で返す", () => {
     const posts = listPosts();
     expect(posts.length).toBeGreaterThanOrEqual(1);
-    for (let i = 1; i < posts.length; i++) {
-      expect(posts[i - 1].publishedAt >= posts[i].publishedAt).toBe(true);
-    }
+    const dates = posts.map((p) => p.publishedAt);
+    const sorted = [...dates].sort((a, b) => b.localeCompare(a));
+    expect(dates).toStrictEqual(sorted);
   });
 
-  it("draft: true の post は除外される", () => {
+  it("draft: true の post は一切含まれない", () => {
     const posts = listPosts();
-    expect(posts.every((p) => p.draft === false)).toBe(true);
+    expect(posts.map((p) => p.draft)).toStrictEqual(posts.map(() => false));
   });
 
-  it("各 post に slug / title / publishedAt が必ず付く", () => {
-    const posts = listPosts();
-    for (const p of posts) {
+  it("各 post の slug / title / publishedAt が schema 準拠", () => {
+    for (const p of listPosts()) {
       expect(p.slug).toMatch(/^[\w-]+$/);
       expect(p.title.length).toBeGreaterThan(0);
       expect(p.publishedAt).toMatch(/^\d{4}-\d{2}-\d{2}/);
@@ -41,14 +40,19 @@ describe("listPosts", () => {
 });
 
 describe("getPostSource", () => {
-  it("既存 slug で markdown 全文 (frontmatter 込み) を返す", () => {
+  it("既存 published slug で markdown 全文 (frontmatter 込み) を返す", () => {
     const slug = listPosts()[0].slug;
     const source = getPostSource(slug);
-    expect(source).not.toBeNull();
-    expect(source?.startsWith("---\n")).toBe(true);
+    expect(source).toMatch(/^---\n/);
+    expect(source).toMatch(/\n---\n/);
   });
 
   it("存在しない slug で null", () => {
     expect(getPostSource("does-not-exist-anywhere")).toBeNull();
+  });
+
+  it("draft post の slug でも null (公開経路から漏らさない)", () => {
+    // _draft-example.md は frontmatter で `draft: true` を持つ
+    expect(getPostSource("_draft-example")).toBeNull();
   });
 });

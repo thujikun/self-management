@@ -1,6 +1,8 @@
 ---
-title: "Minimal post"
+title: "Now"
 publishedAt: "2026-05-07"
 ---
 
-summary も tags も無い最小投稿。一覧 card / 詳細 page で「不存在の null branch」を実コーパスでカバーするためのサンプル。一段落のみで heading も無いので TOC も出ない (見出し 0-1 件は detail page で TOC を出さない仕様)。
+ベンチマーク代わりの短い "now" page。普段考えていることのスナップショット。
+
+最近は AI infra (CTO 1 人で 17 個の MCP server fleet を運用している) と、個人サイトの design / publishing パイプライン (本サイト) の両方に時間を使っている。書きながら考えを整理し、Zenn と dev.to に syndicate する形で多 channel に出す。

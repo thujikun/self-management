@@ -64,45 +64,48 @@ function toMeta(path: string, source: string): PostMeta {
 }
 
 /**
- * 内部 Map: slug → markdown source 全文。lazy init で 1 度だけ構築。
+ * 内部 Map: slug → { meta, source }。`draft: true` は **構築段階で除外** する。
+ * これで `listPosts` / `getPostSource` の両方から draft が一元的に見えなくなる
+ * (どちらかだけで filter すると経路によって draft が漏れるリスクが残る)。
  *
  * @graph-connects none
  */
-let _bySlug: Map<string, string> | null = null;
+interface PublishedEntry {
+  meta: PostMeta;
+  source: string;
+}
 /** @graph-connects none */
-function bySlug(): Map<string, string> {
-  if (_bySlug) return _bySlug;
-  const out = new Map<string, string>();
+let _published: Map<string, PublishedEntry> | null = null;
+/** @graph-connects none */
+function published(): Map<string, PublishedEntry> {
+  if (_published) return _published;
+  const out = new Map<string, PublishedEntry>();
   for (const [path, mod] of Object.entries(rawSources)) {
     const meta = toMeta(path, mod.default);
-    out.set(meta.slug, mod.default);
+    if (meta.draft) continue;
+    out.set(meta.slug, { meta, source: mod.default });
   }
-  _bySlug = out;
+  _published = out;
   return out;
 }
 
 /**
- * 公開 API: 全 post の meta を `publishedAt` 降順 (新着順) で返す。
- * `draft: true` の post は除外。
+ * 公開 API: 全 published post の meta を `publishedAt` 降順 (新着順) で返す。
  *
  * @graph-connects content [calls] parseFrontmatter で各 source の Frontmatter を抽出
  */
 export function listPosts(): PostMeta[] {
-  const out: PostMeta[] = [];
-  for (const [path, mod] of Object.entries(rawSources)) {
-    const meta = toMeta(path, mod.default);
-    if (meta.draft) continue;
-    out.push(meta);
-  }
-  return out.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+  return [...published().values()]
+    .map((e) => e.meta)
+    .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
 }
 
 /**
  * 公開 API: slug から markdown source 全文 (frontmatter 込み) を返す。
- * 存在しなければ null。
+ * 存在しないか draft なら null (公開経路に draft を漏らさない)。
  *
  * @graph-connects none
  */
 export function getPostSource(slug: string): string | null {
-  return bySlug().get(slug) ?? null;
+  return published().get(slug)?.source ?? null;
 }
