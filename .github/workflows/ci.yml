@@ -5,7 +5,10 @@
 # CI 側でも全 guard を再実行する (CLAUDE.md ルール 1 と整合)。
 #
 # runner: ubuntu-latest (public repo は free 無制限)。
-# turbo remote cache は使わず、build job のみ actions/cache で .turbo/ を commit 跨ぎ復元。
+# turbo cache は actions/cache で .turbo/ を全 build 系 job (typecheck/lint/test/build)
+# で commit 跨ぎ復元。typecheck と test は TanStack Router 自動生成
+# `routeTree.gen.ts` (gitignore 済) を必要とするため、各 job で `pnpm build` を
+# 先行実行して generated artifacts を確保する (cortex の build:affected 同型 pattern)。
 name: CI
 
 on:
@@ -35,7 +38,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
       - uses: ./.github/actions/setup
-      - name: tsc -b (project references)
+      - name: Restore turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
+      - name: Build (generates routeTree.gen.ts via TanStack Router plugin)
+        run: pnpm build
+        shell: bash
+      - name: tsc --noEmit (per-workspace)
         run: pnpm typecheck
         shell: bash
 
@@ -60,6 +73,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
       - uses: ./.github/actions/setup
+      - name: Restore turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
+      - name: Build (generates routeTree.gen.ts via TanStack Router plugin)
+        run: pnpm build
+        shell: bash
       - name: Vitest with per-file 90% coverage thresholds
         run: pnpm test:coverage
         shell: bash
