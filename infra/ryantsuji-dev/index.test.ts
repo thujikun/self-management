@@ -30,7 +30,10 @@ beforeAll(() => {
     "ryantsuji-dev:zoneName": "ryantsuji.dev",
   });
   pulumi.runtime.setMocks({
-    newResource(args: pulumi.runtime.MockResourceArgs): { id: string; state: Record<string, unknown> } {
+    newResource(args: pulumi.runtime.MockResourceArgs): {
+      id: string;
+      state: Record<string, unknown>;
+    } {
       return { id: `${args.name}_id`, state: { ...args.inputs, id: `${args.name}_id` } };
     },
     call(args: pulumi.runtime.MockCallArgs): Record<string, unknown> {

@@ -130,11 +130,7 @@ describe("parseOperationsLog (integration with fixture file)", () => {
 
   it("各 release_note は body_summary を持つ", async () => {
     const path = join(dir, "log.md");
-    await writeFile(
-      path,
-      "## 2026-05-04 23:46 JST - test\nimportant body content here\n",
-      "utf8",
-    );
+    await writeFile(path, "## 2026-05-04 23:46 JST - test\nimportant body content here\n", "utf8");
     const result = await parseOperationsLog(path);
     expect(result.nodes).toHaveLength(1);
     const node = result.nodes[0];
@@ -145,11 +141,7 @@ describe("parseOperationsLog (integration with fixture file)", () => {
 
   it("body_summary は内部 H3 を除去", async () => {
     const path = join(dir, "log.md");
-    await writeFile(
-      path,
-      "## 2026-05-04 23:46 JST - x\n### sub\ntext below sub\n",
-      "utf8",
-    );
+    await writeFile(path, "## 2026-05-04 23:46 JST - x\n### sub\ntext below sub\n", "utf8");
     const result = await parseOperationsLog(path);
     const summary = result.nodes[0].body_summary as string;
     expect(summary).not.toContain("### sub");
@@ -176,11 +168,7 @@ describe("loadAllLogMarkdown", () => {
 
   it("log.md + archive ファイルを順に結合 (archive → log.md の順)", async () => {
     await writeFile(join(dir, "log.md"), "## 2026-05-06 main\nmain body\n", "utf8");
-    await writeFile(
-      join(dir, "log.archive.2026-04.md"),
-      "## 2026-04-01 old\nold body\n",
-      "utf8",
-    );
+    await writeFile(join(dir, "log.archive.2026-04.md"), "## 2026-04-01 old\nold body\n", "utf8");
     await writeFile(
       join(dir, "log.archive.2026-03.md"),
       "## 2026-03-01 older\nolder body\n",
@@ -210,7 +198,11 @@ describe("loadAllLogMarkdown", () => {
   it("無関係な .md ファイルは無視 (log.archive.* pattern のみ)", async () => {
     await writeFile(join(dir, "log.md"), "## 2026-05-06 main\nmain\n", "utf8");
     await writeFile(join(dir, "other.md"), "## 2025-01-01 noise\nnoise\n", "utf8");
-    await writeFile(join(dir, "log.archive.invalid.md"), "## 2025-01-01 invalid\ninvalid\n", "utf8");
+    await writeFile(
+      join(dir, "log.archive.invalid.md"),
+      "## 2025-01-01 invalid\ninvalid\n",
+      "utf8",
+    );
     const md = await loadAllLogMarkdown(dir);
     expect(md).toContain("main");
     expect(md).not.toContain("noise");

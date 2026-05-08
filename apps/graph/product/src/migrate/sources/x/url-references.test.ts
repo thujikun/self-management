@@ -234,14 +234,16 @@ describe("buildUrlReferenceEdges with tco resolution", () => {
 
 function makeMockClient(rows: Array<Record<string, unknown>>): BqQueryClient {
   return {
-    createQueryJob: vi.fn(async () => [
-      { getQueryResults: async () => [rows] },
-    ] as Awaited<ReturnType<BqQueryClient["createQueryJob"]>>),
+    createQueryJob: vi.fn(
+      async () =>
+        [{ getQueryResults: async () => [rows] }] as Awaited<
+          ReturnType<BqQueryClient["createQueryJob"]>
+        >,
+    ),
   };
 }
 
 describe("loadUrlIndexFromBq", () => {
-
   it("returns normalized URL → content_id index from BQ rows", async () => {
     const client = makeMockClient([
       { url: "https://Zenn.dev/u/X/", content_id: "c1" },

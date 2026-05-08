@@ -77,9 +77,7 @@ export function parseEngagementArgs(argv: string[]): EngagementArgs {
 
   const action = values.action as string | undefined;
   if (!action || !(ENGAGEMENT_ACTION_TYPES as readonly string[]).includes(action)) {
-    throw new Error(
-      `--action は必須、許容値: ${ENGAGEMENT_ACTION_TYPES.join(" | ")}`,
-    );
+    throw new Error(`--action は必須、許容値: ${ENGAGEMENT_ACTION_TYPES.join(" | ")}`);
   }
 
   const decidedAt = values["decided-at"] ?? new Date().toISOString();

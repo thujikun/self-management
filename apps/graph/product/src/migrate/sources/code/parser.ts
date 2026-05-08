@@ -89,11 +89,7 @@ export function parseConnectsComment(comment: string): ParsedConnectsTag | null 
  *
  * @graph-connects none
  */
-export function applyGraphTag(
-  tags: ParsedGraphTags,
-  tagName: string,
-  comment: string,
-): void {
+export function applyGraphTag(tags: ParsedGraphTags, tagName: string, comment: string): void {
   switch (tagName) {
     case "graph-node": {
       const m = /\{?(\w+)\}?/.exec(comment);
@@ -105,7 +101,10 @@ export function applyGraphTag(
       break;
     case "graph-domain": {
       const raw = comment.replace(/^\{|\}$/g, "").trim();
-      tags.domains = raw.split(",").map((d) => d.trim()).filter(Boolean);
+      tags.domains = raw
+        .split(",")
+        .map((d) => d.trim())
+        .filter(Boolean);
       break;
     }
     case "graph-business":
@@ -233,7 +232,12 @@ export function extractDeclarationsFromFile(
     push(cls.getName() ?? "anonymous", cls, cls.isExported(), extractTagsFromNode(cls));
     const className = cls.getName() ?? "anonymous";
     for (const method of cls.getMethods()) {
-      push(`${className}.${method.getName()}`, method, cls.isExported(), extractTagsFromNode(method));
+      push(
+        `${className}.${method.getName()}`,
+        method,
+        cls.isExported(),
+        extractTagsFromNode(method),
+      );
     }
   }
   for (const iface of sourceFile.getInterfaces()) {
@@ -266,10 +270,7 @@ export function extractDeclarationsFromFile(
  *
  * @graph-connects filesystem [reads_from] glob でファイル一覧 + 中身先読みしてフィルタ
  */
-export async function findFilesWithGraphTags(
-  patterns: string[],
-  cwd: string,
-): Promise<string[]> {
+export async function findFilesWithGraphTags(patterns: string[], cwd: string): Promise<string[]> {
   const all: string[] = [];
   for (const p of patterns) {
     const matched = await glob(p, {

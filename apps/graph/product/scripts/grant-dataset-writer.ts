@@ -43,7 +43,9 @@ async function main() {
   const [meta2] = await dataset.getMetadata();
   console.log("---current access---");
   for (const a of meta2.access ?? []) {
-    console.log(`  ${a.role}: ${a.userByEmail ?? a.specialGroup ?? a.groupByEmail ?? a.iamMember ?? "?"}`);
+    console.log(
+      `  ${a.role}: ${a.userByEmail ?? a.specialGroup ?? a.groupByEmail ?? a.iamMember ?? "?"}`,
+    );
   }
 }
 

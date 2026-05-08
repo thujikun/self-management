@@ -35,7 +35,14 @@ export const STACKS = new Set(["core", "ryan-product-graph", "ryantsuji-dev"]);
  *
  * @graph-connects none
  */
-export const DOMAINS = new Set(["infra", "graph", "x-runtime", "content-pipeline", "release-management", "publishing"]);
+export const DOMAINS = new Set([
+  "infra",
+  "graph",
+  "x-runtime",
+  "content-pipeline",
+  "release-management",
+  "publishing",
+]);
 
 /**
  * 対象拡張子。.test.ts は除外。bin/ は CLI entry point として src/ 側のテスト済 lib を
@@ -120,11 +127,16 @@ export function checkDeclarationConnects(file: string, src: string, errors: File
   const lines = src.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const ln = lines[i];
-    if (!/^(export\s+(const|let|var|function|async\s+function|class|interface|type|enum|default\s+function)|const|let|var|function|async\s+function|class)\s/.test(ln)) {
+    if (
+      !/^(export\s+(const|let|var|function|async\s+function|class|interface|type|enum|default\s+function)|const|let|var|function|async\s+function|class)\s/.test(
+        ln,
+      )
+    ) {
       continue;
     }
     // type / interface / enum は @graph-connects 不要 (cortex の `requireForTypes` デフォルト false)
-    if (/^export\s+(type|interface|enum)\s/.test(ln) || /^(type|interface|enum)\s/.test(ln)) continue;
+    if (/^export\s+(type|interface|enum)\s/.test(ln) || /^(type|interface|enum)\s/.test(ln))
+      continue;
 
     // 直前に block JSDoc または line-comment が続くか確認
     let j = i - 1;
@@ -152,7 +164,9 @@ export function checkDeclarationConnects(file: string, src: string, errors: File
     }
 
     if (!foundComment || !hasGraphConnects) {
-      const declName = ln.match(/(?:const|let|var|function|class|async\s+function)\s+([A-Za-z0-9_$]+)/)?.[1] ?? "(anonymous)";
+      const declName =
+        ln.match(/(?:const|let|var|function|class|async\s+function)\s+([A-Za-z0-9_$]+)/)?.[1] ??
+        "(anonymous)";
       errors.push({ file, msg: `top-level "${declName}" missing @graph-connects (line ${i + 1})` });
     }
   }

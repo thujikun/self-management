@@ -108,14 +108,19 @@ export async function mergeRows(
         await staging.insert(chunk, { raw: false, skipInvalidRows: false });
       } catch (insertErr) {
         // PartialFailureError の中身を全部出して原因特定
-        const e = insertErr as { errors?: Array<{ row: unknown; errors: unknown }>; message?: string };
+        const e = insertErr as {
+          errors?: Array<{ row: unknown; errors: unknown }>;
+          message?: string;
+        };
         if (e.errors && Array.isArray(e.errors) && e.errors.length > 0) {
           const summary = e.errors.slice(0, 3).map((re, idx) => ({
             row_index: i + idx,
             row_keys: re.row ? Object.keys(re.row as object) : [],
             errors: re.errors,
           }));
-          console.error(`bq-merge: insert into ${stagingName} failed for ${e.errors.length} rows. First 3:`);
+          console.error(
+            `bq-merge: insert into ${stagingName} failed for ${e.errors.length} rows. First 3:`,
+          );
           console.error(JSON.stringify(summary, null, 2));
         }
         throw insertErr;

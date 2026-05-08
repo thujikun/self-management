@@ -77,9 +77,21 @@ non-dated section
 
 describe("partitionByThreshold", () => {
   const sections = [
-    { title: "2026-05-01 old", date: new Date("2026-05-01T00:00:00Z"), body: "## 2026-05-01 old\nA" },
-    { title: "2026-05-04 mid", date: new Date("2026-05-04T00:00:00Z"), body: "## 2026-05-04 mid\nB" },
-    { title: "2026-05-06 new", date: new Date("2026-05-06T00:00:00Z"), body: "## 2026-05-06 new\nC" },
+    {
+      title: "2026-05-01 old",
+      date: new Date("2026-05-01T00:00:00Z"),
+      body: "## 2026-05-01 old\nA",
+    },
+    {
+      title: "2026-05-04 mid",
+      date: new Date("2026-05-04T00:00:00Z"),
+      body: "## 2026-05-04 mid\nB",
+    },
+    {
+      title: "2026-05-06 new",
+      date: new Date("2026-05-06T00:00:00Z"),
+      body: "## 2026-05-06 new\nC",
+    },
     { title: "学び", date: null, body: "## 学び\nD" },
   ];
 
@@ -113,7 +125,11 @@ describe("bucketByYearMonth", () => {
 describe("buildArchiveContent", () => {
   it("creates new archive with header when no existing file", () => {
     const sections = [
-      { title: "2026-04-01 a", date: new Date("2026-04-01T00:00:00Z"), body: "## 2026-04-01 a\nA\n" },
+      {
+        title: "2026-04-01 a",
+        date: new Date("2026-04-01T00:00:00Z"),
+        body: "## 2026-04-01 a\nA\n",
+      },
     ];
     const out = buildArchiveContent(null, sections, "2026-04");
     expect(out).toContain("# operations log archive (2026-04)");
@@ -127,9 +143,17 @@ describe("buildArchiveContent", () => {
 mid content
 `;
     const newSections = [
-      { title: "2026-04-01 a", date: new Date("2026-04-01T00:00:00Z"), body: "## 2026-04-01 a\nA\n" },
+      {
+        title: "2026-04-01 a",
+        date: new Date("2026-04-01T00:00:00Z"),
+        body: "## 2026-04-01 a\nA\n",
+      },
       // 2026-04-15 mid を更新版で上書き
-      { title: "2026-04-15 mid", date: new Date("2026-04-15T00:00:00Z"), body: "## 2026-04-15 mid\nUPDATED\n" },
+      {
+        title: "2026-04-15 mid",
+        date: new Date("2026-04-15T00:00:00Z"),
+        body: "## 2026-04-15 mid\nUPDATED\n",
+      },
     ];
     const out = buildArchiveContent(existing, newSections, "2026-04");
     // header 維持
@@ -148,8 +172,16 @@ describe("buildRecentContent", () => {
   it("rebuilds md with prologue + recent sections", () => {
     const prologue = "# operations log\n\nprologue\n\n";
     const recent = [
-      { title: "2026-05-04 mid", date: new Date("2026-05-04T00:00:00Z"), body: "## 2026-05-04 mid\nB" },
-      { title: "2026-05-06 new", date: new Date("2026-05-06T00:00:00Z"), body: "## 2026-05-06 new\nC" },
+      {
+        title: "2026-05-04 mid",
+        date: new Date("2026-05-04T00:00:00Z"),
+        body: "## 2026-05-04 mid\nB",
+      },
+      {
+        title: "2026-05-06 new",
+        date: new Date("2026-05-06T00:00:00Z"),
+        body: "## 2026-05-06 new\nC",
+      },
     ];
     const out = buildRecentContent(prologue, recent);
     expect(out.startsWith("# operations log")).toBe(true);

@@ -147,7 +147,9 @@ export function devtoArticleToNode(
   const id = deterministicId("devto", String(article.id));
   const description = article.description?.trim() ?? "";
   const bodyTrimmed = trimBody(body);
-  const summaryParts = [article.title, description, bodyTrimmed.slice(0, 500)].filter(isNonEmptyText);
+  const summaryParts = [article.title, description, bodyTrimmed.slice(0, 500)].filter(
+    isNonEmptyText,
+  );
   return {
     kind: "contents",
     id,

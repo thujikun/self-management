@@ -71,7 +71,12 @@ export async function loadOAuth2AppCreds(project?: string): Promise<XOAuth2AppCr
   const obj = JSON.parse(raw) as Record<string, unknown>;
   const clientId = obj.X_CLIENT_ID;
   const clientSecret = obj.X_CLIENT_SECRET;
-  if (typeof clientId !== "string" || !clientId || typeof clientSecret !== "string" || !clientSecret) {
+  if (
+    typeof clientId !== "string" ||
+    !clientId ||
+    typeof clientSecret !== "string" ||
+    !clientSecret
+  ) {
     throw new Error("xmcp-app-credentials: X_CLIENT_ID / X_CLIENT_SECRET missing");
   }
   return { clientId, clientSecret };
@@ -82,10 +87,7 @@ export async function loadOAuth2AppCreds(project?: string): Promise<XOAuth2AppCr
  *
  * @graph-connects secret-manager [reads_from] xmcp-user-{account}-oauth2
  */
-export async function loadOAuth2Tokens(
-  account: string,
-  project?: string,
-): Promise<XOAuth2Tokens> {
+export async function loadOAuth2Tokens(account: string, project?: string): Promise<XOAuth2Tokens> {
   const raw = await getSecret(`xmcp-user-${account}-oauth2`, project);
   const obj = JSON.parse(raw) as Record<string, unknown>;
   const accessToken = obj.X_OAUTH2_ACCESS_TOKEN;
@@ -108,12 +110,18 @@ export async function loadOAuth2Tokens(
  *
  * @graph-connects none
  */
-export function isExpired(tokens: XOAuth2Tokens, nowSec: number = Math.floor(Date.now() / 1000)): boolean {
+export function isExpired(
+  tokens: XOAuth2Tokens,
+  nowSec: number = Math.floor(Date.now() / 1000),
+): boolean {
   return tokens.expiresAt - nowSec <= REFRESH_BUFFER_SEC;
 }
 
 /** fetch 風 HTTP 呼び出し abstraction (test 用に inject) */
-export type FetchFn = (url: string, init: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<{
+export type FetchFn = (
+  url: string,
+  init: { method?: string; headers?: Record<string, string>; body?: string },
+) => Promise<{
   ok: boolean;
   status: number;
   text: () => Promise<string>;

@@ -108,8 +108,7 @@ export const TITLE_EXPR: Record<NodeTable, string> = {
   release_notes: "title",
   product_graph_nodes: "name",
   time_buckets: "label",
-  engagement_decisions:
-    "CONCAT(action_type, IFNULL(CONCAT(' @', target_handle), ''))",
+  engagement_decisions: "CONCAT(action_type, IFNULL(CONCAT(' @', target_handle), ''))",
   learnings: "insight",
 };
 

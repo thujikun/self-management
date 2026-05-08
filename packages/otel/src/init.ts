@@ -28,10 +28,7 @@ import { BatchLogRecordProcessor, LoggerProvider } from "@opentelemetry/sdk-logs
 import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { logs } from "@opentelemetry/api-logs";
-import {
-  ATTR_SERVICE_NAME,
-  ATTR_SERVICE_VERSION,
-} from "@opentelemetry/semantic-conventions";
+import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic-conventions";
 import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 import { getSecret } from "./secret.js";
 
@@ -78,9 +75,7 @@ export async function initOtel(opts: OtelInitOptions): Promise<NodeSDK | null> {
   const otlpEndpoint = opts.otlpEndpoint ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
   const instanceId = opts.instanceId ?? process.env.GRAFANA_OTLP_INSTANCE_ID;
   const tokenSecret =
-    opts.tokenSecretName ??
-    process.env.GRAFANA_OTLP_TOKEN_SECRET ??
-    "grafana-otlp-write-token";
+    opts.tokenSecretName ?? process.env.GRAFANA_OTLP_TOKEN_SECRET ?? "grafana-otlp-write-token";
 
   if (!otlpEndpoint || !instanceId) {
     // endpoint / instance ID 未設定はローカル開発と判断、no-op
@@ -114,7 +109,8 @@ export async function initOtel(opts: OtelInitOptions): Promise<NodeSDK | null> {
       exporter: metricExporter,
       exportIntervalMillis: 15000,
     }),
-    instrumentations: opts.enableAutoInstrumentation === false ? [] : [getNodeAutoInstrumentations()],
+    instrumentations:
+      opts.enableAutoInstrumentation === false ? [] : [getNodeAutoInstrumentations()],
   });
 
   // テスト環境では実 OTLP 接続を避けるため `OTEL_SKIP_START=true` で `start()` 抑止。

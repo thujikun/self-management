@@ -27,9 +27,7 @@ describe("getNode", () => {
   });
 
   it("node 不在 → null", async () => {
-    createQueryJobMock.mockResolvedValueOnce([
-      { getQueryResults: async () => [[]] },
-    ]);
+    createQueryJobMock.mockResolvedValueOnce([{ getQueryResults: async () => [[]] }]);
     const { getNode } = await import("./get-node.js");
     const out = await getNode({ kind: "contents", id: "missing" });
     expect(out).toBeNull();

@@ -89,9 +89,7 @@ describe("buildReferencedEdges", () => {
   });
 
   it("normalizes retweeted → references with x_reference_type='retweeted' in properties", () => {
-    const edges = buildReferencedEdges([
-      contentNode("a", [{ type: "retweeted", id: "rt1" }]),
-    ]);
+    const edges = buildReferencedEdges([contentNode("a", [{ type: "retweeted", id: "rt1" }])]);
     expect(edges).toHaveLength(1);
     expect(edges[0].edge_type).toBe("references");
     expect((edges[0].properties as { x_reference_type: string }).x_reference_type).toBe(

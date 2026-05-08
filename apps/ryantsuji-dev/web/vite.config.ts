@@ -23,8 +23,5 @@ export default defineConfig({
       "~": resolve(__dirname, "./src"),
     },
   },
-  plugins: [
-    tanstackStart(),
-    viteReact(),
-  ],
+  plugins: [tanstackStart(), viteReact()],
 });
