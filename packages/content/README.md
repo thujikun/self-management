@@ -43,6 +43,12 @@ lang: "ja"                    # "ja" | "en"、default "ja"
 
 `parseFrontmatter(data: unknown): Frontmatter` も別途 export しているので、frontmatter を render 抜きで validate したい場面 (一覧 page の build-time index など) で使える。
 
+## TOC 用 helper
+
+`extractHeadings(body)` は本文から H2 / H3 を順序通り取り出して `Heading[]` を返す。`id` は **rehype-slug が内部で使う `github-slugger` を直接利用** して算出するので、`renderMarkdown` が出す HTML 側の `<h2 id="...">` と完全に一致する。日本語見出しは Unicode を保持、同名見出しの重複時は `foo` / `foo-1` / `foo-2` の suffix も rehype-slug と同じ規則で振る。
+
+` ``` ` / `~~~` の code fence 内 `## fake` は heading として拾わない (異種 delimiter で fence は閉じない、CommonMark 準拠)。
+
 ## 使い方 (RSC 経由想定)
 
 ```tsx

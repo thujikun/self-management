@@ -57,7 +57,6 @@ const SHIKI_OPTIONS = {
     dark: "github-dark",
   },
   defaultColor: false,
-  inline: undefined,
   cssVariablePrefix: "--shiki-",
 } as const;
 

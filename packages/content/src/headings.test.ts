@@ -3,7 +3,7 @@
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business heading 抽出と reading time 推定の境界条件 test。code fence 内の "#" は無視、ATX のみ拾う、cjk と alphanumeric を別係数で換算する仕様の保証
+ * @graph-business heading 抽出と reading time 推定の境界条件 test。code fence (``` / ~~~) 内の "#" は無視、ATX のみ拾う、Unicode 見出し / 重複見出し suffix が rehype-slug と一致、cjk と alphanumeric を別係数で換算する仕様の保証
  * @graph-connects none
  */
 
@@ -16,16 +16,18 @@ describe("slugify", () => {
     expect(slugify("Hello World")).toBe("hello-world");
   });
 
-  it("日本語 / 記号は除去", () => {
-    expect(slugify("Hello! こんにちは World?")).toBe("hello-world");
+  it("日本語は Unicode 保持 (rehype-slug 互換、TOC リンクが効く)", () => {
+    expect(slugify("こんにちは World")).toBe("こんにちは-world");
+    expect(slugify("Hello! こんにちは World?")).toBe("hello-こんにちは-world");
   });
 
-  it("先頭 / 末尾の `-` を trim", () => {
-    expect(slugify("--- foo bar ---")).toBe("foo-bar");
+  it("空白は `-` に置換 (連続空白は連続 `-` のまま、github-slugger の挙動)", () => {
+    // GitHub の README anchor と同じ: " " → "-" の単純置換、圧縮はしない。
+    expect(slugify("foo   bar")).toBe("foo---bar");
   });
 
-  it("連続する空白 / ハイフンを 1 つに圧縮", () => {
-    expect(slugify("foo   bar---baz")).toBe("foo-bar-baz");
+  it("既存ハイフンは保持 (`---` → `---`、TOC の id を GitHub 表示と揃える)", () => {
+    expect(slugify("foo---bar")).toBe("foo---bar");
   });
 });
 
@@ -39,14 +41,40 @@ describe("extractHeadings", () => {
     ]);
   });
 
-  it("code fence 内の `## fake` は無視", () => {
+  it("backtick code fence (```) 内の `## fake` は無視", () => {
     const md = "## Real\n```\n## fake\n## also fake\n```\n## After fence";
     expect(extractHeadings(md).map((h) => h.text)).toStrictEqual(["Real", "After fence"]);
+  });
+
+  it("tilde code fence (~~~) 内の `## fake` も無視", () => {
+    const md = "## Real\n~~~\n## fake\n~~~\n## After";
+    expect(extractHeadings(md).map((h) => h.text)).toStrictEqual(["Real", "After"]);
+  });
+
+  it("異種 fence delimiter は内側を閉じない (~~~ で開いたら ``` では閉じない)", () => {
+    // ~~~ で開いた fence の中に ``` があっても fence は閉じない (CommonMark 仕様)。
+    // 結果として `## also-inside` は code 扱い → heading として拾わない。
+    const md = "## Outer\n~~~\n## also-inside\n```\n## still-inside\n~~~\n## After";
+    expect(extractHeadings(md).map((h) => h.text)).toStrictEqual(["Outer", "After"]);
   });
 
   it("末尾 `#` の closing-syntax 形式にも対応", () => {
     expect(extractHeadings("## Hello ##")).toStrictEqual([
       { level: 2, text: "Hello", id: "hello" },
+    ]);
+  });
+
+  it("同名見出しの重複時は github-slugger の suffix で分かれる (foo / foo-1)", () => {
+    expect(extractHeadings("## Foo\n## Foo\n## Foo")).toStrictEqual([
+      { level: 2, text: "Foo", id: "foo" },
+      { level: 2, text: "Foo", id: "foo-1" },
+      { level: 2, text: "Foo", id: "foo-2" },
+    ]);
+  });
+
+  it("日本語見出しを Unicode 保持で id 化", () => {
+    expect(extractHeadings("## こんにちは World").map((h) => h.id)).toStrictEqual([
+      "こんにちは-world",
     ]);
   });
 
@@ -71,10 +99,15 @@ describe("estimateReadingTimeMinutes", () => {
     expect(estimateReadingTimeMinutes(en)).toBe(3);
   });
 
-  it("code fence と inline code は本文から除外", () => {
+  it("backtick code fence と inline code は本文から除外", () => {
     const longCode = "x ".repeat(5000);
     const md = `short body text\n\n\`\`\`js\n${longCode}\n\`\`\``;
-    // 本文は "short body text" だけなので最低 1 分
+    expect(estimateReadingTimeMinutes(md)).toBe(1);
+  });
+
+  it("tilde code fence も本文から除外", () => {
+    const longCode = "x ".repeat(5000);
+    const md = `short body text\n\n~~~js\n${longCode}\n~~~`;
     expect(estimateReadingTimeMinutes(md)).toBe(1);
   });
 

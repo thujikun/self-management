@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@shikijs/rehype": "catalog:",
+    "github-slugger": "catalog:",
     "gray-matter": "catalog:",
     "rehype-autolink-headings": "catalog:",
     "rehype-slug": "catalog:",

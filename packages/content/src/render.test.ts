@@ -109,4 +109,37 @@ describe("renderMarkdown", () => {
     const source = `---\ntitle: "x"\npublishedAt: "May 8 2026"\n---\nbody`;
     await expect(renderMarkdown(source)).rejects.toThrow();
   });
+
+  it("日本語見出しの TOC id は HTML 側の <h2 id> と完全一致 (rehype-slug 互換)", async () => {
+    const source = [
+      "---",
+      'title: "x"',
+      'publishedAt: "2026-05-08"',
+      "---",
+      "",
+      "## こんにちは World",
+    ].join("\n");
+    const out = await renderMarkdown(source);
+    const m = out.html.match(/<h2 id="([^"]+)"/);
+    expect(m).not.toBeNull();
+    expect(out.headings[0]?.id).toBe(m?.[1]);
+  });
+
+  it("同名見出し重複時の suffix も HTML の id 列と一致", async () => {
+    const source = [
+      "---",
+      'title: "x"',
+      'publishedAt: "2026-05-08"',
+      "---",
+      "",
+      "## Foo",
+      "",
+      "body",
+      "",
+      "## Foo",
+    ].join("\n");
+    const out = await renderMarkdown(source);
+    const ids = [...out.html.matchAll(/<h2 id="([^"]+)"/g)].map((m) => m[1]);
+    expect(out.headings.map((h) => h.id)).toStrictEqual(ids);
+  });
 });
