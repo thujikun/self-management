@@ -52,6 +52,8 @@ describe("__root route", () => {
     const html = renderToString(<RouterProvider router={router} />);
     expect(html).toContain("<html");
     expect(html).toContain("<title>ryantsuji.dev</title>");
-    expect(html).toContain("coming soon");
+    // landing copy: 「engineering / design / product」を主軸に
+    expect(html).toContain("engineering / design / product");
+    expect(html).toContain('href="/posts"');
   });
 });
