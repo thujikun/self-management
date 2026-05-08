@@ -6,14 +6,16 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./css": "./src/tokens.css"
+    "./css": "./dist/tokens.css"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsx scripts/build-css.ts && tsc",
+    "build:css": "tsx scripts/build-css.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:"
   }
 }
