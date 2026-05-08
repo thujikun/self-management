@@ -1,0 +1,32 @@
+{
+  "name": "@self/content",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Markdown parsing pipeline (frontmatter + GFM + shiki highlight) — server-only, RSC 用",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@shikijs/rehype": "catalog:",
+    "github-slugger": "catalog:",
+    "gray-matter": "catalog:",
+    "rehype-autolink-headings": "catalog:",
+    "rehype-slug": "catalog:",
+    "rehype-stringify": "catalog:",
+    "remark-gfm": "catalog:",
+    "remark-parse": "catalog:",
+    "remark-rehype": "catalog:",
+    "shiki": "catalog:",
+    "unified": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
