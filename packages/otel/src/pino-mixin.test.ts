@@ -8,6 +8,7 @@
  */
 
 import { context, trace } from "@opentelemetry/api";
+import type { Span } from "@opentelemetry/api";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
 import { InMemoryLogRecordExporter, LoggerProvider, SimpleLogRecordProcessor } from "@opentelemetry/sdk-logs";
@@ -79,7 +80,7 @@ describe("createTraceMixin", () => {
       updateName: () => fakeSpan,
       end: () => undefined,
       recordException: () => undefined,
-    } as unknown as ReturnType<typeof trace.getActiveSpan>);
+    } as unknown as Span);
     const fakeSpan = trace.getSpan(fakeContext);
     void fakeSpan;
     context.with(fakeContext, () => {

@@ -11,7 +11,8 @@
     "mcp-ryan-graph": "./bin/ryan-graph.ts"
   },
   "scripts": {
-    "start": "tsx bin/ryan-graph.ts"
+    "start": "tsx bin/ryan-graph.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@google-cloud/bigquery": "catalog:",

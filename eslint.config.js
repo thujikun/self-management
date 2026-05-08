@@ -23,6 +23,9 @@ export default tseslint.config(
       "**/coverage/**",
       ".pnpm-store/**",
       "infra/core/Pulumi.*.yaml",
+      // apps/xmcp は Python アプリ。.venv 配下に Python パッケージ同梱の .js があり
+      // browser global (document/navigator/...) 前提で no-undef を大量に出すので除外。
+      "apps/xmcp/**",
     ],
   },
   js.configs.recommended,

@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "deploy": "vite build && wrangler deploy",
     "deploy:dry": "vite build && wrangler deploy --dry-run",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@tanstack/react-router": "catalog:",

@@ -12,7 +12,8 @@
     "./secret": "./src/secret.ts"
   },
   "scripts": {
-    "test": "echo 'see root vitest'"
+    "test": "echo 'see root vitest'",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@google-cloud/secret-manager": "catalog:",
