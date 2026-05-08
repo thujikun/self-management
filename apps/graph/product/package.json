@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "init-bq": "tsx scripts/init-bq.ts",
     "alter-add-embedding": "tsx scripts/alter-add-embedding.ts",
     "grant-dataset-writer": "tsx scripts/grant-dataset-writer.ts",

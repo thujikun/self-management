@@ -89,7 +89,7 @@ pnpm build:force      # = turbo run build --force
 | `test:coverage` | `vitest run --coverage` | 同上、`perFile: 90%` 閾値も root vitest.config.ts で一元管理 |
 | `lint` / `lint:fix` | `eslint . --max-warnings=0` | flat config 1 つで完結、ファイル数依存だが micro-bench では turbo overhead の方が大きい |
 | `format` / `format:check` | `prettier --write/--check .` | 同上 |
-| `typecheck` | `tsc -b` | TS Project References 経由で incremental が効く。turbo の incremental cache と二重になり相性悪い |
+| `typecheck` | `pnpm -r typecheck` (各 package で `tsc --noEmit`) | 全 package 並列実行で十分速く、Project References を導入していないので turbo cache 化の利得が小さい。将来 cold typecheck が遅くなったら turbo 化を検討 |
 
 将来 monorepo が拡大して上記の判断が逆転したら、本ファイルに移行決定とその理由を追記する。
 
