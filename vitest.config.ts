@@ -29,6 +29,7 @@ export default defineConfig({
     // 次の閾値突破時 (60s 級) は timeout 拡張ではなく `globalSetup` で ts-morph
     // project を prewarm して cold-start 自体を短くする方針に切替える。
     testTimeout: 30000,
+    setupFiles: ["./apps/ryantsuji-dev/web/src/test-setup.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
