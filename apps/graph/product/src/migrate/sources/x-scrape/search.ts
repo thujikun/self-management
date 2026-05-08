@@ -68,11 +68,10 @@ export const searchAdapter: ScrapeAdapter = (input) => {
   }
   const rawTweets = data.tweets.map(tweetToRaw);
   const authors = uniqueAuthors(data.tweets);
-  const { contentNodes, personNodes, contentToAuthor } = externalTweetsToNodes(
-    rawTweets,
-    authors,
-    { source: "x_search_scrape", raw_query: data.rawQuery },
-  );
+  const { contentNodes, personNodes, contentToAuthor } = externalTweetsToNodes(rawTweets, authors, {
+    source: "x_search_scrape",
+    raw_query: data.rawQuery,
+  });
   const edges: EdgeInput[] = [];
   for (const c of contentNodes) {
     const authorId = contentToAuthor.get(c.id);

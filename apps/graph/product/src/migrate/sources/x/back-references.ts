@@ -119,16 +119,15 @@ export async function fetchBackRefsForTweet(
     `/2/tweets/${ref.tweetId}/quote_tweets`,
     {
       max_results: "100",
-      "tweet.fields": "created_at,conversation_id,referenced_tweets,in_reply_to_user_id,lang,author_id",
+      "tweet.fields":
+        "created_at,conversation_id,referenced_tweets,in_reply_to_user_id,lang,author_id",
       expansions: "author_id",
       "user.fields": "name,username,description",
     },
     fetcher,
   );
   const authors = new Map(
-    (qRes.includes?.users ?? [])
-      .filter((u) => u?.id && u?.username)
-      .map((u) => [u.id, u]),
+    (qRes.includes?.users ?? []).filter((u) => u?.id && u?.username).map((u) => [u.id, u]),
   );
   for (const u of authors.values()) {
     nodes.push(userToPersonNode(u));

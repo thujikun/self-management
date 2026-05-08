@@ -12,12 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { deterministicId } from "../../common/id.js";
-import {
-  buildDescription,
-  exportToNode,
-  nodeToResolverNode,
-  parseCode,
-} from "./index.js";
+import { buildDescription, exportToNode, nodeToResolverNode, parseCode } from "./index.js";
 import type { ParsedExport } from "./parser.js";
 
 const sampleExport: ParsedExport = {
@@ -32,7 +27,13 @@ const sampleExport: ParsedExport = {
     domains: ["graph", "infra"],
     business: "X 取り込み parser",
     connects: [
-      { target: "bigquery", relationship: "writes_to", cardinality: null, via: null, description: "BQ 書き込み" },
+      {
+        target: "bigquery",
+        relationship: "writes_to",
+        cardinality: null,
+        via: null,
+        description: "BQ 書き込み",
+      },
     ],
   },
 };
@@ -53,10 +54,7 @@ describe("buildDescription", () => {
       tags: { nodeType: null, stack: null, domains: [], business: null, connects: [] },
     };
     const d = buildDescription(e);
-    expect(d.split("\n")).toEqual([
-      "Function: fooFn",
-      `ファイル: ${e.filePath}`,
-    ]);
+    expect(d.split("\n")).toEqual(["Function: fooFn", `ファイル: ${e.filePath}`]);
   });
 });
 

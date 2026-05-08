@@ -18,22 +18,11 @@
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import type { NodeInput, ParseResult } from "../../common/types.js";
-import {
-  generateExplicitEdges,
-  symbolNodeId,
-  type ResolverNode,
-} from "./edges.js";
-import {
-  parseJSDocExports,
-  SOURCE_PATTERNS,
-  type ParsedExport,
-} from "./parser.js";
+import { generateExplicitEdges, symbolNodeId, type ResolverNode } from "./edges.js";
+import { parseJSDocExports, SOURCE_PATTERNS, type ParsedExport } from "./parser.js";
 
 /** @graph-connects none */
-const REPO_ROOT = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "../../../../../../../",
-);
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../../../");
 
 /**
  * cortex 同型の embedding 入力: NodeType + name + business + domain + stack + path を改行で結合。

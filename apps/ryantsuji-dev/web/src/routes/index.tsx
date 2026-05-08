@@ -23,9 +23,8 @@ function IndexPage() {
       <h1>ryantsuji.dev</h1>
       <p>coming soon — engineering / design / product writings.</p>
       <p className="meta">
-        source-of-truth for posts syndicated to{" "}
-        <a href="https://zenn.dev/ryantsuji">Zenn</a> (JP) and{" "}
-        <a href="https://dev.to/ryantsuji">dev.to</a> (EN).
+        source-of-truth for posts syndicated to <a href="https://zenn.dev/ryantsuji">Zenn</a> (JP)
+        and <a href="https://dev.to/ryantsuji">dev.to</a> (EN).
       </p>
     </main>
   );

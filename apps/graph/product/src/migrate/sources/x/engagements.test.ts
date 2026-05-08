@@ -62,9 +62,7 @@ describe("parseEngagements", () => {
           },
         ],
         includes: {
-          users: [
-            { id: "u1", username: "External", name: "External User", description: "bio" },
-          ],
+          users: [{ id: "u1", username: "External", name: "External User", description: "bio" }],
         },
         meta: {},
       }),

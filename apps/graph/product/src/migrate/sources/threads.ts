@@ -43,7 +43,7 @@ const RYAN_PERSON_ID = deterministicId(PERSON_SOURCE, "ryantsuji");
  */
 const THREAD_SUMMARIES: Record<string, string> = {
   "17mcp":
-    '17 MCP Servers thread (5本、2026-05-03 JST 20:00 投稿)。airCloset の Agentic Graph RAG を支えている 17 個の MCP server fleet を CTO 1 人で運用するために必要だった boring infra (共通 OAuth library、Redis sessions、shared BigQuery logger) の実装と、なぜ stateful monolith ではなく fleet にしたのかという設計判断の話。1.4M ユーザー基盤を持つ会社で AI infra を CTO 1 人が builds する事例として、英語圏 AI infra コミュニティ向けの再 boot 1 本目。',
+    "17 MCP Servers thread (5本、2026-05-03 JST 20:00 投稿)。airCloset の Agentic Graph RAG を支えている 17 個の MCP server fleet を CTO 1 人で運用するために必要だった boring infra (共通 OAuth library、Redis sessions、shared BigQuery logger) の実装と、なぜ stateful monolith ではなく fleet にしたのかという設計判断の話。1.4M ユーザー基盤を持つ会社で AI infra を CTO 1 人が builds する事例として、英語圏 AI infra コミュニティ向けの再 boot 1 本目。",
   dbgraph:
     "DB Graph thread (5本、2026-05-04 JST 23:14 投稿)。airCloset の 991 BQ tables / 15 schemas を natural language で誰でも query できる MCP server を $10/月 で構築した話。dictionary materialization が hard part、knowledge と access を分離する設計、Gemini で全 991 表 description を first-pass 生成し human review で long-tail を埋める運用、GCP OIDC → AWS STS → VPC Lambda の zero-static-creds auth chain、variant 検出で daily rebuild $0.10-0.20。dev.to 元記事へのリンクで thread を締める構成。",
 };
@@ -131,7 +131,10 @@ export function parseFrontmatter(md: string): { fm: Frontmatter; body: string } 
  *
  * @graph-connects none
  */
-export function extractTweetChain(fm: Frontmatter): { conversationId: string | null; chain: Array<{ tweet: number; id: string }> } {
+export function extractTweetChain(fm: Frontmatter): {
+  conversationId: string | null;
+  chain: Array<{ tweet: number; id: string }>;
+} {
   if (fm.chain && Array.isArray(fm.chain)) {
     return {
       conversationId: fm.conversation_id ?? null,
@@ -211,7 +214,10 @@ export async function parseThreads(dir: string = DEFAULT_DIR): Promise<ParseResu
       THREAD_SUMMARIES[shortName] ??
       THREAD_SUMMARIES[fm.short_name ?? ""] ??
       THREAD_SUMMARIES[fm.thread_name ?? ""] ??
-      body.replace(/```[\s\S]*?```/g, "").slice(0, 500).trim();
+      body
+        .replace(/```[\s\S]*?```/g, "")
+        .slice(0, 500)
+        .trim();
 
     nodes.push({
       kind: "contents",

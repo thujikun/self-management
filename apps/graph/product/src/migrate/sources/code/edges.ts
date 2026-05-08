@@ -110,11 +110,7 @@ export function stackRootOf(filePath: string): string {
  *
  * @graph-connects none
  */
-export function resolveTarget(
-  target: string,
-  sourceFilePath: string,
-  ctx: ResolveContext,
-): string {
+export function resolveTarget(target: string, sourceFilePath: string, ctx: ResolveContext): string {
   const sourceStack = stackRootOf(sourceFilePath);
   const sourceDir = sourceFilePath.replace(/\/[^/]+$/, "");
 

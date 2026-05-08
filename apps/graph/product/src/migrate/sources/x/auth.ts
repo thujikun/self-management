@@ -65,16 +65,10 @@ export function buildOAuth1Header(
     ...Object.entries(queryParams),
   ];
   allParams.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  const paramStr = allParams
-    .map(([k, v]) => `${rfc3986Encode(k)}=${rfc3986Encode(v)}`)
-    .join("&");
+  const paramStr = allParams.map(([k, v]) => `${rfc3986Encode(k)}=${rfc3986Encode(v)}`).join("&");
 
   // 2. signature base string
-  const baseStr = [
-    method.toUpperCase(),
-    rfc3986Encode(url),
-    rfc3986Encode(paramStr),
-  ].join("&");
+  const baseStr = [method.toUpperCase(), rfc3986Encode(url), rfc3986Encode(paramStr)].join("&");
 
   // 3. signing key と HMAC-SHA1
   const signingKey = `${rfc3986Encode(creds.consumerSecret)}&${rfc3986Encode(
@@ -101,10 +95,7 @@ export function buildOAuth1Header(
  *
  * @graph-connects secret-manager [reads_from] xmcp-app-credentials + xmcp-user-{account}
  */
-export async function loadXCreds(
-  account: string,
-  project?: string,
-): Promise<XCreds> {
+export async function loadXCreds(account: string, project?: string): Promise<XCreds> {
   const [appJson, userJson] = await Promise.all([
     getSecret("xmcp-app-credentials", project),
     getSecret(`xmcp-user-${account}`, project),

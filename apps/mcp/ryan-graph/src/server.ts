@@ -14,10 +14,7 @@
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { withSpan } from "@self/otel";
 import { NODE_TABLES } from "./bq.js";
@@ -107,7 +104,8 @@ export function createServer(): Server {
       },
       {
         name: "traverse",
-        description: "BFS traverse from a node up to maxDepth (capped at 3). Filter by edgeType and direction.",
+        description:
+          "BFS traverse from a node up to maxDepth (capped at 3). Filter by edgeType and direction.",
         inputSchema: {
           type: "object",
           properties: {
@@ -122,7 +120,8 @@ export function createServer(): Server {
       },
       {
         name: "list_recent",
-        description: "Time-ordered DESC listing of nodes for a given kind. Use 'since' (ISO 8601) for cutoff.",
+        description:
+          "Time-ordered DESC listing of nodes for a given kind. Use 'since' (ISO 8601) for cutoff.",
         inputSchema: {
           type: "object",
           properties: {

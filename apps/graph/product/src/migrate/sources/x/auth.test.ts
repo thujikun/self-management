@@ -9,12 +9,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { _setSecretCacheForTest, clearSecretCache } from "@self/otel/secret";
-import {
-  buildOAuth1Header,
-  loadXCreds,
-  rfc3986Encode,
-  type XCreds,
-} from "./auth.js";
+import { buildOAuth1Header, loadXCreds, rfc3986Encode, type XCreds } from "./auth.js";
 
 const fixedCreds: XCreds = {
   consumerKey: "ck",
@@ -44,10 +39,16 @@ describe("rfc3986Encode", () => {
 
 describe("buildOAuth1Header", () => {
   it("contains all required oauth_* fields", () => {
-    const h = buildOAuth1Header("GET", "https://api.x.com/2/users/me", fixedCreds, {}, {
-      nonce: "n1",
-      timestamp: "1700000000",
-    });
+    const h = buildOAuth1Header(
+      "GET",
+      "https://api.x.com/2/users/me",
+      fixedCreds,
+      {},
+      {
+        nonce: "n1",
+        timestamp: "1700000000",
+      },
+    );
     expect(h).toMatch(/^OAuth /);
     for (const k of [
       "oauth_consumer_key",
@@ -63,22 +64,40 @@ describe("buildOAuth1Header", () => {
   });
 
   it("is deterministic given fixed nonce/timestamp", () => {
-    const a = buildOAuth1Header("GET", "https://api.x.com/2/users/me", fixedCreds, {}, {
-      nonce: "n",
-      timestamp: "1700000000",
-    });
-    const b = buildOAuth1Header("GET", "https://api.x.com/2/users/me", fixedCreds, {}, {
-      nonce: "n",
-      timestamp: "1700000000",
-    });
+    const a = buildOAuth1Header(
+      "GET",
+      "https://api.x.com/2/users/me",
+      fixedCreds,
+      {},
+      {
+        nonce: "n",
+        timestamp: "1700000000",
+      },
+    );
+    const b = buildOAuth1Header(
+      "GET",
+      "https://api.x.com/2/users/me",
+      fixedCreds,
+      {},
+      {
+        nonce: "n",
+        timestamp: "1700000000",
+      },
+    );
     expect(a).toBe(b);
   });
 
   it("signature changes when consumer_secret changes", () => {
-    const a = buildOAuth1Header("GET", "https://x", fixedCreds, {}, {
-      nonce: "n",
-      timestamp: "1",
-    });
+    const a = buildOAuth1Header(
+      "GET",
+      "https://x",
+      fixedCreds,
+      {},
+      {
+        nonce: "n",
+        timestamp: "1",
+      },
+    );
     const b = buildOAuth1Header(
       "GET",
       "https://x",
@@ -94,14 +113,26 @@ describe("buildOAuth1Header", () => {
   });
 
   it("signature changes when query params change (params included in base string)", () => {
-    const a = buildOAuth1Header("GET", "https://x", fixedCreds, { foo: "1" }, {
-      nonce: "n",
-      timestamp: "1",
-    });
-    const b = buildOAuth1Header("GET", "https://x", fixedCreds, { foo: "2" }, {
-      nonce: "n",
-      timestamp: "1",
-    });
+    const a = buildOAuth1Header(
+      "GET",
+      "https://x",
+      fixedCreds,
+      { foo: "1" },
+      {
+        nonce: "n",
+        timestamp: "1",
+      },
+    );
+    const b = buildOAuth1Header(
+      "GET",
+      "https://x",
+      fixedCreds,
+      { foo: "2" },
+      {
+        nonce: "n",
+        timestamp: "1",
+      },
+    );
     const sigA = a.match(/oauth_signature="([^"]+)"/)?.[1];
     const sigB = b.match(/oauth_signature="([^"]+)"/)?.[1];
     expect(sigA).not.toBe(sigB);
@@ -126,14 +157,26 @@ describe("buildOAuth1Header", () => {
   });
 
   it("signs with method case-insensitively (POST = post in base string)", () => {
-    const a = buildOAuth1Header("post", "https://x", fixedCreds, {}, {
-      nonce: "n",
-      timestamp: "1",
-    });
-    const b = buildOAuth1Header("POST", "https://x", fixedCreds, {}, {
-      nonce: "n",
-      timestamp: "1",
-    });
+    const a = buildOAuth1Header(
+      "post",
+      "https://x",
+      fixedCreds,
+      {},
+      {
+        nonce: "n",
+        timestamp: "1",
+      },
+    );
+    const b = buildOAuth1Header(
+      "POST",
+      "https://x",
+      fixedCreds,
+      {},
+      {
+        nonce: "n",
+        timestamp: "1",
+      },
+    );
     expect(a).toBe(b);
   });
 });

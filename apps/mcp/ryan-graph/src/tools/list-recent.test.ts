@@ -40,9 +40,7 @@ describe("listRecent", () => {
   afterEach(() => vi.resetModules());
 
   it("基本: kind=release_notes、limit default=20、SQL に released_at 含む", async () => {
-    createQueryJobMock.mockResolvedValueOnce([
-      { getQueryResults: async () => [[]] },
-    ]);
+    createQueryJobMock.mockResolvedValueOnce([{ getQueryResults: async () => [[]] }]);
     const { listRecent } = await import("./list-recent.js");
     await listRecent({ kind: "release_notes" });
     const args = createQueryJobMock.mock.calls[0][0];
@@ -53,9 +51,7 @@ describe("listRecent", () => {
   });
 
   it("since 指定 → WHERE 条件と params に since が乗る", async () => {
-    createQueryJobMock.mockResolvedValueOnce([
-      { getQueryResults: async () => [[]] },
-    ]);
+    createQueryJobMock.mockResolvedValueOnce([{ getQueryResults: async () => [[]] }]);
     const { listRecent } = await import("./list-recent.js");
     await listRecent({ kind: "decisions", since: "2026-05-01T00:00:00Z", limit: 5 });
     const args = createQueryJobMock.mock.calls[0][0];
@@ -65,9 +61,7 @@ describe("listRecent", () => {
   });
 
   it("product_graph_nodes は description 列を使う", async () => {
-    createQueryJobMock.mockResolvedValueOnce([
-      { getQueryResults: async () => [[]] },
-    ]);
+    createQueryJobMock.mockResolvedValueOnce([{ getQueryResults: async () => [[]] }]);
     const { listRecent } = await import("./list-recent.js");
     await listRecent({ kind: "product_graph_nodes" });
     const sql = createQueryJobMock.mock.calls[0][0].query;
@@ -75,9 +69,7 @@ describe("listRecent", () => {
   });
 
   it("persons は bio 列を summary に使う (body_summary 列不在の fallback)", async () => {
-    createQueryJobMock.mockResolvedValueOnce([
-      { getQueryResults: async () => [[]] },
-    ]);
+    createQueryJobMock.mockResolvedValueOnce([{ getQueryResults: async () => [[]] }]);
     const { listRecent } = await import("./list-recent.js");
     await listRecent({ kind: "persons" });
     const sql = createQueryJobMock.mock.calls[0][0].query;
@@ -85,9 +77,7 @@ describe("listRecent", () => {
   });
 
   it("decisions は rationale_md を summary に使う", async () => {
-    createQueryJobMock.mockResolvedValueOnce([
-      { getQueryResults: async () => [[]] },
-    ]);
+    createQueryJobMock.mockResolvedValueOnce([{ getQueryResults: async () => [[]] }]);
     const { listRecent } = await import("./list-recent.js");
     await listRecent({ kind: "decisions" });
     const sql = createQueryJobMock.mock.calls[0][0].query;

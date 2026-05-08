@@ -66,7 +66,10 @@ export function parseDecisionArgs(argv: string[]): DecisionArgs {
   const tagsRaw = values.tags;
   const tags =
     typeof tagsRaw === "string" && tagsRaw.length > 0
-      ? tagsRaw.split(",").map((t) => t.trim()).filter((t) => t.length > 0)
+      ? tagsRaw
+          .split(",")
+          .map((t) => t.trim())
+          .filter((t) => t.length > 0)
       : null;
 
   return {

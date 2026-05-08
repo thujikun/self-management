@@ -67,17 +67,29 @@ const incremental = args.has("--incremental");
 /** @graph-connects none */
 const withBackRefs = args.has("--with-back-refs");
 /** @graph-connects none */
-const backRefsMaxArg = [...args].find((a) => a.startsWith("--back-refs-max="))?.slice("--back-refs-max=".length);
+const backRefsMaxArg = [...args]
+  .find((a) => a.startsWith("--back-refs-max="))
+  ?.slice("--back-refs-max=".length);
 /** @graph-connects none */
 const backRefsMax = backRefsMaxArg ? Number(backRefsMaxArg) : undefined;
 /** @graph-connects none */
 const sourceFilter = [...args].find((a) => a.startsWith("--source="))?.slice("--source=".length);
 /** @graph-connects none */
-const maxPagesArg = [...args].find((a) => a.startsWith("--max-pages="))?.slice("--max-pages=".length);
+const maxPagesArg = [...args]
+  .find((a) => a.startsWith("--max-pages="))
+  ?.slice("--max-pages=".length);
 /** @graph-connects none */
 const maxPages = maxPagesArg ? Number(maxPagesArg) : undefined;
 
-type SourceName = "operations-log" | "threads" | "strategy" | "memory" | "x" | "code" | "zenn" | "devto";
+type SourceName =
+  | "operations-log"
+  | "threads"
+  | "strategy"
+  | "memory"
+  | "x"
+  | "code"
+  | "zenn"
+  | "devto";
 /** @graph-connects none */
 const ALL_SOURCES: SourceName[] = [
   "operations-log",
@@ -100,26 +112,23 @@ async function runParsers(): Promise<ParseResult[]> {
   }
   const results: ParseResult[] = [];
   for (const t of targets) {
-    const r = await withSpan(
-      `migrate.parse.${t}`,
-      { source: t },
-      () =>
-        ({
-          "operations-log": parseOperationsLog,
-          threads: parseThreads,
-          strategy: parseStrategyDoc,
-          memory: parseMemory,
-          x: () =>
-            parseX(undefined, {
-              ...(maxPages !== undefined ? { maxPages } : {}),
-              ...(incremental ? { incremental: true } : {}),
-              ...(withBackRefs ? { skipBackReferences: false } : {}),
-              ...(backRefsMax !== undefined ? { backRefsMaxTweets: backRefsMax } : {}),
-            }),
-          code: () => parseCode(),
-          zenn: () => parseZenn(),
-          devto: () => parseDevto(),
-        })[t](),
+    const r = await withSpan(`migrate.parse.${t}`, { source: t }, () =>
+      ({
+        "operations-log": parseOperationsLog,
+        threads: parseThreads,
+        strategy: parseStrategyDoc,
+        memory: parseMemory,
+        x: () =>
+          parseX(undefined, {
+            ...(maxPages !== undefined ? { maxPages } : {}),
+            ...(incremental ? { incremental: true } : {}),
+            ...(withBackRefs ? { skipBackReferences: false } : {}),
+            ...(backRefsMax !== undefined ? { backRefsMaxTweets: backRefsMax } : {}),
+          }),
+        code: () => parseCode(),
+        zenn: () => parseZenn(),
+        devto: () => parseDevto(),
+      })[t](),
     );
     log.info({ source: t, nodes: r.nodes.length, edges: r.edges.length }, "parsed source");
     results.push(r);
@@ -211,7 +220,7 @@ function nodeToRow(node: NodeInput): Record<string, unknown> {
   const now = new Date().toISOString();
   return {
     ...node.fields,
-    body_summary: node.body_summary ?? (node.fields.body_summary ?? null),
+    body_summary: node.body_summary ?? node.fields.body_summary ?? null,
     metadata: node.metadata ?? null,
     embedding: (node.fields.embedding as number[] | undefined) ?? [], // REPEATED: 空配列 OK、null は不可
     embedding_model: node.fields.embedding_model ?? null,
@@ -300,10 +309,7 @@ async function main() {
     edgesByTable.set("personal_edges", personalEdges);
     urlEdgeCount = urlEdges.length;
   } catch (err) {
-    log.warn(
-      { err: err instanceof Error ? err.message : String(err) },
-      "url-references: skipped",
-    );
+    log.warn({ err: err instanceof Error ? err.message : String(err) }, "url-references: skipped");
   }
   log.info({ urlEdges: urlEdgeCount, tcoResolved: tcoResolvedCount }, "url references built");
 
@@ -322,10 +328,7 @@ async function main() {
     edgesByTable.set("personal_edges", personalEdges);
     sameEntityEdgeCount = sameEntity.edges.length;
   } catch (err) {
-    log.warn(
-      { err: err instanceof Error ? err.message : String(err) },
-      "same-entity: skipped",
-    );
+    log.warn({ err: err instanceof Error ? err.message : String(err) }, "same-entity: skipped");
   }
   log.info({ sameEntityEdges: sameEntityEdgeCount }, "same-entity edges built");
 

@@ -43,11 +43,15 @@ describe("/api/$ — Hono app", () => {
   it("Route.options.server.handlers.GET も同じ Hono response を返す", async () => {
     const opts = Route.options as {
       server?: {
-        handlers?: Record<string, ((ctx: { request: Request }) => Promise<Response> | Response) | undefined>;
+        handlers?: Record<
+          string,
+          ((ctx: { request: Request }) => Promise<Response> | Response) | undefined
+        >;
       };
     };
     const get = opts.server?.handlers?.GET;
-    if (typeof get !== "function") throw new Error("Route.options.server.handlers.GET is not a function");
+    if (typeof get !== "function")
+      throw new Error("Route.options.server.handlers.GET is not a function");
 
     const res = await get({ request: new Request("http://example.test/api/health") });
     expect(res.status).toBe(200);

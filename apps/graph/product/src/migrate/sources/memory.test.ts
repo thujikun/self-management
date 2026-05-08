@@ -154,42 +154,26 @@ body
 
   it("MEMORY.md 自身は対象外", async () => {
     await writeFile(join(dir, "MEMORY.md"), `index file\n`, "utf8");
-    await writeFile(
-      join(dir, "x.md"),
-      `---\nname: ok\ntype: feedback\n---\nbody\n`,
-      "utf8",
-    );
+    await writeFile(join(dir, "x.md"), `---\nname: ok\ntype: feedback\n---\nbody\n`, "utf8");
     const result = await parseMemory(dir);
     expect(result.nodes).toHaveLength(1);
     expect(result.nodes[0].fields.title).toBe("ok");
   });
 
   it("name が無い feedback → title に externalId 採用 (fm.name ?? externalId fallback)", async () => {
-    await writeFile(
-      join(dir, "no-name.md"),
-      `---\ntype: feedback\n---\nbody\n`,
-      "utf8",
-    );
+    await writeFile(join(dir, "no-name.md"), `---\ntype: feedback\n---\nbody\n`, "utf8");
     const result = await parseMemory(dir);
     expect(result.nodes[0].fields.title).toBe("no-name");
   });
 
   it("name が無い project → topic name に externalId 採用", async () => {
-    await writeFile(
-      join(dir, "no-name-proj.md"),
-      `---\ntype: project\n---\nbody\n`,
-      "utf8",
-    );
+    await writeFile(join(dir, "no-name-proj.md"), `---\ntype: project\n---\nbody\n`, "utf8");
     const result = await parseMemory(dir);
     expect(result.nodes[0].fields.name).toBe("no-name-proj");
   });
 
   it("description / body 両方ない feedback → summary は空文字 (空 join)", async () => {
-    await writeFile(
-      join(dir, "minimal.md"),
-      `---\nname: x\ntype: feedback\n---\n\n`,
-      "utf8",
-    );
+    await writeFile(join(dir, "minimal.md"), `---\nname: x\ntype: feedback\n---\n\n`, "utf8");
     const result = await parseMemory(dir);
     expect(result.nodes[0].body_summary).toBe("");
   });
@@ -205,11 +189,7 @@ body
   });
 
   it("description ない project → metadata.description=null", async () => {
-    await writeFile(
-      join(dir, "p.md"),
-      `---\nname: x\ntype: project\n---\nbody\n`,
-      "utf8",
-    );
+    await writeFile(join(dir, "p.md"), `---\nname: x\ntype: project\n---\nbody\n`, "utf8");
     const result = await parseMemory(dir);
     const meta = result.nodes[0].metadata as Record<string, unknown>;
     expect(meta).toBeDefined();
