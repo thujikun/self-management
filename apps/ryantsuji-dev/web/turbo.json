@@ -3,7 +3,8 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "inputs": ["src/**", "tsconfig.json", "package.json", "vite.config.ts", "wrangler.jsonc"]
+      "inputs": ["src/**", "tsconfig.json", "package.json", "vite.config.ts", "wrangler.jsonc"],
+      "outputs": ["dist/**", "src/routeTree.gen.ts"]
     }
   }
 }
