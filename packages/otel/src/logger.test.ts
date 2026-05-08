@@ -41,9 +41,7 @@ describe("createLogger", () => {
     const joined = captured.join("");
     expect(joined).toContain("hello");
     expect(joined).toContain("test-svc");
-    const line = joined
-      .split("\n")
-      .find((l) => l.includes("hello"));
+    const line = joined.split("\n").find((l) => l.includes("hello"));
     expect(line).toBeDefined();
     const parsed = JSON.parse(line!);
     expect(parsed.service).toBe("test-svc");

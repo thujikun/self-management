@@ -261,17 +261,17 @@ describe("parseOwnPosts", () => {
 describe("parseAllOwnPosts", () => {
   it("calls sinceIdProvider per account and forwards as since_id query param", async () => {
     const loadCreds = vi.fn().mockResolvedValue(creds);
-    const sinceIdProvider = vi.fn().mockImplementation((a: string) =>
-      Promise.resolve(a === "ryantsuji" ? "111" : null),
-    );
+    const sinceIdProvider = vi
+      .fn()
+      .mockImplementation((a: string) => Promise.resolve(a === "ryantsuji" ? "111" : null));
     const fetcher = vi.fn().mockReturnValue(fakeOk({ data: [], meta: {} }));
     await parseAllOwnPosts(loadCreds as (a: string) => Promise<XCreds>, {
       fetcher: fetcher as FetchFn,
       sinceIdProvider,
     });
     // 1st call (ryantsuji) → since_id=111、2nd call (ryanaircloset) → no since_id
-    expect((fetcher.mock.calls[0][0] as string)).toContain("since_id=111");
-    expect((fetcher.mock.calls[1][0] as string)).not.toContain("since_id");
+    expect(fetcher.mock.calls[0][0] as string).toContain("since_id=111");
+    expect(fetcher.mock.calls[1][0] as string).not.toContain("since_id");
     expect(sinceIdProvider).toHaveBeenCalledWith("ryantsuji");
     expect(sinceIdProvider).toHaveBeenCalledWith("ryanaircloset");
   });

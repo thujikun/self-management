@@ -62,7 +62,9 @@ describe("searchNodes", () => {
   it("kind 指定なし → 全 10 table の UNION ALL を組む、limit default=10、embed inject される", async () => {
     createQueryJobMock.mockResolvedValue([
       {
-        getQueryResults: async () => [[{ kind: "contents", id: "c1", title: "t", body_summary: "s", cosine_distance: 0.1 }]],
+        getQueryResults: async () => [
+          [{ kind: "contents", id: "c1", title: "t", body_summary: "s", cosine_distance: 0.1 }],
+        ],
       },
     ]);
     const fakeEmbed = vi.fn().mockResolvedValue([0.1, 0.2]);

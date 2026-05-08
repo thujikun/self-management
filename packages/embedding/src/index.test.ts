@@ -110,8 +110,8 @@ describe("embedBatch", () => {
   });
 
   it("concurrency=1 で逐次実行", async () => {
-    fetchSpy.mockImplementation(async () =>
-      new Response(JSON.stringify({ embedding: { values: [0] } }), { status: 200 }),
+    fetchSpy.mockImplementation(
+      async () => new Response(JSON.stringify({ embedding: { values: [0] } }), { status: 200 }),
     );
     const { embedBatch } = await import("./index.js");
     const out = await embedBatch(["x", "y"], 1);

@@ -27,10 +27,7 @@
 
 import { embedBatch, EMBEDDING_MODEL } from "@self/embedding";
 import { mergeRows } from "../src/migrate/common/bq-merge.js";
-import {
-  buildEngagementNodes,
-  parseEngagementArgs,
-} from "../src/migrate/common/engagement.js";
+import { buildEngagementNodes, parseEngagementArgs } from "../src/migrate/common/engagement.js";
 import { deterministicEdgeId } from "../src/migrate/common/id.js";
 import type { EdgeInput, NodeInput } from "../src/migrate/common/types.js";
 
@@ -80,9 +77,7 @@ async function main(): Promise<void> {
   const args = parseEngagementArgs(process.argv.slice(2));
   const { nodes, edges } = buildEngagementNodes(args);
 
-  const needsEmbed = nodes.filter(
-    (n) => n.body_summary && n.body_summary.trim().length > 0,
-  );
+  const needsEmbed = nodes.filter((n) => n.body_summary && n.body_summary.trim().length > 0);
   if (!args.noEmbed && needsEmbed.length > 0) {
     const texts = needsEmbed.map((n) => n.body_summary!);
     const vecs = await embedBatch(texts);

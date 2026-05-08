@@ -8,12 +8,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import {
-  KIND_FILTER,
-  defaultBqClient,
-  getLastSeenTweetId,
-  type BqQueryClient,
-} from "./since.js";
+import { KIND_FILTER, defaultBqClient, getLastSeenTweetId, type BqQueryClient } from "./since.js";
 
 function makeMockClient(rows: Array<Record<string, unknown>>): {
   client: BqQueryClient;
@@ -38,7 +33,7 @@ function makeMockClient(rows: Array<Record<string, unknown>>): {
 
 describe("KIND_FILTER", () => {
   it("own kind filters by source='x_post' + account", () => {
-    expect(KIND_FILTER.own).toContain("$.source") ;
+    expect(KIND_FILTER.own).toContain("$.source");
     expect(KIND_FILTER.own).toContain("x_post");
     expect(KIND_FILTER.own).toContain("$.account");
   });

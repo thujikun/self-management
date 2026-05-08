@@ -119,9 +119,7 @@ describe("fetchDevtoArticles", () => {
 
   it("throws on non-ok with status + body excerpt", async () => {
     const fetcher = vi.fn().mockReturnValue(fakeErr(429, "rate"));
-    await expect(fetchDevtoArticles("thujikun", fetcher as FetchFn)).rejects.toThrow(
-      /429.*rate/,
-    );
+    await expect(fetchDevtoArticles("thujikun", fetcher as FetchFn)).rejects.toThrow(/429.*rate/);
   });
 
   it("returns [] when response is not an array", async () => {

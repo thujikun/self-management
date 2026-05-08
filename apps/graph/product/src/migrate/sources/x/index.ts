@@ -87,7 +87,7 @@ export async function parseX(
   opts: ParseXOptions = {},
 ): Promise<ParseResult> {
   const sinceIdProvider: SinceIdProvider | undefined = opts.incremental
-    ? opts.sinceIdProvider ?? buildDefaultSinceIdProvider()
+    ? (opts.sinceIdProvider ?? buildDefaultSinceIdProvider())
     : undefined;
   const ownResults = await parseAllOwnPosts(loadCreds, {
     maxPages: opts.maxPages,
@@ -103,7 +103,7 @@ export async function parseX(
         bearerProvider: opts.bearerProvider,
         project: opts.project,
         mentionSinceIdProvider: sinceIdProvider ? (a) => sinceIdProvider(a, "mention") : undefined,
-        noSinceIdMaxPages: opts.incremental ? opts.noSinceIdMaxPages ?? 1 : undefined,
+        noSinceIdMaxPages: opts.incremental ? (opts.noSinceIdMaxPages ?? 1) : undefined,
       });
 
   // own posts ParseResult から OwnTweetRef を抽出して back-references を取得
@@ -124,9 +124,7 @@ export async function parseX(
   if (backRefsResult) all.push(backRefsResult);
   const allNodes = all.flatMap((r) => r.nodes);
   const baseEdges = all.flatMap((r) => r.edges);
-  const referencedEdges = opts.skipReferencedEdges
-    ? []
-    : buildReferencedEdges(allNodes);
+  const referencedEdges = opts.skipReferencedEdges ? [] : buildReferencedEdges(allNodes);
   return {
     source: "x",
     nodes: allNodes,

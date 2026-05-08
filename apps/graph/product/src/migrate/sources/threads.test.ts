@@ -212,7 +212,7 @@ sample body content
   it("既知 thread_name (17mcp / dbgraph) は手書き summary を採用", async () => {
     await writeFile(
       join(dir, "17mcp.md"),
-      "---\nthread_name: 17mcp\nconversation_id: \"1\"\n---\nraw body\n",
+      '---\nthread_name: 17mcp\nconversation_id: "1"\n---\nraw body\n',
       "utf8",
     );
     const result = await parseThreads(dir);
@@ -243,11 +243,7 @@ sample body content
   });
 
   it("thread_name もない場合は file 名から fallback", async () => {
-    await writeFile(
-      join(dir, "fallback.md"),
-      `---\nconversation_id: "44"\n---\nbody\n`,
-      "utf8",
-    );
+    await writeFile(join(dir, "fallback.md"), `---\nconversation_id: "44"\n---\nbody\n`, "utf8");
     const result = await parseThreads(dir);
     const c = result.nodes.find((n) => n.kind === "contents")!;
     expect(c.fields.title).toBe("fallback");

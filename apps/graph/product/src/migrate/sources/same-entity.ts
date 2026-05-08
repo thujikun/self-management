@@ -45,10 +45,7 @@ export interface BqQueryClient {
     query: string;
     location: string;
   }): Promise<
-    [
-      { getQueryResults(): Promise<[Array<Record<string, unknown>>, ...unknown[]]> },
-      ...unknown[],
-    ]
+    [{ getQueryResults(): Promise<[Array<Record<string, unknown>>, ...unknown[]]> }, ...unknown[]]
   >;
 }
 
@@ -153,14 +150,13 @@ export function findSameEntityPairs(
       if (a.source === b.source) continue;
       const s = cosineSimilarity(a.embedding, b.embedding);
       if (s < sim) continue;
-      const days = Math.abs(
-        new Date(a.published_at).getTime() - new Date(b.published_at).getTime(),
-      ) / (24 * 3600 * 1000);
+      const days =
+        Math.abs(new Date(a.published_at).getTime() - new Date(b.published_at).getTime()) /
+        (24 * 3600 * 1000);
       if (days > maxDays) continue;
       // 決定論的に src→tgt 方向を固定 (id 文字列順)
-      const [srcId, tgtId] = a.content_id < b.content_id
-        ? [a.content_id, b.content_id]
-        : [b.content_id, a.content_id];
+      const [srcId, tgtId] =
+        a.content_id < b.content_id ? [a.content_id, b.content_id] : [b.content_id, a.content_id];
       pairs.push({ src_id: srcId, tgt_id: tgtId, similarity: s, daysDiff: days });
     }
   }

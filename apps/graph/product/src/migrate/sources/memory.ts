@@ -27,10 +27,7 @@ import type { EdgeInput, NodeInput, ParseResult } from "../common/types.js";
 const SOURCE = "memory";
 
 /** @graph-connects none */
-const DEFAULT_DIR = join(
-  homedir(),
-  ".claude/projects/-Users-ryan-Workspace-x/memory",
-);
+const DEFAULT_DIR = join(homedir(), ".claude/projects/-Users-ryan-Workspace-x/memory");
 
 export interface MemoryFrontmatter {
   name?: string;

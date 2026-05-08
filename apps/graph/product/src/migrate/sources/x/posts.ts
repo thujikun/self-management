@@ -145,8 +145,7 @@ export async function parseOwnPosts(
   const path = `/2/users/${account.userId}/tweets`;
   const query: Record<string, string> = {
     max_results: "100",
-    "tweet.fields":
-      "created_at,conversation_id,referenced_tweets,in_reply_to_user_id,lang",
+    "tweet.fields": "created_at,conversation_id,referenced_tweets,in_reply_to_user_id,lang",
   };
   if (opts.sinceId) query.since_id = opts.sinceId;
 
@@ -189,7 +188,7 @@ export async function parseAllOwnPosts(
   for (const account of X_ACCOUNTS) {
     const creds = await loadCreds(account.account);
     const sinceId = opts.sinceIdProvider
-      ? (await opts.sinceIdProvider(account.account)) ?? undefined
+      ? ((await opts.sinceIdProvider(account.account)) ?? undefined)
       : undefined;
     out.push(
       await parseOwnPosts(account, creds, {

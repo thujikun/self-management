@@ -18,7 +18,10 @@ import { buildOAuth1Header, type XCreds } from "./auth.js";
 export const X_API_BASE = "https://api.x.com";
 
 /** `xFetch` / `xPaginate` で inject する fetch のシグネチャ。 */
-export type FetchFn = (url: string, init?: { headers?: Record<string, string> }) => Promise<{
+export type FetchFn = (
+  url: string,
+  init?: { headers?: Record<string, string> },
+) => Promise<{
   ok: boolean;
   status: number;
   text: () => Promise<string>;
@@ -168,4 +171,3 @@ export async function xPaginateBearer<T>(
   }
   return pages;
 }
-

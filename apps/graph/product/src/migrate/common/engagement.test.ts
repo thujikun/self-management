@@ -85,11 +85,7 @@ describe("parseEngagementArgs", () => {
   });
 
   it("draft-iters parses as int", () => {
-    const args = parseEngagementArgs([
-      "--action=posted",
-      "--posted-post-id=x",
-      "--draft-iters=3",
-    ]);
+    const args = parseEngagementArgs(["--action=posted", "--posted-post-id=x", "--draft-iters=3"]);
     expect(args.draftIters).toBe(3);
   });
 
@@ -102,9 +98,9 @@ describe("parseEngagementArgs", () => {
   });
 
   it("rejects invalid decided-at", () => {
-    expect(() =>
-      parseEngagementArgs(["--action=posted", "--decided-at=not-a-date"]),
-    ).toThrow(/--decided-at は ISO 8601/);
+    expect(() => parseEngagementArgs(["--action=posted", "--decided-at=not-a-date"])).toThrow(
+      /--decided-at は ISO 8601/,
+    );
   });
 
   it("default decided-at is now (recent timestamp)", () => {

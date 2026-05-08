@@ -159,8 +159,20 @@ export function buildBucketNodes(date: Date): { nodes: NodeInput[]; edges: EdgeI
     },
   };
 
-  const monthName = ["January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"][date.getUTCMonth()];
+  const monthName = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ][date.getUTCMonth()];
   const monthNode: NodeInput = {
     kind: "time_buckets",
     id: ids.month,

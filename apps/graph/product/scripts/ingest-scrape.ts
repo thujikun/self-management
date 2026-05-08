@@ -147,7 +147,7 @@ function nodeToRow(node: NodeInput): Record<string, unknown> {
   const now = new Date().toISOString();
   return {
     ...node.fields,
-    body_summary: node.body_summary ?? (node.fields.body_summary ?? null),
+    body_summary: node.body_summary ?? node.fields.body_summary ?? null,
     metadata: node.metadata ?? null,
     embedding: (node.fields.embedding as number[] | undefined) ?? [],
     embedding_model: node.fields.embedding_model ?? null,
@@ -219,19 +219,15 @@ async function main(): Promise<void> {
 
   for (const [table, nodes] of nodesByTable) {
     const rows = nodes.map(nodeToRow);
-    const r = await withSpan(
-      "ingest-scrape.bq.merge.nodes",
-      { table, rows: rows.length },
-      () => mergeRows(table, rows),
+    const r = await withSpan("ingest-scrape.bq.merge.nodes", { table, rows: rows.length }, () =>
+      mergeRows(table, rows),
     );
     log.info({ table, merged: r.merged }, "merged nodes");
   }
   for (const [table, edges] of edgesByTable) {
     const rows = edges.map(edgeToRow);
-    const r = await withSpan(
-      "ingest-scrape.bq.merge.edges",
-      { table, rows: rows.length },
-      () => mergeRows(table, rows),
+    const r = await withSpan("ingest-scrape.bq.merge.edges", { table, rows: rows.length }, () =>
+      mergeRows(table, rows),
     );
     log.info({ table, merged: r.merged }, "merged edges");
   }

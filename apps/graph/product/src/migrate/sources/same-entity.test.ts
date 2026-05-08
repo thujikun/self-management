@@ -91,9 +91,7 @@ describe("findSameEntityPairs", () => {
     // default だと medium は対象外 → 0 件
     expect(findSameEntityPairs(rows)).toHaveLength(0);
     // medium を含めれば検出
-    expect(
-      findSameEntityPairs(rows, { eligibleSources: ["zenn", "medium"] }),
-    ).toHaveLength(1);
+    expect(findSameEntityPairs(rows, { eligibleSources: ["zenn", "medium"] })).toHaveLength(1);
   });
 
   it("excludes pairs below sim threshold", () => {
@@ -168,9 +166,12 @@ describe("defaultBqClient", () => {
 
 function makeMockClient(rows: Array<Record<string, unknown>>): BqQueryClient {
   return {
-    createQueryJob: vi.fn(async () => [
-      { getQueryResults: async () => [rows] },
-    ] as Awaited<ReturnType<BqQueryClient["createQueryJob"]>>),
+    createQueryJob: vi.fn(
+      async () =>
+        [{ getQueryResults: async () => [rows] }] as Awaited<
+          ReturnType<BqQueryClient["createQueryJob"]>
+        >,
+    ),
   };
 }
 
@@ -222,7 +223,12 @@ describe("loadContentsWithEmbedding", () => {
   it("skips rows with non-array or non-finite embedding", async () => {
     const client = makeMockClient([
       { content_id: "c1", source: "zenn", published_at: "2026-04-01T00:00:00Z", embedding: "bad" },
-      { content_id: "c2", source: "zenn", published_at: "2026-04-01T00:00:00Z", embedding: [Number.NaN, 1] },
+      {
+        content_id: "c2",
+        source: "zenn",
+        published_at: "2026-04-01T00:00:00Z",
+        embedding: [Number.NaN, 1],
+      },
       { content_id: "c3", source: "zenn", published_at: "2026-04-01T00:00:00Z", embedding: [1, 2] },
     ]);
     const out = await loadContentsWithEmbedding(client);

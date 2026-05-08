@@ -66,26 +66,22 @@ describe("countCodeLines", () => {
   });
 
   it("単行ブロックコメント (/* ... */) は除外", async () => {
-    const p = await write(
-      "d.ts",
-      ["/* single */", "const a = 1;"].join("\n"),
-    );
+    const p = await write("d.ts", ["/* single */", "const a = 1;"].join("\n"));
     expect(countCodeLines(p)).toBe(1);
   });
 
   it("JSDoc (/**) も除外", async () => {
     const p = await write(
       "e.ts",
-      ["/**", " * description", " * @graph-connects none", " */", "export function f() {}"].join("\n"),
+      ["/**", " * description", " * @graph-connects none", " */", "export function f() {}"].join(
+        "\n",
+      ),
     );
     expect(countCodeLines(p)).toBe(1);
   });
 
   it(".sh は # を行コメントとして扱う", async () => {
-    const p = await write(
-      "x.sh",
-      ["#!/bin/bash", "# comment", "echo hello"].join("\n"),
-    );
+    const p = await write("x.sh", ["#!/bin/bash", "# comment", "echo hello"].join("\n"));
     expect(countCodeLines(p)).toBe(1);
   });
 
@@ -100,10 +96,7 @@ describe("countCodeLines", () => {
   });
 
   it("ブロックコメント中の // は除外、終端後はコード行", async () => {
-    const p = await write(
-      "f.ts",
-      ["/*", "// inside block", "*/", "const a = 1;"].join("\n"),
-    );
+    const p = await write("f.ts", ["/*", "// inside block", "*/", "const a = 1;"].join("\n"));
     expect(countCodeLines(p)).toBe(1);
   });
 });
@@ -148,7 +141,11 @@ describe("runLineCountCheck", () => {
     const ok = join(dir, "ok.ts");
     const bad = join(dir, "bad.ts");
     await writeFile(ok, "const a = 1;\n", "utf8");
-    await writeFile(bad, Array.from({ length: 12 }, (_, i) => `const x${i}=${i};`).join("\n"), "utf8");
+    await writeFile(
+      bad,
+      Array.from({ length: 12 }, (_, i) => `const x${i}=${i};`).join("\n"),
+      "utf8",
+    );
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const failed = runLineCountCheck([ok, bad], 5);
     expect(failed).toBe(1);
