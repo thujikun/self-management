@@ -9,7 +9,8 @@
 | 長期ビジョン | [VISION.md](./VISION.md) |
 | 設計方針 | [DESIGN.md](./DESIGN.md) |
 | ryan-product-graph 設計 | [product-graph/README.md](./product-graph/README.md) |
-| アーキテクチャ規約 | [guidelines/architecture.md](./guidelines/architecture.md) |
+| **コードレビュー観点** | **[review-guidelines.md](./review-guidelines.md)** |
+| **ガイドライン (詳細)** | **[guidelines/README.md](./guidelines/README.md)** |
 | MCP サーバー仕様 (将来) | [mcp/README.md](./mcp/README.md) |
 | インフラ全体 | [infra/README.md](./infra/README.md) |
 | 自動生成 catalog | [generated/](./generated/) |
