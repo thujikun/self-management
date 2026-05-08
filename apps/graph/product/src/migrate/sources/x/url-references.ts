@@ -29,7 +29,9 @@ export interface BqQueryClient {
   createQueryJob(req: {
     query: string;
     location: string;
-  }): Promise<[{ getQueryResults(): Promise<[Array<Record<string, unknown>>, ...unknown[]]> }, ...unknown[]]>;
+  }): Promise<
+    [{ getQueryResults(): Promise<[Array<Record<string, unknown>>, ...unknown[]]> }, ...unknown[]]
+  >;
 }
 
 /**

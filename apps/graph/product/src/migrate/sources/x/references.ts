@@ -119,7 +119,9 @@ export function buildReferencedEdges(contents: NodeInput[]): EdgeInput[] {
  * @graph-connects none
  */
 export function findMissingReferenceIds(contents: NodeInput[]): string[] {
-  const have = new Set(contents.filter((c) => c.kind === "contents").map((c) => c.fields.external_id as string));
+  const have = new Set(
+    contents.filter((c) => c.kind === "contents").map((c) => c.fields.external_id as string),
+  );
   const missing = new Set<string>();
   for (const c of contents) {
     if (c.kind !== "contents") continue;

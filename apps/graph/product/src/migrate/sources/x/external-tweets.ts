@@ -130,11 +130,7 @@ export function externalTweetsToNodes(
   const contentNodes: NodeInput[] = [];
   const contentToAuthor = new Map<string, string>();
   for (const t of tweets) {
-    const { content, authorPersonId } = externalTweetToContentNode(
-      t,
-      authorsById,
-      metadataExtra,
-    );
+    const { content, authorPersonId } = externalTweetToContentNode(t, authorsById, metadataExtra);
     contentNodes.push(content);
     if (authorPersonId) contentToAuthor.set(content.id, authorPersonId);
   }

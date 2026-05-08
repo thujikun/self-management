@@ -28,15 +28,13 @@ import { Hono } from "hono";
  *
  * @graph-connects hono [provides] /api/* に対する単一 Hono app instance
  */
-export const app = new Hono()
-  .basePath("/api")
-  .get("/health", (c) =>
-    c.json({
-      status: "ok",
-      service: "ryantsuji-dev-web",
-      timestamp: new Date().toISOString(),
-    }),
-  );
+export const app = new Hono().basePath("/api").get("/health", (c) =>
+  c.json({
+    status: "ok",
+    service: "ryantsuji-dev-web",
+    timestamp: new Date().toISOString(),
+  }),
+);
 
 /**
  * Hono app の型を export して client 側 `hc<ApiType>()` で RPC 呼び出しに使う。

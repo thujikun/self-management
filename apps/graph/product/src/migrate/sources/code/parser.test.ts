@@ -158,9 +158,14 @@ describe("hasMeaningfulTags", () => {
   it("returns true when any field is set", () => {
     expect(hasMeaningfulTags({ ...emptyTags(), business: "x" })).toBe(true);
     expect(hasMeaningfulTags({ ...emptyTags(), domains: ["graph"] })).toBe(true);
-    expect(hasMeaningfulTags({ ...emptyTags(), connects: [
-      { target: "x", relationship: "y", cardinality: null, via: null, description: "" },
-    ] })).toBe(true);
+    expect(
+      hasMeaningfulTags({
+        ...emptyTags(),
+        connects: [
+          { target: "x", relationship: "y", cardinality: null, via: null, description: "" },
+        ],
+      }),
+    ).toBe(true);
   });
 });
 
@@ -297,7 +302,7 @@ export enum E { A }
     expect(out.map((o) => o.name).sort()).toEqual(["E", "I", "T"]);
   });
 
-  it('extracts export default expression with name = expression text', () => {
+  it("extracts export default expression with name = expression text", () => {
     const src = `
 const app = 1;
 /** @graph-business d */
@@ -404,10 +409,7 @@ describe("findFilesWithGraphTags + parseJSDocExports (temp dir)", () => {
       join(tmp, "apps/x/src/with.ts"),
       `/** @graph-business hi */\nexport function hi() {}\n`,
     );
-    writeFileSync(
-      join(tmp, "apps/x/src/without.ts"),
-      `export function plain() {}\n`,
-    );
+    writeFileSync(join(tmp, "apps/x/src/without.ts"), `export function plain() {}\n`);
   });
 
   afterEach(() => {

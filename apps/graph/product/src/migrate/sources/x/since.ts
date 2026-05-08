@@ -42,7 +42,9 @@ export interface BqQueryClient {
     query: string;
     location: string;
     params?: Record<string, unknown>;
-  }): Promise<[{ getQueryResults(): Promise<[Array<Record<string, unknown>>, ...unknown[]]> }, ...unknown[]]>;
+  }): Promise<
+    [{ getQueryResults(): Promise<[Array<Record<string, unknown>>, ...unknown[]]> }, ...unknown[]]
+  >;
 }
 
 /**

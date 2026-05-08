@@ -22,11 +22,7 @@ import type { EdgeInput, NodeInput, ParseResult } from "../../common/types.js";
 import { personIdFor, X_ACCOUNTS, type XAccountConfig } from "./accounts.js";
 import type { XCreds } from "./auth.js";
 import { xPaginate, xPaginateBearer, type FetchFn } from "./client.js";
-import {
-  externalTweetsToNodes,
-  type XTweetWithAuthor,
-  type XUserRaw,
-} from "./external-tweets.js";
+import { externalTweetsToNodes, type XTweetWithAuthor, type XUserRaw } from "./external-tweets.js";
 import { getOAuth2Bearer } from "./oauth2.js";
 
 export type EngagementType = "mention" | "like" | "bookmark";
@@ -133,11 +129,10 @@ export async function parseEngagements(
     const authors = ((page.includes?.users as XUserRaw[] | undefined) ?? []).filter(
       (u): u is XUserRaw => Boolean(u && u.id && u.username),
     );
-    const { contentNodes, personNodes } = externalTweetsToNodes(
-      page.data,
-      authors,
-      { engagement: config.engagement, ingested_for: account.account },
-    );
+    const { contentNodes, personNodes } = externalTweetsToNodes(page.data, authors, {
+      engagement: config.engagement,
+      ingested_for: account.account,
+    });
     nodes.push(...contentNodes, ...personNodes);
     for (const c of contentNodes) {
       edges.push({

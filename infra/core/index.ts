@@ -235,12 +235,7 @@ const otlpAccessPolicy = new grafana.cloud.AccessPolicy(
     region: grafanaStack.regionSlug,
     name: "self-management-otlp-write",
     displayName: "self-management OTLP write",
-    scopes: [
-      "metrics:write",
-      "logs:write",
-      "traces:write",
-      "profiles:write",
-    ],
+    scopes: ["metrics:write", "logs:write", "traces:write", "profiles:write"],
     realms: [
       {
         type: "stack",

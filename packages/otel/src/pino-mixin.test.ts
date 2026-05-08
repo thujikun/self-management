@@ -11,14 +11,14 @@ import { context, trace } from "@opentelemetry/api";
 import type { Span } from "@opentelemetry/api";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
-import { InMemoryLogRecordExporter, LoggerProvider, SimpleLogRecordProcessor } from "@opentelemetry/sdk-logs";
+import {
+  InMemoryLogRecordExporter,
+  LoggerProvider,
+  SimpleLogRecordProcessor,
+} from "@opentelemetry/sdk-logs";
 import { BasicTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import {
-  createOtelDestination,
-  createTraceMixin,
-  pinoLevelToSeverity,
-} from "./pino-mixin.js";
+import { createOtelDestination, createTraceMixin, pinoLevelToSeverity } from "./pino-mixin.js";
 
 describe("pinoLevelToSeverity", () => {
   it.each([

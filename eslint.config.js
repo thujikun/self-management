@@ -36,7 +36,10 @@ export default tseslint.config(
       // 抑制コメントは scripts/hooks/check-no-ignore.sh で禁止しているが、ESLint 側でも警告
       "no-warning-comments": ["warn", { terms: ["fixme", "xxx"], location: "anywhere" }],
       // 未使用変数は型を消すかアンダースコアプレフィックスに
-      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
       // any 禁止 (unknown を使う)
       "@typescript-eslint/no-explicit-any": "error",
       // console は明示的に使う場合のみ

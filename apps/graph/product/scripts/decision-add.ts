@@ -62,9 +62,7 @@ async function main(): Promise<void> {
   const args = parseDecisionArgs(process.argv.slice(2));
   const { nodes, edges } = buildDecisionNodes(args);
 
-  const needsEmbed = nodes.filter(
-    (n) => n.body_summary && n.body_summary.trim().length > 0,
-  );
+  const needsEmbed = nodes.filter((n) => n.body_summary && n.body_summary.trim().length > 0);
   if (!args.noEmbed && needsEmbed.length > 0) {
     const vecs = await embedBatch(needsEmbed.map((n) => n.body_summary!));
     for (let i = 0; i < needsEmbed.length; i++) {

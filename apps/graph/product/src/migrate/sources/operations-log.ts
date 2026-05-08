@@ -102,9 +102,7 @@ export function splitH2Sections(md: string): Array<{ title: string; body: string
  */
 export async function loadAllLogMarkdown(dir: string = DEFAULT_DIR): Promise<string> {
   const entries = await readdir(dir).catch(() => [] as string[]);
-  const archives = entries
-    .filter((f) => /^log\.archive\.\d{4}-\d{2}\.md$/.test(f))
-    .sort(); // YYYY-MM 順で安定
+  const archives = entries.filter((f) => /^log\.archive\.\d{4}-\d{2}\.md$/.test(f)).sort(); // YYYY-MM 順で安定
   const parts: string[] = [];
   // archive を時系列順に先、最後に log.md (= 最新)
   for (const f of archives) {

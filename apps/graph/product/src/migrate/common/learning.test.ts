@@ -51,9 +51,9 @@ describe("parseLearningArgs", () => {
   });
 
   it("rejects invalid realized-at", () => {
-    expect(() =>
-      parseLearningArgs(["--insight=x", "--realized-at=bad"]),
-    ).toThrow(/--realized-at は ISO 8601/);
+    expect(() => parseLearningArgs(["--insight=x", "--realized-at=bad"])).toThrow(
+      /--realized-at は ISO 8601/,
+    );
   });
 
   it("default realized-at is now", () => {

@@ -52,9 +52,9 @@ describe("parseDecisionArgs", () => {
   });
 
   it("rejects invalid decided-at", () => {
-    expect(() =>
-      parseDecisionArgs(["--title=x", "--decided-at=not-a-date"]),
-    ).toThrow(/--decided-at は ISO 8601/);
+    expect(() => parseDecisionArgs(["--title=x", "--decided-at=not-a-date"])).toThrow(
+      /--decided-at は ISO 8601/,
+    );
   });
 
   it("default decided-at is now", () => {

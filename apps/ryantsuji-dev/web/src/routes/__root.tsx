@@ -10,12 +10,7 @@
  * @graph-connects tanstack-router [provides] Root Route を export してファイルベースルーティングの起点になる
  */
 
-import {
-  HeadContent,
-  Outlet,
-  Scripts,
-  createRootRouteWithContext,
-} from "@tanstack/react-router";
+import { HeadContent, Outlet, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 

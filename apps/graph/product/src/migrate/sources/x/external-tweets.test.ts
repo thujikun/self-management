@@ -109,10 +109,7 @@ describe("externalTweetsToNodes", () => {
   });
 
   it("omits contentToAuthor entry when author is missing", () => {
-    const result = externalTweetsToNodes(
-      [{ id: "t1", text: "hi" }],
-      [],
-    );
+    const result = externalTweetsToNodes([{ id: "t1", text: "hi" }], []);
     expect(result.contentNodes).toHaveLength(1);
     expect(result.contentToAuthor.size).toBe(0);
   });

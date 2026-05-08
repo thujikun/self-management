@@ -138,7 +138,11 @@ describe("loadOAuth2Tokens", () => {
   it("throws when expires_at not a number", async () => {
     _setSecretCacheForTest(
       "xmcp-user-foo-oauth2",
-      JSON.stringify({ X_OAUTH2_ACCESS_TOKEN: "at", X_OAUTH2_REFRESH_TOKEN: "rt", X_OAUTH2_EXPIRES_AT: "bad" }),
+      JSON.stringify({
+        X_OAUTH2_ACCESS_TOKEN: "at",
+        X_OAUTH2_REFRESH_TOKEN: "rt",
+        X_OAUTH2_EXPIRES_AT: "bad",
+      }),
       "test-proj",
     );
     await expect(loadOAuth2Tokens("foo", "test-proj")).rejects.toThrow(/X_OAUTH2_EXPIRES_AT/);
@@ -147,7 +151,9 @@ describe("loadOAuth2Tokens", () => {
 
 describe("isExpired", () => {
   it("false when expires_at is well in the future", () => {
-    expect(isExpired({ accessToken: "x", refreshToken: "y", expiresAt: NOW + 600 }, NOW)).toBe(false);
+    expect(isExpired({ accessToken: "x", refreshToken: "y", expiresAt: NOW + 600 }, NOW)).toBe(
+      false,
+    );
   });
 
   it("true within 60 sec buffer of expiry", () => {
@@ -184,9 +190,7 @@ describe("refreshTokens", () => {
   });
 
   it("falls back to original refresh_token if response omits it", async () => {
-    const fetcher = vi
-      .fn()
-      .mockReturnValue(fakeOk({ access_token: "new-at", expires_in: 7200 }));
+    const fetcher = vi.fn().mockReturnValue(fakeOk({ access_token: "new-at", expires_in: 7200 }));
     const result = await refreshTokens(
       { clientId: "ci", clientSecret: "cs" },
       "preserved-rt",
@@ -210,9 +214,7 @@ describe("refreshTokens", () => {
   });
 
   it("throws when expires_in is missing", async () => {
-    const fetcher = vi
-      .fn()
-      .mockReturnValue(fakeOk({ access_token: "at", refresh_token: "rt" }));
+    const fetcher = vi.fn().mockReturnValue(fakeOk({ access_token: "at", refresh_token: "rt" }));
     await expect(
       refreshTokens({ clientId: "ci", clientSecret: "cs" }, "rt", fetcher as FetchFn),
     ).rejects.toThrow(/expires_in/);
@@ -221,9 +223,7 @@ describe("refreshTokens", () => {
   it("throws when refresh_token in response is empty string", async () => {
     const fetcher = vi
       .fn()
-      .mockReturnValue(
-        fakeOk({ access_token: "at", refresh_token: "", expires_in: 7200 }),
-      );
+      .mockReturnValue(fakeOk({ access_token: "at", refresh_token: "", expires_in: 7200 }));
     await expect(
       refreshTokens({ clientId: "ci", clientSecret: "cs" }, "rt", fetcher as FetchFn),
     ).rejects.toThrow(/refresh_token/);
@@ -283,14 +283,23 @@ describe("writeOAuth2Tokens", () => {
     const writer: SecretWriter = { addSecretVersion: vi.fn() };
     delete process.env.GOOGLE_CLOUD_PROJECT;
     await expect(
-      writeOAuth2Tokens("foo", { accessToken: "a", refreshToken: "r", expiresAt: 1 }, undefined, writer),
+      writeOAuth2Tokens(
+        "foo",
+        { accessToken: "a", refreshToken: "r", expiresAt: 1 },
+        undefined,
+        writer,
+      ),
     ).rejects.toThrow(/project/);
   });
 });
 
 describe("getOAuth2Bearer", () => {
   it("returns cached access_token when not expired", async () => {
-    _setOAuth2CacheForTest("foo", { accessToken: "cached", refreshToken: "rt", expiresAt: NOW + 600 });
+    _setOAuth2CacheForTest("foo", {
+      accessToken: "cached",
+      refreshToken: "rt",
+      expiresAt: NOW + 600,
+    });
     expect(await getOAuth2Bearer("foo", { project: "test-proj" })).toBe("cached");
   });
 
@@ -355,9 +364,7 @@ describe("getOAuth2Bearer", () => {
     );
     const fetcher = vi
       .fn()
-      .mockReturnValue(
-        fakeOk({ access_token: "new", refresh_token: "new-rt", expires_in: 7200 }),
-      );
+      .mockReturnValue(fakeOk({ access_token: "new", refresh_token: "new-rt", expires_in: 7200 }));
     const writer: SecretWriter = { addSecretVersion: vi.fn().mockResolvedValue(undefined) };
     await getOAuth2Bearer("foo", {
       project: "test-proj",

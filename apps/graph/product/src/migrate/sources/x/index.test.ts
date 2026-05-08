@@ -58,9 +58,7 @@ describe("parseX", () => {
     const externalIds = result.nodes
       .filter((n) => n.kind === "contents")
       .map((n) => n.fields.external_id);
-    expect(externalIds).toEqual(
-      expect.arrayContaining(["ryantsuji-1", "ryanaircloset-1"]),
-    );
+    expect(externalIds).toEqual(expect.arrayContaining(["ryantsuji-1", "ryanaircloset-1"]));
     expect(loadCreds).toHaveBeenCalledTimes(2);
     // 2 own posts call のみ (engagement 各 endpoint は呼ばない)
     expect(fetcher).toHaveBeenCalledTimes(2);
@@ -114,14 +112,17 @@ describe("parseX", () => {
     let calls = 0;
     const fetcher = vi.fn().mockImplementation(() => {
       // 1 件目: replied_to を持つ own post
-      const data = calls++ === 0
-        ? [{
-            id: "tweet1",
-            text: "reply",
-            created_at: "2026-01-01T00:00:00Z",
-            referenced_tweets: [{ type: "replied_to", id: "original" }],
-          }]
-        : [];
+      const data =
+        calls++ === 0
+          ? [
+              {
+                id: "tweet1",
+                text: "reply",
+                created_at: "2026-01-01T00:00:00Z",
+                referenced_tweets: [{ type: "replied_to", id: "original" }],
+              },
+            ]
+          : [];
       return Promise.resolve({
         ok: true,
         status: 200,
@@ -143,14 +144,17 @@ describe("parseX", () => {
     const loadCreds = vi.fn().mockResolvedValue(fakeCreds);
     let calls = 0;
     const fetcher = vi.fn().mockImplementation(() => {
-      const data = calls++ === 0
-        ? [{
-            id: "tweet1",
-            text: "reply",
-            created_at: "2026-01-01T00:00:00Z",
-            referenced_tweets: [{ type: "replied_to", id: "original" }],
-          }]
-        : [];
+      const data =
+        calls++ === 0
+          ? [
+              {
+                id: "tweet1",
+                text: "reply",
+                created_at: "2026-01-01T00:00:00Z",
+                referenced_tweets: [{ type: "replied_to", id: "original" }],
+              },
+            ]
+          : [];
       return Promise.resolve({
         ok: true,
         status: 200,
@@ -216,9 +220,12 @@ describe("parseX", () => {
 
   it("buildDefaultSinceIdProvider returns a SinceIdProvider that queries the injected BQ client", async () => {
     const mockClient: BqQueryClient = {
-      createQueryJob: vi.fn(async () => [
-        { getQueryResults: async () => [[{ max_id: "999" }]] },
-      ] as Awaited<ReturnType<BqQueryClient["createQueryJob"]>>),
+      createQueryJob: vi.fn(
+        async () =>
+          [{ getQueryResults: async () => [[{ max_id: "999" }]] }] as Awaited<
+            ReturnType<BqQueryClient["createQueryJob"]>
+          >,
+      ),
     };
     const provider = buildDefaultSinceIdProvider(mockClient);
     const out = await provider("foo", "own");
@@ -228,9 +235,11 @@ describe("parseX", () => {
 
   it("incremental mode passes since_id (own + mention) and caps liked/bookmark to noSinceIdMaxPages", async () => {
     const loadCreds = vi.fn().mockResolvedValue(fakeCreds);
-    const sinceIdProvider = vi.fn().mockImplementation((account: string, kind: string) =>
-      Promise.resolve(`${account}-${kind}-id`),
-    );
+    const sinceIdProvider = vi
+      .fn()
+      .mockImplementation((account: string, kind: string) =>
+        Promise.resolve(`${account}-${kind}-id`),
+      );
     const fetcher = vi.fn().mockReturnValue(
       Promise.resolve({
         ok: true,

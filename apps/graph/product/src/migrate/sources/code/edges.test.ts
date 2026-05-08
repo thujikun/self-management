@@ -21,7 +21,11 @@ import {
 } from "./edges.js";
 import type { ParsedExport } from "./parser.js";
 
-function makeExport(filePath: string, name: string, connects: ParsedExport["tags"]["connects"]): ParsedExport {
+function makeExport(
+  filePath: string,
+  name: string,
+  connects: ParsedExport["tags"]["connects"],
+): ParsedExport {
   return {
     filePath,
     name,
@@ -133,9 +137,7 @@ describe("resolveTarget", () => {
       nameToIds: new Map<string, string[]>(),
       allNodes: nodesD,
     };
-    expect(resolveTarget("this.run", "apps/graph/product/src/main.ts", ctxD)).toBe(
-      "siblingMethod",
-    );
+    expect(resolveTarget("this.run", "apps/graph/product/src/main.ts", ctxD)).toBe("siblingMethod");
   });
 
   it("path 7: returns stub_id for unresolvable target", () => {
@@ -289,7 +291,13 @@ describe("resolveTarget", () => {
 describe("generateExplicitEdges", () => {
   const exp = makeExport("apps/graph/product/src/foo.ts", "fnA", [
     { target: "fnB", relationship: "calls", cardinality: null, via: null, description: "calls B" },
-    { target: "bigquery", relationship: "writes_to", cardinality: "many", via: null, description: "BQ write" },
+    {
+      target: "bigquery",
+      relationship: "writes_to",
+      cardinality: "many",
+      via: null,
+      description: "BQ write",
+    },
     { target: "none", relationship: "none", cardinality: null, via: null, description: "" },
   ]);
 

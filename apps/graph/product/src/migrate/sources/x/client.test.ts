@@ -59,14 +59,17 @@ describe("xFetch", () => {
     expect(out.data[0].id).toBe("1");
     const [url, init] = fetcher.mock.calls[0];
     expect(url).toBe("https://api.x.com/2/users/me");
-    expect((init as { headers: Record<string, string> }).headers.Authorization).toMatch(
-      /^OAuth /,
-    );
+    expect((init as { headers: Record<string, string> }).headers.Authorization).toMatch(/^OAuth /);
   });
 
   it("appends query string when query params provided", async () => {
     const fetcher = vi.fn().mockReturnValue(fakeOk({ data: [] }));
-    await xFetch(creds, "/2/users/123/tweets", { max_results: "100", expansions: "author_id" }, fetcher as FetchFn);
+    await xFetch(
+      creds,
+      "/2/users/123/tweets",
+      { max_results: "100", expansions: "author_id" },
+      fetcher as FetchFn,
+    );
     const url = fetcher.mock.calls[0][0] as string;
     expect(url).toContain("max_results=100");
     expect(url).toContain("expansions=author_id");
@@ -74,9 +77,7 @@ describe("xFetch", () => {
 
   it("throws on non-2xx including status + body excerpt", async () => {
     const fetcher = vi.fn().mockReturnValue(fakeErr(429, '{"detail":"too many"}'));
-    await expect(xFetch(creds, "/2/foo", {}, fetcher as FetchFn)).rejects.toThrow(
-      /429.*too many/,
-    );
+    await expect(xFetch(creds, "/2/foo", {}, fetcher as FetchFn)).rejects.toThrow(/429.*too many/);
   });
 
   it("handles text() failure gracefully (still throws with status)", async () => {
@@ -102,7 +103,12 @@ describe("xPaginate", () => {
     let i = 0;
     const fetcher = vi.fn().mockImplementation(() => fakeOk(pages[i++]));
     const out: string[] = [];
-    for (const page of await xPaginate<{ id: string }>(creds, "/2/foo", {}, { fetcher: fetcher as FetchFn })) {
+    for (const page of await xPaginate<{ id: string }>(
+      creds,
+      "/2/foo",
+      {},
+      { fetcher: fetcher as FetchFn },
+    )) {
       out.push(...page.data.map((d) => d.id));
     }
     expect(out).toEqual(["a", "b", "c"]);
@@ -124,14 +130,19 @@ describe("xPaginate", () => {
   });
 
   it("stops at maxPages even when next_token still present", async () => {
-    const fetcher = vi.fn().mockImplementation(() =>
-      fakeOk({ data: [{ id: "x" }], meta: { next_token: "neverend" } }),
-    );
+    const fetcher = vi
+      .fn()
+      .mockImplementation(() => fakeOk({ data: [{ id: "x" }], meta: { next_token: "neverend" } }));
     let count = 0;
-    for (const _ of await xPaginate(creds, "/2/foo", {}, {
-      fetcher: fetcher as FetchFn,
-      maxPages: 2,
-    })) {
+    for (const _ of await xPaginate(
+      creds,
+      "/2/foo",
+      {},
+      {
+        fetcher: fetcher as FetchFn,
+        maxPages: 2,
+      },
+    )) {
       count++;
     }
     expect(count).toBe(2);
@@ -171,7 +182,6 @@ describe("xFetchBearer", () => {
   });
 });
 
-
 describe("xPaginateBearer", () => {
   it("traverses pages via meta.next_token using Bearer auth", async () => {
     const pages = [
@@ -181,9 +191,14 @@ describe("xPaginateBearer", () => {
     let i = 0;
     const fetcher = vi.fn().mockImplementation(() => fakeOk(pages[i++]));
     const out: string[] = [];
-    for (const p of await xPaginateBearer<{ id: string }>("T", "/2/foo", {}, {
-      fetcher: fetcher as FetchFn,
-    })) {
+    for (const p of await xPaginateBearer<{ id: string }>(
+      "T",
+      "/2/foo",
+      {},
+      {
+        fetcher: fetcher as FetchFn,
+      },
+    )) {
       out.push(...p.data.map((d) => d.id));
     }
     expect(out).toEqual(["a", "b"]);
@@ -194,10 +209,15 @@ describe("xPaginateBearer", () => {
       .fn()
       .mockImplementation(() => fakeOk({ data: [{ id: "x" }], meta: { next_token: "n" } }));
     let count = 0;
-    for (const _ of await xPaginateBearer("T", "/2/foo", {}, {
-      fetcher: fetcher as FetchFn,
-      maxPages: 2,
-    })) {
+    for (const _ of await xPaginateBearer(
+      "T",
+      "/2/foo",
+      {},
+      {
+        fetcher: fetcher as FetchFn,
+        maxPages: 2,
+      },
+    )) {
       count++;
     }
     expect(count).toBe(2);
@@ -276,5 +296,4 @@ describe("default fetcher fallback (no inject)", () => {
       globalThis.fetch = orig;
     }
   });
-
 });
