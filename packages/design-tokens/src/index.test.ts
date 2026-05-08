@@ -1,62 +1,41 @@
 /**
- * `@self/design-tokens` の barrel export smoke test。
+ * `@self/design-tokens` の barrel export 公開契約 test。
  *
- * 各 module 個別の挙動は primitive.test.ts / semantic.test.ts / css.test.ts で網羅。
- * ここは re-export が壊れていないこと (型 + 値の到達性) だけ確認する。
+ * testing.md の barrel pattern: `Object.keys(module).sort()` を inline snapshot で
+ * 固定し、export 名の追加削除を変更検知する。各 module 個別の挙動は
+ * primitive.test.ts / semantic.test.ts / css.test.ts で網羅。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business barrel export 経路の検証。各 sub-module の中身は専用 test に任せ、ここは index 経由で primitive / semantic / css helper が引けることだけ確認する
+ * @graph-business barrel export 経路の公開契約検証。Object.keys を inline snapshot で固定し、export 追加削除を機械的に検知する。中身は各 sub-module 専用 test に任せる
  * @graph-connects none
  */
 
 import { describe, expect, it } from "vitest";
 
-import {
-  accent,
-  blur,
-  buildCss,
-  dark,
-  duration,
-  easing,
-  fontFamily,
-  fontSize,
-  fontWeight,
-  gray,
-  lineHeight,
-  light,
-  radius,
-  scaleToVars,
-  semanticToVars,
-  space,
-} from "./index.js";
+import * as mod from "./index.js";
 
 describe("@self/design-tokens barrel exports", () => {
-  it("primitive scales (gray / accent / space / radius / typography / motion / blur) が export される", () => {
-    expect(gray[0]).toBeDefined();
-    expect(accent[500]).toBeDefined();
-    expect(space[4]).toBeDefined();
-    expect(radius.md).toBeDefined();
-    expect(fontFamily.sans).toBeDefined();
-    expect(fontSize.base).toBeDefined();
-    expect(lineHeight.normal).toBeDefined();
-    expect(fontWeight.regular).toBeDefined();
-    expect(blur.md).toBeDefined();
-    expect(duration.base).toBeDefined();
-    expect(easing.out).toBeDefined();
-  });
-
-  it("semantic mapping (light / dark) が export される", () => {
-    expect(light.bg.base).toBeDefined();
-    expect(dark.bg.base).toBeDefined();
-    expect(light.bg.base).not.toBe(dark.bg.base);
-    expect(light.glass.bg).toBeDefined();
-    expect(dark.glass.bg).toBeDefined();
-  });
-
-  it("css helper (buildCss / scaleToVars / semanticToVars) が export される", () => {
-    expect(typeof buildCss).toBe("function");
-    expect(typeof scaleToVars).toBe("function");
-    expect(typeof semanticToVars).toBe("function");
+  it("公開 API を集約している", () => {
+    expect(Object.keys(mod).sort()).toMatchInlineSnapshot(`
+      [
+        "accent",
+        "blur",
+        "buildCss",
+        "dark",
+        "duration",
+        "easing",
+        "fontFamily",
+        "fontSize",
+        "fontWeight",
+        "gray",
+        "light",
+        "lineHeight",
+        "radius",
+        "scaleToVars",
+        "semanticToVars",
+        "space",
+      ]
+    `);
   });
 });

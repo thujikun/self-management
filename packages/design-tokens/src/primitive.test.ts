@@ -1,12 +1,13 @@
 /**
  * primitive token (color / space / radius / typography / motion / blur) の値検証。
  *
- * 値の "正解" は design 判断なので比較的緩い: 形式 (OKLCH 文字列、rem 文字列、ms など)
- * + scale が連続キーで埋まっていることを確認する。
+ * 全 primitive を **inline snapshot で固定** し、值 (color step / clamp 式 / ms 値)
+ * の意図しない変更を機械的に検知する。snapshot は token system の公開契約。
+ * scale は数値 step が連続して埋まる構造を `toStrictEqual` でも別途 guard する。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business primitive token の構造保証。色は OKLCH 形式、spacing は rem、duration は ms 等の形式チェックと、各 scale が想定 key で連続している (穴あきが無い) ことを test する
+ * @graph-business primitive token の不変性保証。各 scale を inline snapshot で固定し token 値の変更を検知、key 集合は toStrictEqual で構造 guard。design discovery で値を更新したら snapshot を `vitest -u` で受け入れる
  * @graph-connects none
  */
 
@@ -27,93 +28,170 @@ import {
 } from "./primitive.js";
 
 describe("color primitives (OKLCH)", () => {
-  it("gray scale は 0/50/100/.../900/1000 を網羅", () => {
-    expect(Object.keys(gray).map(Number).sort((a, b) => a - b)).toEqual([
-      0, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000,
-    ]);
+  it("gray scale は 0/50/100/.../900/1000 の連続 step を持つ", () => {
+    expect(
+      Object.keys(gray)
+        .map(Number)
+        .sort((a, b) => a - b),
+    ).toStrictEqual([0, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]);
   });
 
-  it("accent scale は 50/100/.../900 を網羅", () => {
-    expect(Object.keys(accent).map(Number).sort((a, b) => a - b)).toEqual([
-      50, 100, 200, 300, 400, 500, 600, 700, 800, 900,
-    ]);
+  it("accent scale は 50/100/.../900 の連続 step を持つ", () => {
+    expect(
+      Object.keys(accent)
+        .map(Number)
+        .sort((a, b) => a - b),
+    ).toStrictEqual([50, 100, 200, 300, 400, 500, 600, 700, 800, 900]);
   });
 
-  it("全 color 値は oklch(...) 形式", () => {
-    for (const v of Object.values(gray)) expect(v).toMatch(/^oklch\(.+\)$/);
-    for (const v of Object.values(accent)) expect(v).toMatch(/^oklch\(.+\)$/);
+  it("gray の値全体を snapshot で固定 (chroma=0 / OKLCH 形式)", () => {
+    expect(gray).toMatchInlineSnapshot(`
+      {
+        "0": "oklch(100% 0 0)",
+        "100": "oklch(96% 0 0)",
+        "1000": "oklch(0% 0 0)",
+        "200": "oklch(92% 0 0)",
+        "300": "oklch(86% 0 0)",
+        "400": "oklch(74% 0 0)",
+        "50": "oklch(98.5% 0 0)",
+        "500": "oklch(60% 0 0)",
+        "600": "oklch(48% 0 0)",
+        "700": "oklch(36% 0 0)",
+        "800": "oklch(24% 0 0)",
+        "900": "oklch(14% 0 0)",
+      }
+    `);
   });
 
-  it("gray は彩度 (chroma) ゼロ", () => {
-    for (const v of Object.values(gray)) expect(v).toMatch(/oklch\(\d+(\.\d+)?% 0 0\)/);
+  it("accent の値全体を snapshot で固定 (warm hue 50)", () => {
+    expect(accent).toMatchInlineSnapshot(`
+      {
+        "100": "oklch(94% 0.03 50)",
+        "200": "oklch(88% 0.06 50)",
+        "300": "oklch(80% 0.1 50)",
+        "400": "oklch(71% 0.14 50)",
+        "50": "oklch(97% 0.015 50)",
+        "500": "oklch(63% 0.16 50)",
+        "600": "oklch(54% 0.16 50)",
+        "700": "oklch(45% 0.14 50)",
+        "800": "oklch(36% 0.11 50)",
+        "900": "oklch(26% 0.07 50)",
+      }
+    `);
   });
 });
 
 describe("spacing / radius / blur primitives", () => {
-  it("space は 0 / 1 / 2 / 3 / 4 / 6 / 8 / 12 / 16 / 24 を提供", () => {
-    expect(Object.keys(space)).toEqual(
-      ["0", "1", "2", "3", "4", "6", "8", "12", "16", "24"],
-    );
+  it("space scale を snapshot で固定 (0.25rem base harmonic)", () => {
+    expect(space).toMatchInlineSnapshot(`
+      {
+        "0": "0",
+        "1": "0.25rem",
+        "12": "3rem",
+        "16": "4rem",
+        "2": "0.5rem",
+        "24": "6rem",
+        "3": "0.75rem",
+        "4": "1rem",
+        "6": "1.5rem",
+        "8": "2rem",
+      }
+    `);
   });
 
-  it("space は 0 以外 rem 単位", () => {
-    expect(space[0]).toBe("0");
-    for (const k of [1, 2, 3, 4, 6, 8, 12, 16, 24] as const) {
-      expect(space[k]).toMatch(/rem$/);
-    }
+  it("radius scale を snapshot で固定", () => {
+    expect(radius).toMatchInlineSnapshot(`
+      {
+        "full": "9999px",
+        "lg": "0.75rem",
+        "md": "0.5rem",
+        "none": "0",
+        "sm": "0.25rem",
+      }
+    `);
   });
 
-  it("radius は none / sm / md / lg / full の 5 step", () => {
-    expect(Object.keys(radius).sort()).toEqual(["full", "lg", "md", "none", "sm"]);
-  });
-
-  it("blur は none / sm / md / lg / xl の 5 step", () => {
-    expect(Object.keys(blur).sort()).toEqual(["lg", "md", "none", "sm", "xl"]);
+  it("blur scale を snapshot で固定", () => {
+    expect(blur).toMatchInlineSnapshot(`
+      {
+        "lg": "16px",
+        "md": "8px",
+        "none": "0",
+        "sm": "4px",
+        "xl": "24px",
+      }
+    `);
   });
 });
 
 describe("typography primitives", () => {
-  it("fontFamily は sans / serif / mono を提供", () => {
-    expect(fontFamily.sans).toBeTruthy();
-    expect(fontFamily.serif).toBeTruthy();
-    expect(fontFamily.mono).toBeTruthy();
+  it("fontFamily の値全体を snapshot で固定", () => {
+    expect(fontFamily).toMatchInlineSnapshot(`
+      {
+        "mono": "ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace",
+        "sans": ""Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif",
+        "serif": ""Iowan Old Style", "Apple Garamond", Georgia, "Times New Roman", serif",
+      }
+    `);
   });
 
-  it("fontSize は clamp() ベースの fluid scale", () => {
-    for (const v of Object.values(fontSize)) {
-      expect(v).toMatch(/^clamp\(.+\)$/);
-    }
+  it("fontSize の値全体を snapshot で固定 (clamp ベース fluid scale)", () => {
+    expect(fontSize).toMatchInlineSnapshot(`
+      {
+        "2xl": "clamp(1.75rem, 1.5rem + 1vw, 2.5rem)",
+        "3xl": "clamp(2.5rem, 2rem + 2vw, 3.75rem)",
+        "base": "clamp(1rem, 0.95rem + 0.25vw, 1.125rem)",
+        "lg": "clamp(1.125rem, 1.05rem + 0.4vw, 1.375rem)",
+        "sm": "clamp(0.875rem, 0.825rem + 0.25vw, 1rem)",
+        "xl": "clamp(1.375rem, 1.25rem + 0.6vw, 1.75rem)",
+        "xs": "clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem)",
+      }
+    `);
   });
 
-  it("fontSize は xs/sm/base/lg/xl/2xl/3xl の 7 step", () => {
-    expect(Object.keys(fontSize).sort()).toEqual(["2xl", "3xl", "base", "lg", "sm", "xl", "xs"]);
+  it("lineHeight を snapshot で固定 (1.0–2.0 の unitless 数値)", () => {
+    expect(lineHeight).toMatchInlineSnapshot(`
+      {
+        "normal": "1.55",
+        "relaxed": "1.75",
+        "snug": "1.35",
+        "tight": "1.15",
+      }
+    `);
   });
 
-  it("lineHeight は tight/snug/normal/relaxed の 4 step、unitless 数値", () => {
-    for (const v of Object.values(lineHeight)) {
-      expect(parseFloat(v)).toBeGreaterThan(1);
-      expect(parseFloat(v)).toBeLessThan(2);
-    }
-  });
-
-  it("fontWeight は regular/medium/semibold/bold、文字列数値", () => {
-    expect(fontWeight.regular).toBe("400");
-    expect(fontWeight.bold).toBe("700");
+  it("fontWeight を snapshot で固定 (CSS の wght 文字列)", () => {
+    expect(fontWeight).toMatchInlineSnapshot(`
+      {
+        "bold": "700",
+        "medium": "500",
+        "regular": "400",
+        "semibold": "600",
+      }
+    `);
   });
 });
 
 describe("motion primitives", () => {
-  it("duration は ms 単位、instant=0", () => {
-    expect(duration.instant).toBe("0ms");
-    expect(duration.fast).toMatch(/^\d+ms$/);
-    expect(duration.base).toMatch(/^\d+ms$/);
-    expect(duration.slow).toMatch(/^\d+ms$/);
+  it("duration を snapshot で固定 (ms 単位、instant=0)", () => {
+    expect(duration).toMatchInlineSnapshot(`
+      {
+        "base": "200ms",
+        "fast": "120ms",
+        "instant": "0ms",
+        "slow": "320ms",
+      }
+    `);
   });
 
-  it("easing は cubic-bezier または linear", () => {
-    expect(easing.linear).toBe("linear");
-    for (const k of ["out", "inOut", "spring"] as const) {
-      expect(easing[k]).toMatch(/^cubic-bezier\(/);
-    }
+  it("easing を snapshot で固定 (linear or cubic-bezier)", () => {
+    expect(easing).toMatchInlineSnapshot(`
+      {
+        "inOut": "cubic-bezier(0.65, 0, 0.35, 1)",
+        "linear": "linear",
+        "out": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "spring": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+      }
+    `);
   });
 });
