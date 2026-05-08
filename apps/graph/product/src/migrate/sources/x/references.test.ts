@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 import { deterministicId } from "../../common/id.js";
-import type { NodeInput } from "../common/types.js";
+import type { NodeInput } from "../../common/types.js";
 import {
   buildReferencedEdges,
   extractReferencedTweets,

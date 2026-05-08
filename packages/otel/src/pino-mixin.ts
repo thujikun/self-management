@@ -17,6 +17,7 @@
 
 import { trace, context } from "@opentelemetry/api";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
+import type { AnyValue, AnyValueMap } from "@opentelemetry/api-logs";
 
 /**
  * 現在の active span から trace context を抽出する pino mixin。
@@ -87,10 +88,12 @@ export function createOtelDestination(loggerName = "self-management"): {
         const level = typeof obj.level === "string" ? obj.level : "info";
         const message = typeof obj.message === "string" ? obj.message : "";
         const severity = pinoLevelToSeverity(level);
-        const attrs: Record<string, unknown> = {};
+        // JSON.parse の返り値は AnyValue (scalar / array / nested map / null) と互換。
+        // TS は recursive subset を証明できないので value 単位で AnyValue にキャスト。
+        const attrs: AnyValueMap = {};
         for (const [k, v] of Object.entries(obj)) {
           if (k === "message" || k === "level" || k === "time" || k === "v") continue;
-          attrs[k] = v;
+          attrs[k] = v as AnyValue;
         }
         logger.emit({
           severityText: level.toUpperCase(),

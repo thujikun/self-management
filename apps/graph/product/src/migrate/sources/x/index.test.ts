@@ -12,6 +12,7 @@ import { _setSecretCacheForTest, clearSecretCache } from "@self/otel/secret";
 import { buildDefaultSinceIdProvider, parseX } from "./index.js";
 import type { XCreds } from "./auth.js";
 import type { FetchFn } from "./client.js";
+import type { BqQueryClient } from "./since.js";
 
 const fakeCreds: XCreds = {
   consumerKey: "ck",
@@ -214,10 +215,10 @@ describe("parseX", () => {
   });
 
   it("buildDefaultSinceIdProvider returns a SinceIdProvider that queries the injected BQ client", async () => {
-    const mockClient = {
+    const mockClient: BqQueryClient = {
       createQueryJob: vi.fn(async () => [
         { getQueryResults: async () => [[{ max_id: "999" }]] },
-      ] as Awaited<ReturnType<Parameters<typeof buildDefaultSinceIdProvider>[0] extends undefined ? never : Parameters<typeof buildDefaultSinceIdProvider>[0]["createQueryJob"]>>),
+      ] as Awaited<ReturnType<BqQueryClient["createQueryJob"]>>),
     };
     const provider = buildDefaultSinceIdProvider(mockClient);
     const out = await provider("foo", "own");

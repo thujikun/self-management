@@ -142,7 +142,7 @@ describe("parseEngagements", () => {
   });
 
   it("bookmark falls back to default getOAuth2Bearer when no bearerProvider (uses SM cache)", async () => {
-    const { _setSecretCacheForTest, clearSecretCache } = await import("@self/otel/secret");
+    const { clearSecretCache } = await import("@self/otel/secret");
     const { _setOAuth2CacheForTest, clearOAuth2Cache } = await import("./oauth2.js");
     clearSecretCache();
     clearOAuth2Cache();

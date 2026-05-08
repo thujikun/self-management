@@ -15,7 +15,7 @@
  */
 
 import { deterministicId } from "../../common/id.js";
-import type { EdgeInput, NodeInput, ParseResult } from "../common/types.js";
+import type { EdgeInput, NodeInput, ParseResult } from "../../common/types.js";
 import { X_ACCOUNTS, personIdFor, type XAccountConfig } from "./accounts.js";
 import type { XCreds } from "./auth.js";
 import { xPaginate, type FetchFn } from "./client.js";

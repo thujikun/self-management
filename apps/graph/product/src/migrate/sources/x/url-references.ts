@@ -17,7 +17,7 @@
 
 import { BigQuery } from "@google-cloud/bigquery";
 import { BQ_DATASET } from "../../../schema/shared.js";
-import type { EdgeInput, NodeInput } from "../common/types.js";
+import type { EdgeInput, NodeInput } from "../../common/types.js";
 
 /** @graph-connects none */
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT ?? "ryan-self-management";

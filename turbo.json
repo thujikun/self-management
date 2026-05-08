@@ -10,18 +10,11 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": [
-        "$TURBO_DEFAULT$",
         "src/**",
-        "scripts/**",
-        "vite.config.ts",
-        "wrangler.jsonc",
         "tsconfig.json",
         "package.json"
       ],
-      "outputs": [
-        "dist/**",
-        ".output/**"
-      ]
+      "outputs": ["dist/**"]
     },
     "dev": {
       "cache": false,

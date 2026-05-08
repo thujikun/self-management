@@ -14,7 +14,7 @@
  * @graph-connects none
  */
 
-import type { EdgeInput } from "../common/types.js";
+import type { EdgeInput } from "../../common/types.js";
 import {
   externalTweetsToNodes,
   type XTweetWithAuthor,

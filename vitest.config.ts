@@ -26,6 +26,8 @@ export default defineConfig({
     // import phase が線形悪化し、cold-start テストが届かなくなる。30s は通常の
     // unit test 上限としては十分余裕で、これを超えるなら "実バグ" として扱う前提。
     // pool: "threads" を試したが、共有状態を前提とするテストが破綻するため fork のまま。
+    // 次の閾値突破時 (60s 級) は timeout 拡張ではなく `globalSetup` で ts-morph
+    // project を prewarm して cold-start 自体を短くする方針に切替える。
     testTimeout: 30000,
     coverage: {
       provider: "v8",

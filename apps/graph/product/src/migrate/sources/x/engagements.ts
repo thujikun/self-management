@@ -18,7 +18,7 @@
  * @graph-connects bigquery [writes_to] contents (外部 tweet) + persons (外部 author seed) + personal_edges (engaged_with / mentioned_in)
  */
 
-import type { EdgeInput, NodeInput, ParseResult } from "../common/types.js";
+import type { EdgeInput, NodeInput, ParseResult } from "../../common/types.js";
 import { personIdFor, X_ACCOUNTS, type XAccountConfig } from "./accounts.js";
 import type { XCreds } from "./auth.js";
 import { xPaginate, xPaginateBearer, type FetchFn } from "./client.js";
