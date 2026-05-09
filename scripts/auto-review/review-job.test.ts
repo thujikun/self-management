@@ -146,7 +146,7 @@ describe("runReviewJob", () => {
     expect(getState().prs["7"]?.iterations).toStrictEqual(0);
   });
 
-  it("worktree は finally 節で必ず削除される (post で throw しても)", async () => {
+  it("post が throw: anti-loop で sha bookmark + iteration++、worktree は finally 削除", async () => {
     const stdout = [
       "<!-- AUTO_REVIEW_BODY_START -->",
       "x",
@@ -160,8 +160,27 @@ describe("runReviewJob", () => {
         throw new Error("network down");
       },
     };
-    const { input } = makeInput({ prs: {} });
-    await expect(runReviewJob(input, failingDeps)).rejects.toThrow("network down");
+    const { input, getState } = makeInput({ prs: { "7": { iterations: 0 } } });
+    await runReviewJob(input, failingDeps);
     expect(harness.worktreeOps).toStrictEqual(["create-7", "remove-7"]);
+    const after = getState().prs["7"];
+    expect(after?.lastReviewedSha).toStrictEqual("abc123");
+    expect(after?.iterations).toStrictEqual(1);
+  });
+
+  it("createWorktree が throw: anti-loop で sha bookmark + iteration++、remove 呼ばれず", async () => {
+    const { deps, harness } = makeDeps("");
+    const failingDeps: ReviewJobDeps = {
+      ...deps,
+      createWorktree: async () => {
+        throw new Error("fatal: branch already in use");
+      },
+    };
+    const { input, getState } = makeInput({ prs: {} });
+    await runReviewJob(input, failingDeps);
+    expect(harness.worktreeOps).toStrictEqual([]);
+    const after = getState().prs["7"];
+    expect(after?.lastReviewedSha).toStrictEqual("abc123");
+    expect(after?.iterations).toStrictEqual(1);
   });
 });
