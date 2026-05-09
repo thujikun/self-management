@@ -26,7 +26,7 @@ env:
 | `AUTO_REVIEW_REPO` | `thujikun/self-management` | 対象 repo |
 | `AUTO_REVIEW_POLL_INTERVAL_MS` | `60000` | poll 間隔 (ms) |
 | `AUTO_REVIEW_MAX_CONCURRENT` | `2` | 並行 job 上限 (vitest 競合を避けて控えめ) |
-| `AUTO_REVIEW_MAX_ITERATIONS` | `5` | 同 PR の review/fix サイクル累積上限。超えると stalled に倒して停止 |
+| `AUTO_REVIEW_MAX_ITERATIONS` | `10` | 同 PR の review post + fix push のそれぞれで +1 (= round-trip 1 回で +2)。超えると stalled に倒して停止。timeout / parse failure / FIX_FAILED / push 検出失敗の何れもこの counter を進める (= 必ず cap で止まる) |
 | `AUTO_REVIEW_REPO_ROOT` | `process.cwd()` | git worktree base となるメイン repo path |
 | `CLAUDE_TIMEOUT_MS` | `1800000` (30 分) | claude -p 1 回の timeout |
 
@@ -39,7 +39,7 @@ state は `~/.cache/self-management-auto-review/state.json` に atomic write (tm
 | 1. reviewer dedup | `head_sha` | 同 SHA は再 review skip |
 | 2. author dedup | `commentId` | 同 commentId は再 fix skip |
 | 3. NO_OP marker | reviewer prompt 内 Step 4 | 投稿前に直近の自分の review body と正規化比較 → 同一なら `<!-- VERDICT:NO_OP -->` を stdout に → script は state.lastReviewedSha だけ更新して post skip |
-| 4. iteration cap | per-PR counter | review post / fix push 1 ペア = +1。`MAX_ITERATIONS_PER_PR=5` 超えたら `stalled: true` で当該 PR の両モード停止 (manual unblock は state.json 編集) |
+| 4. iteration cap | per-PR counter | **review post と fix push それぞれで +1** (= 1 round-trip = +2、APPROVE で 0 reset)。`MAX_ITERATIONS_PER_PR=10` (default) を超えたら `stalled: true` で当該 PR の両モード停止 (manual unblock は state.json 編集)。timeout / parse failure / FIX_FAILED / push 検出失敗の何れも iteration を進める (= cap で必ず止まる、無限 retry させない) |
 
 正規化規則 (`dedup.ts`):
 - VERDICT / BODY START/END marker 除去
@@ -89,12 +89,23 @@ scripts/auto-review/
 - claude `--resume` での session 継続 (個人 repo の小 PR では cold start 軽微)
 - Product Graph 鮮度自動 build (graph 更新は別 PR で対応予定)
 
+## セキュリティ前提
+
+bot は worktree cwd で `claude -p ... --dangerously-skip-permissions` を spawn する。worktree 内に閉じるとはいえ、Claude tool calls からは **`~/.claude/`、`~/.gitconfig`、その他 HOME 配下の任意ファイル** に access できる構成。これは:
+
+- **個人 repo** (`thujikun/self-management`) を **個人 machine** で動かすことが前提
+- 信頼できない PR (例: fork からの contribution) には適用しない (将来 fork に拡張する場合は worktree を別 user / sandbox 化する必要あり)
+- `~/.claude/`, `~/.gitconfig`, `~/.ssh/` 等の sensitive ファイルが Claude session の context に含まれる前提で運用すること
+
+cortex の auto-review も同 pattern (個人運用 + `--dangerously-skip-permissions`)。
+
 ## トラブルシュート
 
 - **claude が timeout** (default 30 分): `CLAUDE_TIMEOUT_MS` で延ばすか、PR を細かく分割
-- **iteration cap で stalled**: `state.json` の該当 PR エントリを削除すれば再開
+- **iteration cap で stalled**: `state.json` の該当 PR エントリを削除すれば再開。再試行が必要な commentId が `lastAddressedCommentId` に bookmark されている場合も同じく state.json 編集で消す
 - **worktree が残った**: `git worktree prune` + `rm -rf ~/.cache/self-management-auto-review/worktrees`
 - **同じ指摘で無限ループ**: NO_OP 判定が機能していない可能性。`dedup.ts` の `normalizeBody` の正規化規則を見直し、本文中の差分要素が抜けていないか確認
+- **fix が走ったのに push されていない**: fix-job は worktree HEAD ↔ origin/<branch> の SHA 比較で push 検証する。検証 fail なら iteration を進めて state を bookmark し、同 commentId の永久 retry を遮断する
 
 ## 関連
 

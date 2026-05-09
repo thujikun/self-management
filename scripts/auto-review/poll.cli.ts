@@ -7,7 +7,7 @@
  *
  * - 並行度は MAX_CONCURRENT (default 2)
  * - 同 PR の review と fix は per-PR mutex で直列化
- * - iteration cap (MAX_ITERATIONS_PER_PR=5) 超過で当該 PR を stalled としてスキップ
+ * - iteration cap (MAX_ITERATIONS_PER_PR=10、review post と fix push それぞれで +1 = 1 round-trip = +2) 超過で当該 PR を stalled としてスキップ
  *
  * SIGINT / SIGTERM で graceful stop (in-flight job を待ってから exit)。
  */
@@ -25,7 +25,7 @@ const execFileP = promisify(execFile);
 const REPO = process.env.AUTO_REVIEW_REPO ?? "thujikun/self-management";
 const POLL_INTERVAL_MS = parseInt(process.env.AUTO_REVIEW_POLL_INTERVAL_MS ?? "60000", 10);
 const MAX_CONCURRENT = parseInt(process.env.AUTO_REVIEW_MAX_CONCURRENT ?? "2", 10);
-const MAX_ITERATIONS_PER_PR = parseInt(process.env.AUTO_REVIEW_MAX_ITERATIONS ?? "5", 10);
+const MAX_ITERATIONS_PER_PR = parseInt(process.env.AUTO_REVIEW_MAX_ITERATIONS ?? "10", 10);
 const REPO_ROOT = process.env.AUTO_REVIEW_REPO_ROOT ?? process.cwd();
 
 interface PR {

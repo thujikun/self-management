@@ -3,7 +3,7 @@
  *
  * - 各 PR の最終 review 状況 / 最終 fix 対応 commentId / iteration counter を保持
  * - 起動時 load → 各 job 完了時に updateState 経由で書き換え + atomic write (tmp → rename)
- * - 場所は `~/.cache/self-management-auto-review/state.json` (`STATE_PATH` で override 可)
+ * - 場所は `~/.cache/self-management-auto-review/state.json` (`loadState` / `saveState` の path 引数で override 可、test 用)
  */
 
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
@@ -23,7 +23,7 @@ export interface PRState {
   lastAddressedAt?: string;
   /** 最後に fix 対応した review 本文の正規化 hash。 */
   lastAddressedBodyHash?: string;
-  /** review post / fix push 1 ペアあたり +1。APPROVE で 0 reset。 */
+  /** review post と fix push それぞれで +1 (= 1 round-trip = +2)。APPROVE で 0 reset。 */
   iterations: number;
   /** iteration cap 超過で true。両モードが当該 PR を skip。 */
   stalled?: boolean;
