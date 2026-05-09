@@ -47,8 +47,11 @@ const sql = neon(databaseUrl);
  */
 const MANAGED_TABLES = ["posts", "comments", "likes", "view_counts"] as const;
 
-// pre-flight: 管理対象 table のいずれかが既に存在したら早期 exit。
-/** @graph-connects none */
+/**
+ * pre-flight: 管理対象 table のいずれかが既に存在したら早期 exit。
+ *
+ * @graph-connects neon [reads_from] information_schema.tables を select して MANAGED_TABLES の存在確認 (再実行ガード)
+ */
 const existing = (await sql.query(
   `SELECT table_name FROM information_schema.tables
    WHERE table_schema = 'public' AND table_name = ANY($1::text[])`,
