@@ -1,22 +1,29 @@
 /**
- * `@self/db` の placeholder 段階 smoke test。
+ * `@self/db` の barrel export 公開契約 test。
  *
- * 後続 PR で Drizzle schema / migration / Neon client が入ったら、
- * 各モジュールの test ファイルに分割していく。
+ * `Object.keys(mod).sort()` を inline snapshot で固定し、export 名の追加削除を
+ * 機械的に検知する。各 schema / client の挙動は専用 test に任せる。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business `@self/db` の現状 stub に対する最低限の smoke test。schema 実装後は本ファイルを削除して各モジュール側に test を分散する想定
+ * @graph-business barrel export を inline snapshot で凍結し、公開 API の追加削除を検知。schema (posts/comments/likes/viewCounts) と client (createDb) を 1 entry から引ける契約を保証
  * @graph-connects none
  */
 
 import { describe, expect, it } from "vitest";
 
-import { DB_SCHEMA_VERSION } from "./index.js";
+import * as mod from "./index.js";
 
-describe("@self/db", () => {
-  it("DB_SCHEMA_VERSION が文字列として export される", () => {
-    expect(typeof DB_SCHEMA_VERSION).toBe("string");
-    expect(DB_SCHEMA_VERSION.length).toBeGreaterThan(0);
+describe("@self/db barrel exports", () => {
+  it("公開 API を集約している", () => {
+    expect(Object.keys(mod).sort()).toMatchInlineSnapshot(`
+      [
+        "comments",
+        "createDb",
+        "likes",
+        "posts",
+        "viewCounts",
+      ]
+    `);
   });
 });
