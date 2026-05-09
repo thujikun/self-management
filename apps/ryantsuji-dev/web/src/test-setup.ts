@@ -1,5 +1,5 @@
 /**
- * vitest 用のグローバル setup。
+ * vitest 用の app 固有 setup。
  *
  * `createServerFn` は production runtime では client → HTTP RPC → server handler
  * の経路で動くが、vitest test 環境にはその runtime がない。テストでは route loader
@@ -8,6 +8,9 @@
  *
  * 物理的な bundle 分離は build 側 (`@vitejs/plugin-rsc` の AST 変換) が担うので、
  * テストで passthrough にしても production の挙動には影響しない。
+ *
+ * 本ファイルは `apps/ryantsuji-dev/web/vitest.config.ts` の `setupFiles` から
+ * のみ参照される (root vitest config からは見えない)。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
@@ -20,23 +23,19 @@ import { vi } from "vitest";
 vi.mock("@tanstack/react-start", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-start")>();
   type Validator = (data: unknown) => unknown;
-  type HandlerArgs = { data: unknown };
-  type Handler = (args: HandlerArgs) => unknown;
+  type Handler = (args: { data: unknown }) => unknown;
 
   function createMock() {
     let validator: Validator | null = null;
-    let handler: Handler | null = null;
     const builder = {
       inputValidator(v: Validator) {
         validator = v;
         return builder;
       },
       handler(fn: Handler) {
-        handler = fn;
         return async (args: { data: unknown } = { data: undefined }) => {
           const data = validator ? validator(args.data) : args.data;
-          if (!handler) throw new Error("handler not set");
-          return await handler({ data });
+          return await fn({ data });
         };
       },
     };
