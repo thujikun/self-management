@@ -11,6 +11,8 @@
  * - 同 PR の review/fix/merge は per-PR mutex で直列化
  * - iteration cap (review post と fix push それぞれで +1 = 1 round-trip = +2) 超過で当該 PR を stalled としてスキップ
  *
+ * 各 tick / job の進捗を `[scope] message` 形式で stdout に逐次ログする (cortex 同型)。
+ *
  * SIGINT / SIGTERM で graceful stop (in-flight job を待ってから exit)。
  */
 
@@ -20,6 +22,7 @@ import { promisify } from "node:util";
 import { runFixJob } from "./fix-job.js";
 import { runIndexJob } from "./index-job.js";
 import { JobQueue } from "./job-queue.js";
+import { log, warn } from "./log.js";
 import { runMergeJob } from "./merge-job.js";
 import { runReviewJob } from "./review-job.js";
 import { loadState, saveState, setPR, StateMutex, type State } from "./state.js";
@@ -82,8 +85,13 @@ function isWipTitle(title: string): boolean {
 const mutex = new StateMutex();
 let state: State = await loadState();
 
-console.log(
-  `[auto-review] starting (repo=${REPO}, interval=${POLL_INTERVAL_MS}ms, maxConcurrent=${MAX_CONCURRENT}, maxIterations=${MAX_ITERATIONS_PER_PR})`,
+log(
+  "[auto-review]",
+  `starting (repo=${REPO}, interval=${POLL_INTERVAL_MS}ms, maxConcurrent=${MAX_CONCURRENT}, maxIterations=${MAX_ITERATIONS_PER_PR}, repoRoot=${REPO_ROOT})`,
+);
+log(
+  "[auto-review]",
+  `state loaded: ${Object.keys(state.prs).length} PR entries, lastIndexedMainSha=${state.global?.lastIndexedMainSha ?? "<none>"}`,
 );
 
 const queue = new JobQueue({ maxConcurrent: MAX_CONCURRENT });
@@ -99,31 +107,74 @@ async function update(updater: (s: State) => State): Promise<State> {
   );
 }
 
+let tickCount = 0;
+
 async function tick(): Promise<void> {
-  // index mode: origin/main が動いていたら graph:build を kick (PR scan より前に走らせる、軽いので非 block)
-  await runIndexJob({ repoRoot: REPO_ROOT, state, updateState: update }).catch((err: unknown) => {
-    console.warn(`[index] tick error:`, err);
+  tickCount++;
+  log("[poll]", `tick #${tickCount} begin`);
+
+  // index mode: origin/main が動いていたら graph:build を kick
+  const indexResult = await runIndexJob({
+    repoRoot: REPO_ROOT,
+    state,
+    updateState: update,
+  }).catch((err: unknown) => {
+    warn("[index]", `tick error:`, err);
     return { state, kicked: false };
   });
+  if (!indexResult.kicked) {
+    log("[index]", `origin/main unchanged, skip`);
+  }
 
   const prs = await listOpenPRs().catch((err: unknown) => {
-    console.warn(`[poll] gh pr list failed:`, err);
+    warn("[poll]", `gh pr list failed:`, err);
     return [] as PR[];
   });
+  log("[poll]", `${prs.length} open PR(s)`);
+
+  let reviewEnqueued = 0;
+  let fixEnqueued = 0;
+  let mergeEnqueued = 0;
+  let skipped = 0;
 
   for (const pr of prs) {
-    if (pr.isDraft || isWipTitle(pr.title)) continue;
+    const tag = `[poll pr-${pr.number}]`;
+    if (pr.isDraft) {
+      log(tag, `skip: draft`);
+      skipped++;
+      continue;
+    }
+    if (isWipTitle(pr.title)) {
+      log(tag, `skip: WIP title (${pr.title})`);
+      skipped++;
+      continue;
+    }
     const cur = state.prs[String(pr.number)] ?? { iterations: 0 };
-    if (cur.stalled) continue;
+    if (cur.stalled) {
+      log(tag, `skip: stalled (iteration cap reached previously)`);
+      skipped++;
+      continue;
+    }
     if (cur.iterations >= MAX_ITERATIONS_PER_PR) {
-      console.warn(`[pr-${pr.number}] iteration cap (${cur.iterations}) reached → stalled`);
+      warn(tag, `iteration cap (${cur.iterations}) reached → mark stalled`);
       await update((s) => setPR(s, pr.number, { stalled: true }));
+      skipped++;
       continue;
     }
 
-    // Reviewer mode: 前回 review と head_sha が違えば enqueue
+    log(
+      tag,
+      `sha=${pr.headRefOid.slice(0, 7)}, branch=${pr.headRefName}, iterations=${cur.iterations}`,
+    );
+
+    // Reviewer mode
     if (cur.lastReviewedSha !== pr.headRefOid) {
-      queue.enqueue({
+      log(
+        tag,
+        `  reviewer: lastReviewedSha=${cur.lastReviewedSha?.slice(0, 7) ?? "<none>"} ≠ ${pr.headRefOid.slice(0, 7)} → enqueue review`,
+      );
+      reviewEnqueued++;
+      const accepted = queue.enqueue({
         id: `review-${pr.number}-${pr.headRefOid}`,
         prNumber: pr.number,
         type: "review",
@@ -139,21 +190,30 @@ async function tick(): Promise<void> {
           });
         },
       });
+      if (!accepted) log(tag, `  reviewer: dedup (already queued / running), skip`);
+    } else {
+      log(tag, `  reviewer: lastReviewedSha matches → skip`);
     }
 
     // Author / merge mode: 直近 verdict comment を fetch
     const verdicts = await getBotVerdictComments(pr.number).catch((err: unknown) => {
-      console.warn(`[poll pr-${pr.number}] verdict fetch failed:`, err);
+      warn(tag, `verdict fetch failed:`, err);
       return [] as BotComment[];
     });
     const sorted = [...verdicts].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    log(tag, `  ${verdicts.length} bot verdict comment(s) found`);
 
-    // Author mode: 最新 REQUEST_CHANGES コメントを未対応なら enqueue
+    // Author mode
     const latestRC = sorted.find((c) => c.body.includes("VERDICT:REQUEST_CHANGES"));
     if (latestRC && latestRC.id !== cur.lastAddressedCommentId) {
+      log(
+        tag,
+        `  author: REQUEST_CHANGES comment #${latestRC.id} (lastAddressed=${cur.lastAddressedCommentId ?? "<none>"}) → enqueue fix`,
+      );
+      fixEnqueued++;
       const reviewBody = latestRC.body;
       const commentId = latestRC.id;
-      queue.enqueue({
+      const accepted = queue.enqueue({
         id: `fix-${pr.number}-${commentId}`,
         prNumber: pr.number,
         type: "fix",
@@ -170,15 +230,23 @@ async function tick(): Promise<void> {
           });
         },
       });
+      if (!accepted) log(tag, `  author: dedup (already queued / running), skip`);
+    } else if (!latestRC) {
+      log(tag, `  author: no REQUEST_CHANGES comment → skip`);
+    } else {
+      log(tag, `  author: comment #${latestRC.id} already addressed → skip`);
     }
 
-    // Merge mode: 直近 verdict が APPROVE で head_sha 一致 + 未 merge なら enqueue。
-    // 「直近 verdict」は REQUEST_CHANGES より新しい APPROVE がある場合のみ APPROVE とみなす
-    // (古い APPROVE の後に新しい REQUEST_CHANGES が来ているなら merge しない)。
+    // Merge mode
     const latestVerdict = sorted[0];
     const isApproveLatest = latestVerdict?.body.includes("VERDICT:APPROVE") ?? false;
     if (isApproveLatest && cur.lastMergedSha !== pr.headRefOid) {
-      queue.enqueue({
+      log(
+        tag,
+        `  merge: latest verdict is APPROVE + sha not yet merged → enqueue merge (CI green check pending)`,
+      );
+      mergeEnqueued++;
+      const accepted = queue.enqueue({
         id: `merge-${pr.number}-${pr.headRefOid}`,
         prNumber: pr.number,
         type: "merge",
@@ -192,15 +260,26 @@ async function tick(): Promise<void> {
           });
         },
       });
+      if (!accepted) log(tag, `  merge: dedup (already queued / running), skip`);
+    } else if (isApproveLatest) {
+      log(tag, `  merge: APPROVE but lastMergedSha matches → skip (already merged or attempted)`);
+    } else {
+      log(tag, `  merge: latest verdict is not APPROVE → skip`);
     }
   }
+
+  const status = queue.status();
+  log(
+    "[poll]",
+    `tick #${tickCount} end: enqueued=${reviewEnqueued + fixEnqueued + mergeEnqueued} (review=${reviewEnqueued}, fix=${fixEnqueued}, merge=${mergeEnqueued}), skipped=${skipped}, queue=${status.queued}, running=${status.running}`,
+  );
 }
 
 let stopping = false;
 const stop = (sig: string): void => {
   if (stopping) return;
   stopping = true;
-  console.log(`\n[auto-review] received ${sig}, draining in-flight jobs...`);
+  log("[auto-review]", `received ${sig}, draining in-flight jobs...`);
 };
 process.on("SIGINT", () => stop("SIGINT"));
 process.on("SIGTERM", () => stop("SIGTERM"));
@@ -213,4 +292,4 @@ while (!stopping) {
   await tick();
 }
 await queue.waitIdle();
-console.log("[auto-review] stopped");
+log("[auto-review]", `stopped (after ${tickCount} tick(s))`);
