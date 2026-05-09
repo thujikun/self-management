@@ -2,16 +2,13 @@
   "name": "@self/embedding",
   "version": "0.1.0",
   "private": true,
-  "description": "gemini-embedding-2 wrapper (Vertex AI :embedContent)",
+  "description": "gemini-embedding-001 wrapper (Google AI Studio Generative Language API、free tier)",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "google-auth-library": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
