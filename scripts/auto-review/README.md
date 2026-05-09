@@ -1,0 +1,102 @@
+# auto-review
+
+self-management の polling 型 PR 自動レビュー bot。`pnpm auto-review` で常駐起動し、`thujikun/self-management` の open PR を 60 秒ごとに走査して、新しい head_sha と新しい REQUEST_CHANGES marker comment を見つけたら Claude Code CLI で対応する。
+
+cortex の `scripts/auto-review/` (webhook 駆動の本格 bot) を **polling 型 + 個人 1 人運用前提**に縮小コピーした構成。
+
+## モード
+
+| モード | trigger | 動作 |
+|---|---|---|
+| reviewer | open PR の `head_sha` が前回 review と違う | 6 観点 (Graph / Arch / Security / Test / Doc / Impact) で review コメントを posting |
+| author | bot 自身の最新 review に `<!-- VERDICT:REQUEST_CHANGES -->` marker | worktree で `claude -p` を spawn → 修正 → commit → push |
+
+両モードは **同じ poll loop で同時に動く** (`MODE` env なし)。webhook トンネル不要。
+
+## 起動
+
+```bash
+pnpm auto-review
+```
+
+env:
+
+| 変数 | default | 用途 |
+|---|---|---|
+| `AUTO_REVIEW_REPO` | `thujikun/self-management` | 対象 repo |
+| `AUTO_REVIEW_POLL_INTERVAL_MS` | `60000` | poll 間隔 (ms) |
+| `AUTO_REVIEW_MAX_CONCURRENT` | `2` | 並行 job 上限 (vitest 競合を避けて控えめ) |
+| `AUTO_REVIEW_MAX_ITERATIONS` | `5` | 同 PR の review/fix サイクル累積上限。超えると stalled に倒して停止 |
+| `AUTO_REVIEW_REPO_ROOT` | `process.cwd()` | git worktree base となるメイン repo path |
+| `CLAUDE_TIMEOUT_MS` | `1800000` (30 分) | claude -p 1 回の timeout |
+
+state は `~/.cache/self-management-auto-review/state.json` に atomic write (tmp → rename)。worktree は `~/.cache/self-management-auto-review/worktrees/` 以下 (macOS の `/private/var/folders/` auto-clean 回避)。
+
+## anti-loop 4 層
+
+| 層 | 対象 | 動作 |
+|---|---|---|
+| 1. reviewer dedup | `head_sha` | 同 SHA は再 review skip |
+| 2. author dedup | `commentId` | 同 commentId は再 fix skip |
+| 3. NO_OP marker | reviewer prompt 内 Step 4 | 投稿前に直近の自分の review body と正規化比較 → 同一なら `<!-- VERDICT:NO_OP -->` を stdout に → script は state.lastReviewedSha だけ更新して post skip |
+| 4. iteration cap | per-PR counter | review post / fix push 1 ペア = +1。`MAX_ITERATIONS_PER_PR=5` 超えたら `stalled: true` で当該 PR の両モード停止 (manual unblock は state.json 編集) |
+
+正規化規則 (`dedup.ts`):
+- VERDICT / BODY START/END marker 除去
+- 「N 回目」「Round N」「第 N 回」「Iteration N」「イテレーション N」除去
+- 6 桁以上の連続数字 → `<ID>`
+- ISO8601 timestamp → `<TS>`
+- 連続空白 → 1 つ、前後 trim
+- 行番号 (`L854`) 等の短い数字は保持
+
+## 出力フォーマット
+
+bot の review コメントは以下の形:
+
+```
+<!-- AUTO_REVIEW_BODY_START -->
+<レビュー本文 markdown>
+<!-- AUTO_REVIEW_BODY_END -->
+<!-- VERDICT:REQUEST_CHANGES -->   # または APPROVE
+```
+
+START/END marker で bot コメント識別 + 業務本文の抽出を兼ねる。VERDICT marker は author mode の trigger。
+
+## ファイル構成
+
+```text
+scripts/auto-review/
+├── poll.cli.ts        # entry: gh pr list loop + dispatcher
+├── job-queue.ts       # 並行度 + per-PR mutex
+├── review-job.ts      # reviewer 1 PR 分 (read-only worktree → claude → comment 投稿)
+├── fix-job.ts         # author 1 PR 分 (PR branch worktree → claude → commit + push)
+├── claude.ts          # spawn claude -p、stdout から body / verdict 抽出
+├── worktree.ts        # git worktree 作成 / 削除 (read-only / branch 2 種)
+├── prompt-review.ts   # review prompt builder (pure)
+├── prompt-fix.ts      # fix prompt builder (pure)
+├── dedup.ts           # body 正規化 + SHA-256 hash
+├── state.ts           # ~/.cache/self-management-auto-review/state.json + StateMutex
+├── *.test.ts          # 各 pure module の test
+└── README.md
+```
+
+## scope NOT included
+
+- 自動マージ (branch protection で手動 merge 強制中)
+- alert-fix / annotation 自動運用 (Grafana / SPG なし)
+- Slack 通知
+- launchd 自動起動 (手動 `pnpm auto-review` で十分)
+- claude `--resume` での session 継続 (個人 repo の小 PR では cold start 軽微)
+- Product Graph 鮮度自動 build (graph 更新は別 PR で対応予定)
+
+## トラブルシュート
+
+- **claude が timeout** (default 30 分): `CLAUDE_TIMEOUT_MS` で延ばすか、PR を細かく分割
+- **iteration cap で stalled**: `state.json` の該当 PR エントリを削除すれば再開
+- **worktree が残った**: `git worktree prune` + `rm -rf ~/.cache/self-management-auto-review/worktrees`
+- **同じ指摘で無限ループ**: NO_OP 判定が機能していない可能性。`dedup.ts` の `normalizeBody` の正規化規則を見直し、本文中の差分要素が抜けていないか確認
+
+## 関連
+
+- [docs/review-guidelines.md](../../docs/review-guidelines.md) — レビュー判定基準
+- [cortex/scripts/auto-review/](https://github.com/) — 元の cortex 実装 (webhook 駆動の本格版)
