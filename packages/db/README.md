@@ -1,20 +1,97 @@
 # @self/db
 
-ryantsuji.dev の Postgres (Neon) schema + client (現状 stub)。
+ryantsuji.dev の Postgres (Neon) schema + client。Drizzle ORM + `@neondatabase/serverless` の **HTTP driver** を使い、CF Workers から TCP socket 不要で叩ける構成。
 
-## 後続 PR で実装
+## カバーする table
 
-- **Drizzle schema** (`src/schema/`):
-  - `users`, `sessions`, `accounts` (Better Auth が要求する table)
-  - `comments` (post slug, parent_id, body markdown, author_id, created_at)
-  - `likes` (post slug, user_id, unique constraint)
-  - `view_counts` (post slug, count) — heavy write は Upstash counter にして batch flush
-- **Neon 接続**: `@neondatabase/serverless` + Hyperdrive binding (CF Workers から最短 hop)
-- **drizzle-kit migrate**: schema diff から migration 生成、CI で apply
+| table | 役割 |
+|---|---|
+| `posts` | markdown 投稿の identity (slug PK)。本文は markdown SSoT 側、ここは comments / likes / view_counts の FK target |
+| `comments` | 投稿コメント (cascade FK to `posts.slug`)、認証導入前提の author* field、soft delete |
+| `likes` | post への like / reaction、composite PK `(post_slug, identifier, kind)`、anonymous (cookie hash) と認証ユーザー (users.id) の両方を identifier に取る |
+| `view_counts` | 投稿ごとの view counter (1:1 with posts.slug、bigint counter) |
 
-## 設計メモ
+将来追加: `users` / `sessions` / `accounts` (Better Auth 用) は別 PR。
 
-- 記事本体は markdown (別 repo `ryantsuji-dev-content`) なので Postgres には乗せない
-- view counts のような heavy write は Postgres に直書きしない → Upstash Redis で counter → 定期 flush
-- comment / like は moderate write 量なので直 Postgres でよい
-- Better Auth の standard schema を尊重する (rename しない)
+## 使い方
+
+### TypeScript / runtime (CF Workers / Node)
+
+```ts
+import { createDb, posts, comments } from "@self/db";
+
+// CF Workers の env.DATABASE_URL を渡す。1 request 1 instance を想定 (lazy fetch)。
+const db = createDb(env.DATABASE_URL);
+
+const all = await db.select().from(posts).orderBy(posts.publishedAt);
+await db.insert(comments).values({ postSlug: "hello-world", authorName: "ryan", body: "..." });
+```
+
+### drizzle-kit (migration / studio)
+
+```bash
+# direnv allow で .envrc.local の DATABASE_URL を環境変数に流してから:
+pnpm --filter @self/db drizzle:generate   # schema 変更後、migrations/ に SQL 生成
+pnpm --filter @self/db migrate:apply      # migrations/*.sql を順次適用 (空 DB / fresh apply 用)
+pnpm --filter @self/db drizzle:studio     # ブラウザ UI で row を眺める
+```
+
+`drizzle:generate` は `src/schema/index.ts` を起点に diff を取って `migrations/0NNN_*.sql` を吐く。生成 SQL は **commit する** (review 対象)。
+
+`migrate:apply` は **空 DB / fresh apply のみ想定**。pre-flight check で既存 table を検知したら早期 exit、各 file 内の statement 群を `sql.transaction([])` で atomic に適用する。本格運用に入ったら drizzle-kit の正規 migrate runner に置き換える想定 (`drizzle:push` は TTY 必須で避ける)。
+
+## consumer 側のハマり所: BigInt
+
+`view_counts.count` は `bigint(mode: "bigint")` で返すので **JS BigInt** になる。`JSON.stringify(row)` は `TypeError: Do not know how to serialize a BigInt` を投げるので注意:
+
+```ts
+const [vc] = await db.select().from(viewCounts).where(eq(viewCounts.postSlug, slug));
+
+// ❌ TypeError
+return JSON.stringify(vc);
+
+// ✅ 文字列化 (大規模 view 想定なら推奨)
+return JSON.stringify({ ...vc, count: String(vc.count) });
+
+// ✅ 数値化 (2^53 = 9 × 10^15 を超えない範囲なら OK)
+return JSON.stringify({ ...vc, count: Number(vc.count) });
+```
+
+bigint mode を選んだ理由は 2^31 (PG int) も 2^53 (JS number) も将来 view 数で踏む可能性を小さくするため。precision を捨てて Number に倒すなら schema 側で `mode: "number"` に変更することも検討可。
+
+## 設計の決め事
+
+- **slug を PK** に。UUID より読みやすく、URL / Zenn / dev.to との突合 key としても素直
+- **本文は markdown SSoT** (`apps/ryantsuji-dev/web/content/posts/*.md`)、Postgres には id/title/publishedAt のみ cache
+- view counts は **直 Postgres に増分 UPDATE**。次 phase で write が爆発したら Upstash Redis 経由 batch flush に切替
+- comment は **soft delete** (`deleted_at`) で row を残す方針 (spam / abuse 対応)
+- like は **(post, identifier, kind) で unique**。`kind` は GitHub 互換に拡張余地 (`hooray` / `rocket` 等)
+- 認証導入前提の field (`comments.authorId`、`likes.identifier`) は string で受けておき、Better Auth 導入時に users table への FK relation に格上げ
+
+## 環境変数
+
+`DATABASE_URL` (Neon の **pooled** connection string) が必須。
+
+| env | 設定方法 |
+|---|---|
+| dev | `.envrc.local` に `export DATABASE_URL="postgresql://..."` (gitignore 済) |
+| production (CF Workers) | `wrangler secret put DATABASE_URL` |
+| 共有 (将来) | GCP Secret Manager に投入 + `.envrc` で `gcloud secrets versions access latest` (Grafana / SA token と同パターン) |
+
+## ファイル構成
+
+```
+packages/db/
+├── src/
+│   ├── schema/
+│   │   ├── posts.ts            # 投稿 identity (slug PK)
+│   │   ├── comments.ts         # cascade FK to posts
+│   │   ├── likes.ts            # composite PK
+│   │   ├── view-counts.ts      # 1:1 with posts
+│   │   └── index.ts            # barrel (drizzle-kit が schema 起点として参照)
+│   ├── client.ts               # createDb(url) - Neon HTTP + Drizzle
+│   └── index.ts                # public barrel
+├── scripts/apply-migrations.ts # 空 DB / fresh apply 用 SQL runner
+├── migrations/                 # drizzle-kit generate の出力 (commit する)
+└── drizzle.config.ts           # drizzle-kit 設定
+```

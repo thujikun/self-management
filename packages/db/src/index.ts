@@ -1,16 +1,29 @@
 /**
- * `@self/db` — ryantsuji.dev の Postgres (Neon) schema + client。
+ * `@self/db` — ryantsuji.dev の Postgres (Neon) schema + client の barrel。
  *
- * 現状は stub。後続 PR で次を埋める想定:
- * - Drizzle schema (`src/schema/`): users, sessions (Better Auth 系), comments, likes, view_counts
- * - Neon HTTP driver / Hyperdrive 接続 wrapper
- * - migration scripts (drizzle-kit)
+ * - **schema**: posts / comments / likes / view_counts (Drizzle 定義)
+ * - **client**: `createDb(url)` で CF Workers から HTTP 経由で接続
+ * - **subpath**: `@self/db/schema` (drizzle-kit 用) と `@self/db/client` (runtime) も別 export
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business 個人ブログの dynamic surface (comment / like / view count / session) を支える Neon Postgres schema の SSoT placeholder。Drizzle + Neon HTTP driver で edge から最短 hop で叩ける構成に倒す
+ * @graph-business `@self/db` の公開 API。schema / client を 1 module から引けるよう集約。drizzle-kit は subpath `@self/db/schema` を参照、runtime app は `createDb(url)` を呼ぶ
  * @graph-connects none
  */
 
-/** @graph-connects none */
-export const DB_SCHEMA_VERSION = "0.0.0-stub";
+export {
+  posts,
+  comments,
+  likes,
+  viewCounts,
+  type Comment,
+  type Like,
+  type NewComment,
+  type NewLike,
+  type NewPost,
+  type NewViewCount,
+  type Post,
+  type ViewCount,
+} from "./schema/index.js";
+
+export { createDb, type Db } from "./client.js";
