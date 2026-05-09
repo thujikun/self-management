@@ -324,6 +324,41 @@ export const grafanaMcpTokenSecretId = mcpTokenSecret.id;
 export const grafanaStackUrl = grafanaStack.url;
 
 /**
+ * Neon Postgres (ryantsuji.dev) の DATABASE_URL を保管する Secret container。
+ *
+ * Neon は console / API でしか project / branch を作れない (Pulumi neon provider
+ * の成熟度待ち) ので、connection string 自体は Ryan が console で取得 → `gcloud
+ * secrets versions add neon-database-url --data-file=-` で投入する運用にする
+ * (grafana-mcp-token と同パターン)。Pulumi は **container と IAM のみ管理**。
+ *
+ * 消費経路:
+ * - dev (.envrc): `gcloud secrets versions access` で `DATABASE_URL` env に展開
+ * - production CF Workers: `wrangler secret put DATABASE_URL` で binding に投入
+ *   (deploy 直前に GCP から手で読んで wrangler に流す。長期的には infra/ryantsuji-dev/
+ *   側で `cloudflare.WorkerSecret` を declarative に bind する形にする)
+ *
+ * @graph-connects secret-manager [writes_to] neon-database-url secret container
+ */
+const neonDatabaseUrlSecret = new gcp.secretmanager.Secret(
+  "neon-database-url",
+  {
+    secretId: "neon-database-url",
+    replication: { auto: {} },
+  },
+  { dependsOn: [apiServices["secretmanager"]] },
+);
+
+/** @graph-connects iam [writes_to] graph-app SA に neon DB URL secret の read 権限 */
+new gcp.secretmanager.SecretIamMember("graph-neon-database-url-accessor", {
+  secretId: neonDatabaseUrlSecret.id,
+  role: "roles/secretmanager.secretAccessor",
+  member: pulumi.interpolate`serviceAccount:${graphSa.email}`,
+});
+
+/** @graph-connects none */
+export const neonDatabaseUrlSecretId = neonDatabaseUrlSecret.id;
+
+/**
  * xmcp (X API MCP server) の OAuth credentials。
  *
  * 構成:
