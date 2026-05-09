@@ -38,7 +38,26 @@ pnpm --filter @self/db drizzle:studio     # ブラウザ UI で row を眺める
 
 `drizzle:generate` は `src/schema/index.ts` を起点に diff を取って `migrations/0NNN_*.sql` を吐く。生成 SQL は **commit する** (review 対象)。
 
-`drizzle:push` は TTY 必須なので避け、`migrate:apply` (本リポジトリ独自の SQL runner) で当てる。本格運用に入ったら drizzle-kit の正規 migrate runner に置き換える想定。
+`migrate:apply` は **空 DB / fresh apply のみ想定**。pre-flight check で既存 table を検知したら早期 exit、各 file 内の statement 群を `sql.transaction([])` で atomic に適用する。本格運用に入ったら drizzle-kit の正規 migrate runner に置き換える想定 (`drizzle:push` は TTY 必須で避ける)。
+
+## consumer 側のハマり所: BigInt
+
+`view_counts.count` は `bigint(mode: "bigint")` で返すので **JS BigInt** になる。`JSON.stringify(row)` は `TypeError: Do not know how to serialize a BigInt` を投げるので注意:
+
+```ts
+const [vc] = await db.select().from(viewCounts).where(eq(viewCounts.postSlug, slug));
+
+// ❌ TypeError
+return JSON.stringify(vc);
+
+// ✅ 文字列化 (大規模 view 想定なら推奨)
+return JSON.stringify({ ...vc, count: String(vc.count) });
+
+// ✅ 数値化 (2^53 = 9 × 10^15 を超えない範囲なら OK)
+return JSON.stringify({ ...vc, count: Number(vc.count) });
+```
+
+bigint mode を選んだ理由は 2^31 (PG int) も 2^53 (JS number) も将来 view 数で踏む可能性を小さくするため。precision を捨てて Number に倒すなら schema 側で `mode: "number"` に変更することも検討可。
 
 ## 設計の決め事
 

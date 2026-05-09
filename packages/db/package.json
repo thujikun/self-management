@@ -13,7 +13,6 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "drizzle:generate": "drizzle-kit generate",
-    "drizzle:push": "drizzle-kit push",
     "drizzle:studio": "drizzle-kit studio",
     "migrate:apply": "tsx scripts/apply-migrations.ts"
   },
