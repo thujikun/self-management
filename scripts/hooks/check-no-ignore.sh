@@ -32,6 +32,9 @@ for file in $FILES; do
     # 本 guard 自身と eslint config は禁止コメント名を文字列として扱うため除外
     scripts/hooks/check-no-ignore.sh) continue ;;
     eslint.config.js) continue ;;
+    # TanStack Router 自動生成 routeTree.gen.ts は @ts-nocheck / eslint-disable を
+    # 含む形で出力される (人手 review しない、機械的に再生成される artifact)。
+    *routeTree.gen.ts) continue ;;
   esac
   for p in "${PATTERNS[@]}"; do
     if grep -nE "$p" "$file" > /dev/null 2>&1; then

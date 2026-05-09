@@ -29,10 +29,12 @@ pnpm exec tsx scripts/hooks/check-graph-tags.cli.ts $FILES
 pnpm exec tsx scripts/compact-log.cli.ts --check
 
 # 5. ESLint (max-warnings=0)
-# staged TS だけ走らせる (フルプロジェクト lint は CI 側で再度走る前提)
+# staged TS だけ走らせる (フルプロジェクト lint は CI 側で再度走る前提)。
+# `--no-warn-ignored` で ignores に該当する staged file (routeTree.gen.ts 等) の
+# warning を抑止 (warning が `--max-warnings=0` を踏むのを回避)。
 TS_FILES=$(echo "$FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|cjs)$' || true)
 if [ -n "$TS_FILES" ]; then
-  pnpm exec eslint --max-warnings=0 $TS_FILES
+  pnpm exec eslint --max-warnings=0 --no-warn-ignored $TS_FILES
 fi
 
 # 6. test:coverage (per-file 90% 閾値、threshold 違反は exit 1)
