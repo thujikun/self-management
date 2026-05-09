@@ -1,12 +1,19 @@
 /**
  * vitest config (root)。
  *
- * coverage threshold は最初は緩く (50%) 設定し、テスト追加につれて引き上げる方針。
- * 「閾値を下げる代わりにテストを追加する」ルール (cortex 同型) を遵守。
+ * **vitest projects pattern** で各 workspace の concern を分離する:
+ * - 一般 workspace (graph / mcp / packages / infra / scripts) は root の default
+ *   project (inline) が拾う
+ * - `apps/ryantsuji-dev/web` は自身の `vitest.config.ts` で setupFiles
+ *   (`createServerFn` の test passthrough mock) を所有し、root はそのパスへの
+ *   依存を持たない
+ *
+ * coverage / testTimeout / threshold は root レベルで一元管理 (per-file 90% を
+ * 全 project に適用)。
  *
  * @graph-stack core
  * @graph-domain infra
- * @graph-business 全 workspace 横断の vitest 設定 + coverage threshold。`include` でユニットテストファイル、`coverage.include` で計測対象を限定。最初は閾値 50% で開始し、テスト追加に応じて引き上げる
+ * @graph-business 全 workspace 横断の vitest 設定。projects pattern で各 app の concern を per-app vitest.config.ts に隔離し、root は default project (graph/mcp/packages/infra/scripts) と coverage threshold + testTimeout を握る
  * @graph-connects none
  */
 
@@ -14,11 +21,23 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: [
-      "apps/**/src/**/*.{test,spec}.{ts,tsx}",
-      "packages/**/src/**/*.{test,spec}.{ts,tsx}",
-      "infra/**/*.{test,spec}.{ts,tsx}",
-      "scripts/**/*.{test,spec}.{ts,tsx}",
+    projects: [
+      // app 固有 setup を持つ workspace (vitest.config.ts を参照)
+      "apps/ryantsuji-dev/web",
+      // setupFiles 不要な共通 workspace 群はここに inline で定義
+      {
+        extends: true,
+        test: {
+          name: "default",
+          include: [
+            "apps/graph/**/src/**/*.{test,spec}.{ts,tsx}",
+            "apps/mcp/**/src/**/*.{test,spec}.{ts,tsx}",
+            "packages/**/src/**/*.{test,spec}.{ts,tsx}",
+            "infra/**/*.{test,spec}.{ts,tsx}",
+            "scripts/**/*.{test,spec}.{ts,tsx}",
+          ],
+        },
+      },
     ],
     // ts-morph in-memory project の cold-start (`apps/graph/.../code/parser.test.ts`)
     // が full-suite 並列負荷時に default 5s に届かず flake するため 30s に拡張。
@@ -60,6 +79,9 @@ export default defineConfig({
         "**/Pulumi.*.yaml",
         // TanStack Router 自動生成 routeTree (gitignore 済、自動付与ヘッダーで lint/type 抑制)
         "**/routeTree.gen.ts",
+        // vitest setup は test infrastructure (mock 定義) なので coverage 計測対象外。
+        // pure logic を持つ場合は src/ に切り出してテスト対象にする。
+        "**/test-setup.ts",
       ],
       // 閾値は **each-file 基準** で強制 (Ryan ルール: 全体平均では 1 ファイル 100% で
       // 他をごまかせるため不採用)。`perFile: true` で coverage.include の各ファイルが
