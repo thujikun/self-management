@@ -75,6 +75,6 @@ export function buildFixPrompt(input: FixPromptInput): string {
     "# 失敗時の挙動",
     "",
     "- conflict 解消できない / 6 gate を green にできない場合、push せず終了。次の人間判断に委ねる。",
-    "- その場合は stdout に `<!-- FIX_FAILED:<理由> -->` を 1 行残す。呼び出し側 (poll.cli.ts) はこれを見て iteration counter を進めずに skip する。",
+    "- その場合は stdout に `<!-- FIX_FAILED:<理由> -->` を 1 行残す。呼び出し側 (fix-job.ts) は当該 commentId を bookmark + iteration counter を +1 進めて、同 commentId の永久 retry を遮断する (= MAX_ITERATIONS_PER_PR cap で必ず止まる)。再試行が必要な場合は Ryan が手動で state.json の `lastAddressedCommentId` を消す方針なので、**安易に early-give-up しないこと** (限界まで try してから FIX_FAILED を出す)。",
   ].join("\n");
 }
