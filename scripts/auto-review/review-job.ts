@@ -23,6 +23,7 @@ import {
   type ClaudeRunResult,
 } from "./claude.js";
 import { hashBody } from "./dedup.js";
+import { fmtDuration, log, warn } from "./log.js";
 import { buildReviewPrompt } from "./prompt-review.js";
 import { setPR, type State } from "./state.js";
 import { createReadOnlyWorktree, removeWorktree, type Worktree } from "./worktree.js";
@@ -58,31 +59,44 @@ export async function runReviewJob(
   input: ReviewJobInput,
   deps: ReviewJobDeps = DEFAULT_REVIEW_JOB_DEPS,
 ): Promise<State> {
+  const tag = `[review pr-${input.prNumber}]`;
+  const jobStart = Date.now();
+  log(tag, `start (sha=${input.headSha.slice(0, 7)}, repo=${input.repo})`);
   let wt: Worktree | null = null;
   try {
+    log(tag, `creating read-only worktree at sha=${input.headSha.slice(0, 7)}...`);
+    const wtStart = Date.now();
     wt = await deps.createWorktree(input.repoRoot, input.prNumber, input.headSha);
+    log(tag, `worktree ready: ${wt.path} (${fmtDuration(Date.now() - wtStart)})`);
+
     const prompt = buildReviewPrompt({
       prNumber: input.prNumber,
       repo: input.repo,
       lastReviewBodyHash: input.lastReviewBodyHash,
     });
+    log(tag, `spawning claude -p (prompt=${prompt.length} chars, cwd=${wt.path})...`);
+    const claudeStart = Date.now();
     const result = await deps.runClaude({ prompt, cwd: wt.path });
+    const claudeDur = fmtDuration(Date.now() - claudeStart);
+    log(
+      tag,
+      `claude done (${claudeDur}, exit=${result.exitCode}, timedOut=${result.timedOut}, stdout=${result.stdout.length} chars)`,
+    );
 
     if (result.timedOut) {
-      console.warn(`[review pr-${input.prNumber}] claude timed out`);
-      // sha + iteration 更新で同 sha 再試行をブロック (anti-loop)
+      warn(tag, `claude timed out after ${claudeDur} → anti-loop bookmark`);
       return await markReviewedAndIncrement(input);
     }
     if (result.exitCode !== 0) {
-      console.warn(
-        `[review pr-${input.prNumber}] claude exit ${result.exitCode}; stderr tail:\n${result.stderr.slice(-500)}`,
+      warn(
+        tag,
+        `claude non-zero exit ${result.exitCode}; stderr tail:\n${result.stderr.slice(-500)}`,
       );
     }
     const parsed = parseReviewOutput(result.stdout);
 
     if (parsed.verdict === "NO_OP") {
-      console.log(`[review pr-${input.prNumber}] NO_OP — body unchanged from last`);
-      // NO_OP は本文同一が確認できた状態。iteration は据え置き、sha だけ更新して同 sha 再試行を防ぐ
+      log(tag, `NO_OP — body unchanged from last review, sha bookmark only (no post)`);
       return await input.updateState((s) =>
         setPR(s, input.prNumber, {
           lastReviewedSha: input.headSha,
@@ -92,18 +106,23 @@ export async function runReviewJob(
     }
 
     if (parsed.body === null || parsed.verdict === null) {
-      console.warn(
-        `[review pr-${input.prNumber}] failed to parse claude output (body=${parsed.body !== null}, verdict=${parsed.verdict})`,
+      warn(
+        tag,
+        `parse failure (bodyParsed=${parsed.body !== null}, verdict=${parsed.verdict}) → anti-loop bookmark`,
       );
-      // parse failure を放置すると次回 poll で同 sha を無限再試行するので、
-      // sha + iteration を進めて MAX_ITERATIONS_PER_PR cap で止まるようにする
       return await markReviewedAndIncrement(input);
     }
 
+    log(
+      tag,
+      `parsed verdict=${parsed.verdict}, body=${parsed.body.length} chars → posting comment`,
+    );
+    const postStart = Date.now();
     const fullBody = buildBotCommentBody(parsed.body, parsed.verdict);
     await deps.postPRComment(input.repo, input.prNumber, fullBody);
+    log(tag, `comment posted (${fmtDuration(Date.now() - postStart)})`);
 
-    return await input.updateState((s) => {
+    const next = await input.updateState((s) => {
       const cur = s.prs[String(input.prNumber)] ?? { iterations: 0 };
       const nextIterations = parsed.verdict === "APPROVE" ? 0 : cur.iterations + 1;
       return setPR(s, input.prNumber, {
@@ -113,16 +132,23 @@ export async function runReviewJob(
         iterations: nextIterations,
       });
     });
+    const itersAfter = next.prs[String(input.prNumber)]?.iterations ?? 0;
+    log(
+      tag,
+      `state updated: lastReviewedSha=${input.headSha.slice(0, 7)}, iterations=${itersAfter}${parsed.verdict === "APPROVE" ? " (reset by APPROVE)" : ""}`,
+    );
+    return next;
   } catch (err) {
-    // worktree creation 失敗や予期せぬ throw を anti-loop に倒す
-    console.warn(`[review pr-${input.prNumber}] failed:`, err);
+    warn(tag, `unexpected failure → anti-loop bookmark:`, err);
     return await markReviewedAndIncrement(input);
   } finally {
     if (wt) {
+      log(tag, `removing worktree...`);
       await deps
         .removeWorktree(input.repoRoot, wt)
-        .catch((e) => console.warn(`[review pr-${input.prNumber}] removeWorktree error:`, e));
+        .catch((e) => warn(tag, `removeWorktree error:`, e));
     }
+    log(tag, `done (total ${fmtDuration(Date.now() - jobStart)})`);
   }
 }
 

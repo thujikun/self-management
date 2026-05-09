@@ -24,6 +24,7 @@ import {
   type ClaudeRunResult,
 } from "./claude.js";
 import { hashBody } from "./dedup.js";
+import { fmtDuration, log, warn } from "./log.js";
 import { buildFixPrompt } from "./prompt-fix.js";
 import { setPR, type State } from "./state.js";
 import { createBranchWorktree, removeWorktree, type Worktree } from "./worktree.js";
@@ -69,16 +70,24 @@ export async function runFixJob(
   input: FixJobInput,
   deps: FixJobDeps = DEFAULT_FIX_JOB_DEPS,
 ): Promise<State> {
+  const tag = `[fix pr-${input.prNumber}]`;
+  const jobStart = Date.now();
+  log(tag, `start (branch=${input.branch}, commentId=${input.commentId}, repo=${input.repo})`);
   let wt: Worktree | null = null;
   try {
+    log(tag, `creating branch worktree for ${input.branch} (with origin/main merge attempt)...`);
+    const wtStart = Date.now();
     const created = await deps.createWorktree(input.repoRoot, input.prNumber, input.branch);
     wt = created.wt;
+    log(
+      tag,
+      `worktree ready: ${wt.path} (${fmtDuration(Date.now() - wtStart)}, mergeFailed=${created.mergeFailed})`,
+    );
     if (created.mergeFailed) {
-      console.warn(`[fix pr-${input.prNumber}] origin/main merge had conflicts; AI will resolve`);
+      warn(tag, `origin/main merge had conflicts; AI will resolve`);
     }
-    // worktree 作成直後 (= origin/<branch> + origin/main merge 後) の HEAD を baseline とする。
-    // Claude が commit + push したら HEAD と origin/<branch> がともに move する。
     const beforeSha = await deps.revParse(wt.path, "HEAD").catch(() => "<unknown>");
+    log(tag, `baseline HEAD = ${beforeSha.slice(0, 7)}`);
 
     const prompt = buildFixPrompt({
       prNumber: input.prNumber,
@@ -86,49 +95,53 @@ export async function runFixJob(
       branch: input.branch,
       reviewBody: input.reviewBody,
     });
+    log(tag, `spawning claude -p (prompt=${prompt.length} chars, cwd=${wt.path})...`);
+    const claudeStart = Date.now();
     const result = await deps.runClaude({ prompt, cwd: wt.path });
+    const claudeDur = fmtDuration(Date.now() - claudeStart);
+    log(
+      tag,
+      `claude done (${claudeDur}, exit=${result.exitCode}, timedOut=${result.timedOut}, stdout=${result.stdout.length} chars)`,
+    );
 
     if (result.timedOut) {
-      console.warn(`[fix pr-${input.prNumber}] claude timed out`);
+      warn(tag, `claude timed out after ${claudeDur} → anti-loop bookmark`);
       return await markAddressedAndIncrement(input);
     }
     if (result.exitCode !== 0) {
-      console.warn(
-        `[fix pr-${input.prNumber}] claude exit ${result.exitCode}; stderr tail:\n${result.stderr.slice(-500)}`,
+      warn(
+        tag,
+        `claude non-zero exit ${result.exitCode}; stderr tail:\n${result.stderr.slice(-500)}`,
       );
     }
 
     const parsed = parseReviewOutput(result.stdout);
     if (parsed.fixFailedReason !== null) {
-      console.warn(`[fix pr-${input.prNumber}] FIX_FAILED: ${parsed.fixFailedReason}`);
-      // commentId を bookmark + iteration を進めて、同 commentId の永久 retry を遮断する
-      // (再試行が必要なら state.json を手動編集して該当 PR の lastAddressedCommentId を消す)
+      warn(tag, `FIX_FAILED reported: ${parsed.fixFailedReason} → anti-loop bookmark`);
       return await markAddressedAndIncrement(input);
     }
 
-    // push 検証: worktree HEAD が beforeSha から動いていて、かつ origin/<branch> が一致するなら本当に push された
+    log(tag, `verifying push: comparing worktree HEAD vs origin/${input.branch}...`);
     const afterSha = await deps.revParse(wt.path, "HEAD").catch(() => "<unknown>");
     let originSha: string;
     try {
       await deps.fetchOriginBranch(wt.path, input.branch);
       originSha = await deps.revParse(wt.path, `origin/${input.branch}`);
     } catch (err) {
-      console.warn(
-        `[fix pr-${input.prNumber}] fetch/rev-parse origin/${input.branch} failed:`,
-        err,
-      );
+      warn(tag, `fetch/rev-parse origin/${input.branch} failed:`, err);
       originSha = "<unknown>";
     }
     const pushed = afterSha !== beforeSha && afterSha === originSha;
+    log(
+      tag,
+      `push verification: before=${beforeSha.slice(0, 7)}, after=${afterSha.slice(0, 7)}, origin=${originSha.slice(0, 7)} → ${pushed ? "PUSHED" : "NOT PUSHED"}`,
+    );
     if (!pushed) {
-      console.warn(
-        `[fix pr-${input.prNumber}] push not detected (before=${beforeSha}, after=${afterSha}, origin=${originSha})`,
-      );
-      // Claude が crash / commit ゼロ / push 失敗の何れの場合も、anti-loop で止めるために commentId と iteration を進める
+      warn(tag, `push not detected → anti-loop bookmark`);
       return await markAddressedAndIncrement(input);
     }
 
-    return await input.updateState((s) => {
+    const next = await input.updateState((s) => {
       const cur = s.prs[String(input.prNumber)] ?? { iterations: 0 };
       return setPR(s, input.prNumber, {
         lastAddressedCommentId: input.commentId,
@@ -137,17 +150,20 @@ export async function runFixJob(
         iterations: cur.iterations + 1,
       });
     });
+    const itersAfter = next.prs[String(input.prNumber)]?.iterations ?? 0;
+    log(tag, `state updated: lastAddressedCommentId=${input.commentId}, iterations=${itersAfter}`);
+    return next;
   } catch (err) {
-    // worktree creation 失敗 (例: Ryan が main repo で当該 branch を checkout 中) や
-    // 他の予期せぬ throw を anti-loop に倒す。state を進めないと poll loop が同 commentId を永久 retry する。
-    console.warn(`[fix pr-${input.prNumber}] failed:`, err);
+    warn(tag, `unexpected failure → anti-loop bookmark:`, err);
     return await markAddressedAndIncrement(input);
   } finally {
     if (wt) {
+      log(tag, `removing worktree...`);
       await deps
         .removeWorktree(input.repoRoot, wt)
-        .catch((e) => console.warn(`[fix pr-${input.prNumber}] removeWorktree error:`, e));
+        .catch((e) => warn(tag, `removeWorktree error:`, e));
     }
+    log(tag, `done (total ${fmtDuration(Date.now() - jobStart)})`);
   }
 }
 

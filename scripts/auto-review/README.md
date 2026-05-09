@@ -64,6 +64,38 @@ bot の review コメントは以下の形:
 
 START/END marker で bot コメント識別 + 業務本文の抽出を兼ねる。VERDICT marker は author mode の trigger。
 
+## ログ出力
+
+stdout に `[HH:MM:SS] [+Xs] [scope] message` 形式で逐次出力。`scope` は `[poll]` / `[poll pr-N]` / `[review pr-N]` / `[fix pr-N]` / `[merge pr-N]` / `[index]` / `[job <id>]` のいずれかで grep / 解析しやすい。長時間 job (claude -p / graph:build) の進行状況を追えるよう、各段階で start / 完了 / duration を出す。
+
+例 (1 tick + 1 review job):
+
+```
+[12:00:00] [+0s] [auto-review] starting (repo=thujikun/self-management, ...)
+[12:00:00] [+0s] [poll] tick #1 begin
+[12:00:01] [+1s] [index] origin/main moved (<none> → abc1234), kicking graph:build
+[12:00:01] [+1s] [index] spawned pnpm graph:build (pid=12345) → ~/.cache/.../graph-build-2026-...log
+[12:00:02] [+2s] [poll] 3 open PR(s)
+[12:00:02] [+2s] [poll pr-13] sha=abc1234, branch=feat/foo, iterations=0
+[12:00:02] [+2s] [poll pr-13]   reviewer: lastReviewedSha=<none> ≠ abc1234 → enqueue review
+[12:00:03] [+3s] [poll pr-13]   1 bot verdict comment(s) found
+[12:00:03] [+3s] [poll pr-13]   author: no REQUEST_CHANGES comment → skip
+[12:00:03] [+3s] [poll pr-13]   merge: latest verdict is not APPROVE → skip
+[12:00:03] [+3s] [poll] tick #1 end: enqueued=1 (review=1, fix=0, merge=0), skipped=0, queue=0, running=1
+[12:00:03] [+3s] [job review-13-abc1234] picked from queue (running=1/2)
+[12:00:03] [+3s] [review pr-13] start (sha=abc1234, repo=thujikun/self-management)
+[12:00:03] [+3s] [review pr-13] creating read-only worktree at sha=abc1234...
+[12:00:05] [+5s] [review pr-13] worktree ready: ~/.cache/.../pr-13-review-... (1.8s)
+[12:00:05] [+5s] [review pr-13] spawning claude -p (prompt=4521 chars, cwd=...)...
+[12:01:32] [+92s] [review pr-13] claude done (1m27s, exit=0, timedOut=false, stdout=12345 chars)
+[12:01:32] [+92s] [review pr-13] parsed verdict=APPROVE, body=4521 chars → posting comment
+[12:01:33] [+93s] [review pr-13] comment posted (820ms)
+[12:01:33] [+93s] [review pr-13] state updated: lastReviewedSha=abc1234, iterations=0 (reset by APPROVE)
+[12:01:33] [+93s] [review pr-13] removing worktree...
+[12:01:33] [+93s] [review pr-13] done (total 1m30s)
+[12:01:33] [+93s] [job review-13-abc1234] released (queued=0, running=0)
+```
+
 ## ファイル構成
 
 ```text
@@ -79,8 +111,9 @@ scripts/auto-review/
 ├── prompt-review.ts   # review prompt builder (pure)
 ├── prompt-fix.ts      # fix prompt builder (pure)
 ├── dedup.ts           # body 正規化 + SHA-256 hash
+├── log.ts             # `[HH:MM:SS] [+Xs] [scope] msg` 形式の logger + fmtDuration helper
 ├── state.ts           # ~/.cache/self-management-auto-review/state.json + StateMutex
-├── *.test.ts          # 各 module の test (10 ファイル)
+├── *.test.ts          # 各 module の test (11 ファイル)
 └── README.md
 ```
 
