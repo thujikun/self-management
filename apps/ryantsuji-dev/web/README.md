@@ -1,13 +1,28 @@
 # apps/ryantsuji-dev/web
 
-ryantsuji.dev のフロントエンド + API。**TanStack Start (SSR) + Hono (RPC) on Cloudflare Workers**。
+ryantsuji.dev のフロントエンド + API。**TanStack Start (SSR + RSC) + Hono (RPC) on Cloudflare Workers**。
 
 ## 中身
 
 - TanStack Router file-based routing (`src/routes/`)
 - TanStack Query を root context に同居 (loader / hook で共有 cache)
 - Hono を `/api/*` の catch-all に embed (RPC type を `ApiType` として export)
+- **RSC 有効化** (`tanstackStart({ rsc: { enabled: true } })` + `@vitejs/plugin-rsc`)。`createServerFn` の handler 経由で重 dep (shiki / unified) は **rsc env のみに bundle** され client / ssr bundle に漏れない
 - 1 CF Worker に SSR + API を統合 (deploy unit を 1 つに)
+
+## ビルド構造
+
+`vite build` は **5 environment** を吐く:
+
+| env | 役割 | 出力 |
+|---|---|---|
+| api | route 内 API handler | server bundle 内 |
+| middleware | TanStack Start middleware | server bundle 内 |
+| **rsc** | server component / server function を Flight stream に emit | `dist/server/rsc/` |
+| client | hydration + flight stream consumer | `dist/client/` |
+| ssr | initial HTML render (client bundle と同 input) | `dist/server/` |
+
+`server.ts` (Worker entry) は `dist/server/server.js` を import し CF Workers の `fetch(req, env, ctx)` 形式に変換。
 
 ## 開発
 
@@ -36,12 +51,19 @@ pnpm deploy       # 本番 deploy (要 wrangler login)
 
 ## 後続 PR
 
-- **PR 2 (RSC spike)**: `experimental` flag で RSC enable + 1 component を Server Component 化して動作検証
-- **PR 3 (design system)**: `packages/design-tokens` で OKLCH ベースの token を定義 → `styles.css` を置換
-- **PR 4 (db schema)**: `packages/db` (Drizzle + Neon) で comment / like の schema 定義
-- **PR 5 (auth)**: Better Auth で GitHub / Google / Facebook (Apple は v2)
-- **PR 6 (content rendering)**: `ryantsuji-dev-content` repo を build-time clone して markdown → 静的 route 生成
-- **PR 7 (syndicator)**: dev.to API publish (canonical_url=ryantsuji.dev) + Zenn URL HEAD verify
+- **PR (db schema)**: `packages/db` (Drizzle + Neon) で comment / like の schema 定義
+- **PR (auth)**: Better Auth で GitHub / Google / Facebook (Apple は v2)
+- **PR (syndicator)**: dev.to API publish (canonical_url=ryantsuji.dev) + Zenn URL HEAD verify
+- **OG image / RSS feed / sitemap**: SEO 系
+- **Phase 1 design discovery**: design tokens の OKLCH 値再調整
+
+完了済 (履歴は git log と各 PR description):
+- bootstrap: TanStack Start + Hono + Pulumi zone
+- RSC spike: `docs/spike/rsc.md` に動作検証 record
+- design tokens: `@self/design-tokens` (OKLCH + glass morphism)
+- content: `@self/content` (markdown render pipeline)
+- /posts: 投稿一覧 + 詳細 route + content/posts/*.md 統合
+- **RSC isolation: shiki / unified を rsc env に閉じ込め client bundle 540KB 化**
 
 ## RPC client
 
@@ -59,5 +81,5 @@ const data = await res.json();
 
 ## 注意点
 
-- TanStack Start は v1 安定化中で API が動く可能性あり (特に RSC 関連)。本 bootstrap は SSR ベースのみで、RSC は別 PR の spike 結果次第で enable
-- `@tanstack/react-start/plugin/vite` の `target: "cloudflare-module"` が `.output/server/index.mjs` を出力する想定。バージョン差で path 変わったら `wrangler.jsonc` の `main` を合わせる
+- `@tanstack/react-start/plugin/vite` の `target: "cloudflare-module"` は v1.167 で plugin schema から削除済。`vite build` は generic SSR bundle (`dist/server/server.js`) を吐き、`server.ts` Worker entry が CF Workers `fetch` shape に wrap する構造
+- RSC 経由で server bundle に閉じ込めたい module を import する場合、必ず `createServerFn().handler()` 内で参照する。route file の top-level import は client bundle にも漏れる
