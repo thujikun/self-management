@@ -27,6 +27,7 @@
     "interview:add": "pnpm --filter @self/graph-product interview-add",
     "log:compact": "tsx scripts/compact-log.cli.ts",
     "log:check": "tsx scripts/compact-log.cli.ts --check",
+    "auto-review": "tsx scripts/auto-review/poll.cli.ts",
     "check:line-count": "tsx scripts/hooks/check-line-count.cli.ts",
     "check:graph-tags": "tsx scripts/hooks/check-graph-tags.cli.ts",
     "check:no-ignore": "bash scripts/hooks/check-no-ignore.sh $(git ls-files)",
