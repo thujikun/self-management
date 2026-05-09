@@ -8,5 +8,7 @@ dist
 .env.local
 *.log
 
-# TanStack Router auto-generated route tree (regenerated on dev/build)
-src/routeTree.gen.ts
+# TanStack Router auto-generated route tree は **commit する** 方針:
+# - tsc --noEmit が router.tsx の `./routeTree.gen` import を解決できる必要がある
+# - 生成は dev / build (router-plugin) または `pnpm routeTree:generate` でトリガ
+# - 自動生成 marker を持つので diff は機械的に解釈できる (差分が出たら route 構造が変わった合図)

@@ -53,7 +53,7 @@ export const DOMAINS = new Set([
 export const TARGET_RE = /^(apps|packages|infra)\/.+\.tsx?$/;
 
 /** @graph-connects none */
-export const EXCLUDE_RE = /(\.(test|spec|d)\.tsx?$|\/bin\/)/;
+export const EXCLUDE_RE = /(\.(test|spec|d)\.tsx?$|\/bin\/|\/routeTree\.gen\.ts$)/;
 
 export interface FileError {
   file: string;
