@@ -41,7 +41,7 @@ state は `~/.cache/self-management-auto-review/state.json` に atomic write (tm
 | 1. reviewer dedup | `head_sha` | 同 SHA は再 review skip |
 | 2. author dedup | `commentId` | 同 commentId は再 fix skip |
 | 3. NO_OP marker | reviewer prompt 内 Step 4 | 投稿前に直近の自分の review body と正規化比較 → 同一なら `<!-- VERDICT:NO_OP -->` を stdout に → script は state.lastReviewedSha だけ更新して post skip |
-| 4. iteration cap | per-PR counter | **review post と fix push それぞれで +1** (= 1 round-trip = +2、APPROVE で 0 reset)。`MAX_ITERATIONS_PER_PR=10` (default) を超えたら `stalled: true` で当該 PR の両モード停止 (manual unblock は state.json 編集)。timeout / parse failure / FIX_FAILED / push 検出失敗の何れも iteration を進める (= cap で必ず止まる、無限 retry させない) |
+| 4. iteration cap | per-PR counter | **review post / fix push / merge retry それぞれで +1** (APPROVE で 0 reset)。`MAX_ITERATIONS_PER_PR=10` (default) を超えたら `stalled: true` で当該 PR の全モード停止 (manual unblock は state.json 編集)。timeout / parse failure / FIX_FAILED / push 検出失敗 / CI 未 pass / ciAllPass throw の何れも iteration を進める (= 全 path で必ず cap に達する、無限 retry させない) |
 
 正規化規則 (`dedup.ts`):
 - VERDICT / BODY START/END marker 除去

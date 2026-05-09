@@ -2,8 +2,10 @@
  * Auto-merge job: bot の APPROVE comment + CI 全 green 条件下で `gh pr merge --squash --delete-branch`。
  *
  * 流れ:
- *   1. CI 全 check が SUCCESS かを確認 (`gh pr checks <N>` 経由)
- *   2. CI 未完了 / 失敗なら state 不変で skip (次 poll で再試行、cap 設定なし — CI が green になるまで自然に待つ)
+ *   1. CI 全 check が SUCCESS かを確認 (`gh pr checks <N>` 経由、0 件 PR は対象外)
+ *   2. CI 未完了 / 失敗 / ciAllPass 自体が throw → iterations++ で next tick retry。
+ *      MAX_ITERATIONS_PER_PR cap で必ず stalled に倒れる (永久 CI pending / external webhook
+ *      死に対する anti-loop、全 path で必ず cap に達する不変条件と整合)
  *   3. CI 全 pass なら `gh pr merge --squash --delete-branch`
  *   4. merge 成功 → state.lastMergedSha + lastMergedAt を bookmark
  *   5. merge 失敗 (branch protection 不足など) → state 不変で warn ログ (人間判断に委ねる)
