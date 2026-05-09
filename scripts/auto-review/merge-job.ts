@@ -46,7 +46,13 @@ export async function runMergeJob(
   });
   if (!ok) {
     console.log(`[merge pr-${input.prNumber}] CI not all pass yet, will retry next tick`);
-    return { state: input.state, merged: false };
+    // iteration counter を進めて MAX_ITERATIONS_PER_PR cap で必ず止まるようにする
+    // (CI 永久 pending / external webhook 死に対する防御。spec: 全 path で必ず cap に達する)
+    const next = await input.updateState((s) => {
+      const cur = s.prs[String(input.prNumber)] ?? { iterations: 0 };
+      return setPR(s, input.prNumber, { iterations: cur.iterations + 1 });
+    });
+    return { state: next, merged: false };
   }
   try {
     await deps.mergeSquash(input.repo, input.prNumber);
