@@ -3,11 +3,13 @@
  *
  * polling 型: 60 秒ごとに `gh pr list` で open PR を走査し、
  *   - reviewer mode: head_sha が前回 review と異なる PR を review job に enqueue
- *   - author mode: bot 自身の最新 verdict コメント (REQUEST_CHANGES marker) を見つけて未対応なら fix job に enqueue
+ *   - author mode: bot 自身の最新 verdict コメント (REQUEST_CHANGES marker) を未対応なら fix job に enqueue
+ *   - merge mode: bot 自身の最新 APPROVE コメント + head_sha 一致 + CI 全 green ならば merge job に enqueue
+ *   - index mode: tick 毎に `origin/main` SHA を見て、前回 index 時から動いていたら detached `pnpm graph:build` を kick
  *
  * - 並行度は MAX_CONCURRENT (default 2)
- * - 同 PR の review と fix は per-PR mutex で直列化
- * - iteration cap (MAX_ITERATIONS_PER_PR=10、review post と fix push それぞれで +1 = 1 round-trip = +2) 超過で当該 PR を stalled としてスキップ
+ * - 同 PR の review/fix/merge は per-PR mutex で直列化
+ * - iteration cap (review post と fix push それぞれで +1 = 1 round-trip = +2) 超過で当該 PR を stalled としてスキップ
  *
  * SIGINT / SIGTERM で graceful stop (in-flight job を待ってから exit)。
  */
@@ -15,8 +17,10 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { JobQueue } from "./job-queue.js";
 import { runFixJob } from "./fix-job.js";
+import { runIndexJob } from "./index-job.js";
+import { JobQueue } from "./job-queue.js";
+import { runMergeJob } from "./merge-job.js";
 import { runReviewJob } from "./review-job.js";
 import { loadState, saveState, setPR, StateMutex, type State } from "./state.js";
 
@@ -96,6 +100,12 @@ async function update(updater: (s: State) => State): Promise<State> {
 }
 
 async function tick(): Promise<void> {
+  // index mode: origin/main が動いていたら graph:build を kick (PR scan より前に走らせる、軽いので非 block)
+  await runIndexJob({ repoRoot: REPO_ROOT, state, updateState: update }).catch((err: unknown) => {
+    console.warn(`[index] tick error:`, err);
+    return { state, kicked: false };
+  });
+
   const prs = await listOpenPRs().catch((err: unknown) => {
     console.warn(`[poll] gh pr list failed:`, err);
     return [] as PR[];
@@ -131,14 +141,15 @@ async function tick(): Promise<void> {
       });
     }
 
-    // Author mode: 最新 REQUEST_CHANGES コメントを未対応なら enqueue
+    // Author / merge mode: 直近 verdict comment を fetch
     const verdicts = await getBotVerdictComments(pr.number).catch((err: unknown) => {
       console.warn(`[poll pr-${pr.number}] verdict fetch failed:`, err);
       return [] as BotComment[];
     });
-    const latestRC = [...verdicts]
-      .filter((c) => c.body.includes("VERDICT:REQUEST_CHANGES"))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    const sorted = [...verdicts].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    // Author mode: 最新 REQUEST_CHANGES コメントを未対応なら enqueue
+    const latestRC = sorted.find((c) => c.body.includes("VERDICT:REQUEST_CHANGES"));
     if (latestRC && latestRC.id !== cur.lastAddressedCommentId) {
       const reviewBody = latestRC.body;
       const commentId = latestRC.id;
@@ -154,6 +165,28 @@ async function tick(): Promise<void> {
             branch: pr.headRefName,
             reviewBody,
             commentId,
+            state,
+            updateState: update,
+          });
+        },
+      });
+    }
+
+    // Merge mode: 直近 verdict が APPROVE で head_sha 一致 + 未 merge なら enqueue。
+    // 「直近 verdict」は REQUEST_CHANGES より新しい APPROVE がある場合のみ APPROVE とみなす
+    // (古い APPROVE の後に新しい REQUEST_CHANGES が来ているなら merge しない)。
+    const latestVerdict = sorted[0];
+    const isApproveLatest = latestVerdict?.body.includes("VERDICT:APPROVE") ?? false;
+    if (isApproveLatest && cur.lastMergedSha !== pr.headRefOid) {
+      queue.enqueue({
+        id: `merge-${pr.number}-${pr.headRefOid}`,
+        prNumber: pr.number,
+        type: "merge",
+        run: async () => {
+          await runMergeJob({
+            prNumber: pr.number,
+            headSha: pr.headRefOid,
+            repo: REPO,
             state,
             updateState: update,
           });

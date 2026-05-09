@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { getPR, loadState, saveState, setPR, StateMutex, type State } from "./state.js";
+import { getPR, loadState, saveState, setGlobal, setPR, StateMutex, type State } from "./state.js";
 
 let tmpDir: string;
 let path: string;
@@ -70,6 +70,45 @@ describe("getPR / setPR", () => {
     expect(after.prs).toStrictEqual({
       "5": { iterations: 2 },
       "7": { iterations: 0 },
+    });
+  });
+
+  it("setPR は merge 用 field (lastMergedSha / lastMergedAt) も partial 更新できる", () => {
+    const before: State = { prs: { "9": { iterations: 1 } } };
+    const after = setPR(before, 9, {
+      lastMergedSha: "merged-sha",
+      lastMergedAt: "2026-05-09T01:00:00Z",
+    });
+    expect(after.prs["9"]).toStrictEqual({
+      iterations: 1,
+      lastMergedSha: "merged-sha",
+      lastMergedAt: "2026-05-09T01:00:00Z",
+    });
+  });
+
+  it("setGlobal は global state を partial 更新 (immutable copy 返却、prs は触らず)", () => {
+    const before: State = { prs: { "5": { iterations: 1 } } };
+    const after = setGlobal(before, {
+      lastIndexedMainSha: "main-1",
+      lastIndexedAt: "2026-05-09T02:00:00Z",
+    });
+    expect(after).toStrictEqual({
+      prs: { "5": { iterations: 1 } },
+      global: { lastIndexedMainSha: "main-1", lastIndexedAt: "2026-05-09T02:00:00Z" },
+    });
+    // 元の参照は不変
+    expect(before).toStrictEqual({ prs: { "5": { iterations: 1 } } });
+  });
+
+  it("setGlobal は既存 global field を保持しつつ新 field を merge する", () => {
+    const before: State = {
+      prs: {},
+      global: { lastIndexedMainSha: "old-sha", lastIndexedAt: "2026-05-09T00:00:00Z" },
+    };
+    const after = setGlobal(before, { lastIndexedMainSha: "new-sha" });
+    expect(after.global).toStrictEqual({
+      lastIndexedMainSha: "new-sha",
+      lastIndexedAt: "2026-05-09T00:00:00Z",
     });
   });
 });
