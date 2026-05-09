@@ -15,6 +15,7 @@
 
 import { spawn } from "node:child_process";
 
+import { fmtDuration, log, warn } from "./log.js";
 import { setPR, type State } from "./state.js";
 
 export interface MergeJobInput {
@@ -42,36 +43,45 @@ export async function runMergeJob(
   input: MergeJobInput,
   deps: MergeJobDeps = DEFAULT_MERGE_JOB_DEPS,
 ): Promise<{ state: State; merged: boolean }> {
+  const tag = `[merge pr-${input.prNumber}]`;
+  const jobStart = Date.now();
+  log(tag, `start (sha=${input.headSha.slice(0, 7)}, repo=${input.repo})`);
+
+  log(tag, `checking CI status (gh pr checks)...`);
+  const ciStart = Date.now();
   const ok = await deps.ciAllPass(input.repo, input.prNumber).catch((err: unknown) => {
-    console.warn(`[merge pr-${input.prNumber}] ciAllPass error:`, err);
+    warn(tag, `ciAllPass error:`, err);
     return false;
   });
+  log(tag, `ciAllPass = ${ok} (${fmtDuration(Date.now() - ciStart)})`);
+
   if (!ok) {
-    console.log(`[merge pr-${input.prNumber}] CI not all pass yet, will retry next tick`);
-    // iteration counter を進めて MAX_ITERATIONS_PER_PR cap で必ず止まるようにする
-    // (CI 永久 pending / external webhook 死に対する防御。spec: 全 path で必ず cap に達する)
+    log(tag, `CI not all pass yet → iterations++ (anti-loop), retry next tick`);
     const next = await input.updateState((s) => {
       const cur = s.prs[String(input.prNumber)] ?? { iterations: 0 };
       return setPR(s, input.prNumber, { iterations: cur.iterations + 1 });
     });
+    log(tag, `done — not merged (total ${fmtDuration(Date.now() - jobStart)})`);
     return { state: next, merged: false };
   }
+  log(tag, `CI green → executing gh pr merge --squash --delete-branch...`);
+  const mergeStart = Date.now();
   try {
     await deps.mergeSquash(input.repo, input.prNumber);
   } catch (err) {
-    console.warn(
-      `[merge pr-${input.prNumber}] gh pr merge failed (branch protection or API error):`,
-      err,
-    );
+    warn(tag, `gh pr merge failed (branch protection or API error):`, err);
+    log(tag, `done — not merged (total ${fmtDuration(Date.now() - jobStart)})`);
     return { state: input.state, merged: false };
   }
-  console.log(`[merge pr-${input.prNumber}] merged via squash`);
+  log(tag, `merged via squash (${fmtDuration(Date.now() - mergeStart)})`);
   const next = await input.updateState((s) =>
     setPR(s, input.prNumber, {
       lastMergedSha: input.headSha,
       lastMergedAt: new Date().toISOString(),
     }),
   );
+  log(tag, `state updated: lastMergedSha=${input.headSha.slice(0, 7)}`);
+  log(tag, `done — merged (total ${fmtDuration(Date.now() - jobStart)})`);
   return { state: next, merged: true };
 }
 

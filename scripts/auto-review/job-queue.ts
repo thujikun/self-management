@@ -8,6 +8,8 @@
  * cortex の `enqueueJob` / `processQueue` / `acquireJob` を縮小コピー。
  */
 
+import { log, warn } from "./log.js";
+
 export interface Job {
   /** dedup key。同値が queued / running なら enqueue 拒否。 */
   id: string;
@@ -68,14 +70,22 @@ export class JobQueue {
   private start(job: Job): void {
     this.running.add(job.id);
     this.runningPRs.add(job.prNumber);
+    log(
+      `[job ${job.id}]`,
+      `picked from queue (running=${this.running.size}/${this.maxConcurrent})`,
+    );
     job
       .run()
       .catch((err) => {
-        console.error(`[job ${job.id}] error:`, err);
+        warn(`[job ${job.id}]`, `unhandled error:`, err);
       })
       .finally(() => {
         this.running.delete(job.id);
         this.runningPRs.delete(job.prNumber);
+        log(
+          `[job ${job.id}]`,
+          `released (queued=${this.queue.length}, running=${this.running.size})`,
+        );
         // 1 件終わったら次を kick
         queueMicrotask(() => this.process());
       });
