@@ -66,6 +66,11 @@ catalog:
   ts-morph: ^25.0.0
   glob: ^13.0.6
 
+  # Database (Neon Postgres + Drizzle)
+  drizzle-orm: ^0.45.2
+  drizzle-kit: ^0.31.10
+  "@neondatabase/serverless": ^1.1.0
+
   # Content rendering (markdown → HTML, server-only)
   unified: ^11.0.5
   remark-parse: ^11.0.0
