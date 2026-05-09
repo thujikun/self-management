@@ -58,8 +58,9 @@ export async function runReviewJob(
   input: ReviewJobInput,
   deps: ReviewJobDeps = DEFAULT_REVIEW_JOB_DEPS,
 ): Promise<State> {
-  const wt = await deps.createWorktree(input.repoRoot, input.prNumber, input.headSha);
+  let wt: Worktree | null = null;
   try {
+    wt = await deps.createWorktree(input.repoRoot, input.prNumber, input.headSha);
     const prompt = buildReviewPrompt({
       prNumber: input.prNumber,
       repo: input.repo,
@@ -112,8 +113,16 @@ export async function runReviewJob(
         iterations: nextIterations,
       });
     });
+  } catch (err) {
+    // worktree creation 失敗や予期せぬ throw を anti-loop に倒す
+    console.warn(`[review pr-${input.prNumber}] failed:`, err);
+    return await markReviewedAndIncrement(input);
   } finally {
-    await deps.removeWorktree(input.repoRoot, wt);
+    if (wt) {
+      await deps
+        .removeWorktree(input.repoRoot, wt)
+        .catch((e) => console.warn(`[review pr-${input.prNumber}] removeWorktree error:`, e));
+    }
   }
 }
 

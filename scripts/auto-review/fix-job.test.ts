@@ -156,7 +156,7 @@ describe("runFixJob", () => {
     expect(harness.fetched).toStrictEqual(["feat/sample"]);
   });
 
-  it("worktree は finally で削除 (Claude crash でも)", async () => {
+  it("Claude spawn が throw: anti-loop で bookmark + iteration++、worktree は finally 削除", async () => {
     const { deps, harness } = makeDeps("", { before: "AAA", after: "AAA", origin: "AAA" });
     const failingDeps: FixJobDeps = {
       ...deps,
@@ -164,8 +164,30 @@ describe("runFixJob", () => {
         throw new Error("spawn failed");
       },
     };
-    const { input } = makeInput({ prs: {} });
-    await expect(runFixJob(input, failingDeps)).rejects.toThrow("spawn failed");
+    const { input, getState } = makeInput({ prs: { "9": { iterations: 0 } } });
+    await runFixJob(input, failingDeps);
     expect(harness.worktreeOps).toStrictEqual(["create-9", "remove-9"]);
+    const after = getState().prs["9"];
+    expect(after?.lastAddressedCommentId).toStrictEqual(12345);
+    expect(after?.iterations).toStrictEqual(1);
+  });
+
+  it("createWorktree が throw (例: branch already used): anti-loop で bookmark + iteration++、worktree 削除呼び出し無し", async () => {
+    const { deps, harness } = makeDeps("", { before: "AAA", after: "AAA", origin: "AAA" });
+    const failingDeps: FixJobDeps = {
+      ...deps,
+      createWorktree: async () => {
+        throw new Error(
+          "fatal: 'feat/db-package' is already used by worktree at '/Users/ryan/Workspace/self-management'",
+        );
+      },
+    };
+    const { input, getState } = makeInput({ prs: { "9": { iterations: 0 } } });
+    await runFixJob(input, failingDeps);
+    // worktree 作成失敗時は removeWorktree を呼ばない (wt が null のまま finally に行く)
+    expect(harness.worktreeOps).toStrictEqual([]);
+    const after = getState().prs["9"];
+    expect(after?.lastAddressedCommentId).toStrictEqual(12345);
+    expect(after?.iterations).toStrictEqual(1);
   });
 });

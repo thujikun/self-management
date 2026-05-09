@@ -27,10 +27,19 @@ export interface PRState {
   iterations: number;
   /** iteration cap 超過で true。両モードが当該 PR を skip。 */
   stalled?: boolean;
+  /** auto-merge が成功した head_sha (再 merge 試行を抑止)。 */
+  lastMergedSha?: string;
+  /** auto-merge 成功時刻 (ISO timestamp)。 */
+  lastMergedAt?: string;
 }
 
 export interface State {
   prs: Record<string, PRState>;
+  /** auto-index 用 global 状態。`origin/main` SHA をキーに二重 index を抑止。 */
+  global?: {
+    lastIndexedMainSha?: string;
+    lastIndexedAt?: string;
+  };
 }
 
 export const DEFAULT_STATE_PATH = `${homedir()}/.cache/self-management-auto-review/state.json`;
@@ -40,7 +49,9 @@ export async function loadState(path: string = DEFAULT_STATE_PATH): Promise<Stat
   try {
     const raw = await readFile(path, "utf8");
     const parsed = JSON.parse(raw) as Partial<State>;
-    return { prs: parsed.prs ?? {} };
+    const out: State = { prs: parsed.prs ?? {} };
+    if (parsed.global) out.global = parsed.global;
+    return out;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return { prs: {} };
     throw err;
@@ -69,6 +80,14 @@ export function setPR(state: State, prNumber: number, partial: Partial<PRState>)
       ...state.prs,
       [String(prNumber)]: { ...current, ...partial },
     },
+  };
+}
+
+/** global state を partial で更新 (immutable copy 返却)。 */
+export function setGlobal(state: State, partial: NonNullable<State["global"]>): State {
+  return {
+    ...state,
+    global: { ...(state.global ?? {}), ...partial },
   };
 }
 
