@@ -69,18 +69,17 @@ export async function runFixJob(
   input: FixJobInput,
   deps: FixJobDeps = DEFAULT_FIX_JOB_DEPS,
 ): Promise<State> {
-  const { wt, mergeFailed } = await deps.createWorktree(
-    input.repoRoot,
-    input.prNumber,
-    input.branch,
-  );
-  if (mergeFailed) {
-    console.warn(`[fix pr-${input.prNumber}] origin/main merge had conflicts; AI will resolve`);
-  }
-  // worktree 作成直後 (= origin/<branch> + origin/main merge 後) の HEAD を baseline とする。
-  // Claude が commit + push したら HEAD と origin/<branch> がともに move する。
-  const beforeSha = await deps.revParse(wt.path, "HEAD").catch(() => "<unknown>");
+  let wt: Worktree | null = null;
   try {
+    const created = await deps.createWorktree(input.repoRoot, input.prNumber, input.branch);
+    wt = created.wt;
+    if (created.mergeFailed) {
+      console.warn(`[fix pr-${input.prNumber}] origin/main merge had conflicts; AI will resolve`);
+    }
+    // worktree 作成直後 (= origin/<branch> + origin/main merge 後) の HEAD を baseline とする。
+    // Claude が commit + push したら HEAD と origin/<branch> がともに move する。
+    const beforeSha = await deps.revParse(wt.path, "HEAD").catch(() => "<unknown>");
+
     const prompt = buildFixPrompt({
       prNumber: input.prNumber,
       repo: input.repo,
@@ -138,8 +137,17 @@ export async function runFixJob(
         iterations: cur.iterations + 1,
       });
     });
+  } catch (err) {
+    // worktree creation 失敗 (例: Ryan が main repo で当該 branch を checkout 中) や
+    // 他の予期せぬ throw を anti-loop に倒す。state を進めないと poll loop が同 commentId を永久 retry する。
+    console.warn(`[fix pr-${input.prNumber}] failed:`, err);
+    return await markAddressedAndIncrement(input);
   } finally {
-    await deps.removeWorktree(input.repoRoot, wt);
+    if (wt) {
+      await deps
+        .removeWorktree(input.repoRoot, wt)
+        .catch((e) => console.warn(`[fix pr-${input.prNumber}] removeWorktree error:`, e));
+    }
   }
 }
 
