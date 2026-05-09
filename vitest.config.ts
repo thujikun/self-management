@@ -77,7 +77,7 @@ export default defineConfig({
         "scripts/*.cli.ts",
         // Pulumi の Pulumi.yaml / Pulumi.<stack>.yaml は code ではない
         "**/Pulumi.*.yaml",
-        // TanStack Router 自動生成 routeTree (gitignore 済、自動付与ヘッダーで lint/type 抑制)
+        // TanStack Router 自動生成 routeTree (commit 済だが human-authored ではないので coverage 計測対象外)
         "**/routeTree.gen.ts",
         // vitest setup は test infrastructure (mock 定義) なので coverage 計測対象外。
         // pure logic を持つ場合は src/ に切り出してテスト対象にする。
