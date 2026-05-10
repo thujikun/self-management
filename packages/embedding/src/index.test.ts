@@ -1,63 +1,80 @@
 /**
- * `@self/embedding` (AI Studio gemini-embedding-001 wrapper) の unit test。
+ * `@self/embedding` (Vertex AI gemini-embedding-2 wrapper) の unit test。
  *
- * 実 HTTP は global fetch を vi.spyOn で短絡。`GEMINI_API_KEY` env で認証。
+ * 実 HTTP は global fetch を vi.spyOn で短絡。GoogleAuth は `_setAuthForTest` で
+ * 差し替えてアクセストークン取得経路を mock。
  *
  * @graph-stack ryan-product-graph
  * @graph-domain graph
- * @graph-business AI Studio embedding wrapper のテスト。embedText / embedBatch / API key 認証 / エラー / 空入力 / batch concurrency / taskType 伝播の挙動を網羅
+ * @graph-business Vertex AI embedding wrapper のテスト。embedText / embedBatch / ADC token 認証 / エラー / 空入力 / batch concurrency / taskType 伝播の挙動を網羅
  * @graph-connects none
  */
 
+import type { GoogleAuth } from "google-auth-library";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const ORIGINAL_ENV = { ...process.env };
+/**
+ * GoogleAuth の最小 mock。`getClient().getAccessToken()` で token 文字列を返す。
+ *
+ * @graph-connects none
+ */
+function makeFakeAuth(token: string | null = "fake-token"): GoogleAuth {
+  return {
+    getClient: async () => ({
+      getAccessToken: async () => ({ token }),
+    }),
+  } as unknown as GoogleAuth;
+}
 
 describe("embedText", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    process.env.GEMINI_API_KEY = "fake-key";
     fetchSpy = vi.spyOn(globalThis, "fetch");
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     fetchSpy.mockRestore();
-    process.env = { ...ORIGINAL_ENV };
+    const { _setAuthForTest } = await import("./index.js");
+    _setAuthForTest(null);
     vi.resetModules();
   });
 
-  it("成功時に embedding values を返す + URL の query string に key 入る", async () => {
+  it("成功時に embedding.values を返す + Vertex AI :embedContent endpoint を Bearer 認証で叩く", async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(JSON.stringify({ embedding: { values: [0.1, 0.2, 0.3] } }), { status: 200 }),
     );
-    const { embedText } = await import("./index.js");
+    const { embedText, _setAuthForTest } = await import("./index.js");
+    _setAuthForTest(makeFakeAuth("fake-token"));
     const out = await embedText("hello");
     expect(out).toStrictEqual([0.1, 0.2, 0.3]);
+
     const url = fetchSpy.mock.calls[0][0] as string;
     expect(url).toMatch(
-      /generativelanguage\.googleapis\.com.*models\/gemini-embedding-001:embedContent\?key=fake-key/,
+      /^https:\/\/aiplatform\.googleapis\.com\/v1\/projects\/[^/]+\/locations\/global\/publishers\/google\/models\/gemini-embedding-2:embedContent$/,
     );
     const init = fetchSpy.mock.calls[0][1] as RequestInit;
     const headers = init.headers as Record<string, string>;
+    expect(headers["Authorization"]).toStrictEqual("Bearer fake-token");
     expect(headers["Content-Type"]).toStrictEqual("application/json");
-    // body には model + content.parts、taskType は未指定なので含まれない
+    // body には content.parts[].text 入る、taskType 未指定なら含まれない
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
-    expect(body).toStrictEqual({
-      model: "models/gemini-embedding-001",
-      content: { parts: [{ text: "hello" }] },
-    });
+    expect(body).toStrictEqual({ content: { parts: [{ text: "hello" }] } });
   });
 
-  it("taskType 指定時は body の taskType に伝播", async () => {
+  it("taskType 指定時は body.taskType に伝播", async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(JSON.stringify({ embedding: { values: [0.1] } }), { status: 200 }),
     );
-    const { embedText } = await import("./index.js");
+    const { embedText, _setAuthForTest } = await import("./index.js");
+    _setAuthForTest(makeFakeAuth());
     await embedText("query", "RETRIEVAL_QUERY");
     const init = fetchSpy.mock.calls[0][1] as RequestInit;
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
-    expect(body.taskType).toStrictEqual("RETRIEVAL_QUERY");
+    expect(body).toStrictEqual({
+      content: { parts: [{ text: "query" }] },
+      taskType: "RETRIEVAL_QUERY",
+    });
   });
 
   it("空文字 / whitespace のみ → エラー", async () => {
@@ -68,35 +85,26 @@ describe("embedText", () => {
 
   it("HTTP non-OK → エラー (status と body を含む)", async () => {
     fetchSpy.mockImplementation(async () => new Response("model not found", { status: 404 }));
-    const { embedText } = await import("./index.js");
+    const { embedText, _setAuthForTest } = await import("./index.js");
+    _setAuthForTest(makeFakeAuth());
     await expect(embedText("hello")).rejects.toThrow(/404/);
     await expect(embedText("hello")).rejects.toThrow(/model not found/);
   });
 
-  it("response が embedding values を欠いていたらエラー", async () => {
+  it("response が embedding.values を欠いていたらエラー", async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(JSON.stringify({ embedding: { values: [] } }), { status: 200 }),
     );
-    const { embedText } = await import("./index.js");
+    const { embedText, _setAuthForTest } = await import("./index.js");
+    _setAuthForTest(makeFakeAuth());
     await expect(embedText("hello")).rejects.toThrow(/no values/);
   });
 
-  it("GEMINI_API_KEY が未設定ならエラー (AI Studio key 発行を促すメッセージ)", async () => {
-    delete process.env.GEMINI_API_KEY;
-    const { embedText } = await import("./index.js");
-    await expect(embedText("hello")).rejects.toThrow(/GEMINI_API_KEY/);
-    await expect(embedText("hello")).rejects.toThrow(/aistudio\.google\.com/);
-  });
-
-  it("API key は URL encode される (special char 含み)", async () => {
-    process.env.GEMINI_API_KEY = "key/with+special";
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ embedding: { values: [0.1] } }), { status: 200 }),
-    );
-    const { embedText } = await import("./index.js");
-    await embedText("x");
-    const url = fetchSpy.mock.calls[0][0] as string;
-    expect(url).toMatch(/key=key%2Fwith%2Bspecial/);
+  it("access token が取得できない (null) ならエラー (ADC 設定を促すメッセージ)", async () => {
+    const { embedText, _setAuthForTest } = await import("./index.js");
+    _setAuthForTest(makeFakeAuth(null));
+    await expect(embedText("hello")).rejects.toThrow(/access token/);
+    await expect(embedText("hello")).rejects.toThrow(/GOOGLE_APPLICATION_CREDENTIALS/);
   });
 });
 
@@ -104,13 +112,13 @@ describe("embedBatch", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    process.env.GEMINI_API_KEY = "fake-key";
     fetchSpy = vi.spyOn(globalThis, "fetch");
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     fetchSpy.mockRestore();
-    process.env = { ...ORIGINAL_ENV };
+    const { _setAuthForTest } = await import("./index.js");
+    _setAuthForTest(null);
     vi.resetModules();
   });
 
@@ -121,7 +129,7 @@ describe("embedBatch", () => {
   });
 
   it("3 件 → 順序保持で結果配列を返す", async () => {
-    const responses: Array<{ embedding: { values: number[] } }> = [
+    const responses = [
       { embedding: { values: [10] } },
       { embedding: { values: [20] } },
       { embedding: { values: [30] } },
@@ -131,7 +139,8 @@ describe("embedBatch", () => {
       const i = n++;
       return new Response(JSON.stringify(responses[i]), { status: 200 });
     });
-    const { embedBatch } = await import("./index.js");
+    const { embedBatch, _setAuthForTest } = await import("./index.js");
+    _setAuthForTest(makeFakeAuth());
     const out = await embedBatch(["a", "b", "c"], 1);
     // concurrency=1 で逐次実行 → 順序保持を厳密に検証
     expect(out).toStrictEqual([[10], [20], [30]]);
@@ -141,7 +150,8 @@ describe("embedBatch", () => {
     fetchSpy.mockImplementation(
       async () => new Response(JSON.stringify({ embedding: { values: [0] } }), { status: 200 }),
     );
-    const { embedBatch } = await import("./index.js");
+    const { embedBatch, _setAuthForTest } = await import("./index.js");
+    _setAuthForTest(makeFakeAuth());
     const out = await embedBatch(["x", "y"], 1);
     expect(out).toHaveLength(2);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
@@ -154,17 +164,23 @@ describe("embedBatch", () => {
       if (i === 1) return new Response("boom", { status: 500 });
       return new Response(JSON.stringify({ embedding: { values: [i] } }), { status: 200 });
     });
-    const { embedBatch } = await import("./index.js");
+    const { embedBatch, _setAuthForTest } = await import("./index.js");
+    _setAuthForTest(makeFakeAuth());
     await expect(embedBatch(["a", "b", "c"], 3)).rejects.toThrow(/500/);
   });
 });
 
 describe("constants", () => {
-  it("model / dim を AI Studio gemini-embedding-001 / 3072 で公開", async () => {
+  it("model / dim / location を Vertex AI gemini-embedding-2 / 3072 / global で公開", async () => {
     const m = await import("./index.js");
-    expect({ model: m.EMBEDDING_MODEL, dim: m.EMBEDDING_DIMENSIONS }).toStrictEqual({
-      model: "gemini-embedding-001",
+    expect({
+      model: m.EMBEDDING_MODEL,
+      dim: m.EMBEDDING_DIMENSIONS,
+      loc: m.EMBEDDING_LOCATION,
+    }).toStrictEqual({
+      model: "gemini-embedding-2",
       dim: 3072,
+      loc: "global",
     });
   });
 });
