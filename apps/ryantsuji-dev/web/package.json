@@ -18,6 +18,7 @@
     "@self/db": "workspace:*",
     "@self/design-tokens": "workspace:*",
     "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
     "gray-matter": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@tanstack/react-router-devtools": "catalog:",
@@ -38,6 +39,7 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "@vitejs/plugin-rsc": "catalog:",
+    "happy-dom": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "wrangler": "catalog:"
