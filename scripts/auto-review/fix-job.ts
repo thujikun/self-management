@@ -5,9 +5,11 @@
  *   1. PR branch worktree 作成 (origin/main を merge 試行、conflict 残存可)
  *   2. claude -p に fix prompt + reviewBody を投げる (Claude 自身が conflict 解消 → 修正 → 6 gate → commit & push)
  *   3. push 検証: worktree HEAD と origin/<branch> の SHA を比較し、本当に push されたか確認
- *      - FIX_FAILED marker / push 検出失敗 / Claude crash の何れも commentId を bookmark + iteration を進めて
- *        anti-loop cap で止まるようにする (state 不変で永久 retry させない)
- *      - push 検出成功なら success として bookmark + iteration を進める
+ *      - 成功 (push 検出): commentId bookmark + iteration++ (round-trip cap 用)
+ *      - 失敗 (FIX_FAILED / push 検出失敗 / timeout / throw): commentId は bookmark **しない**。代わりに
+ *        per-commentId の `fixFailureCount` + `lastFixFailedAt` を更新する。poll 側で backoff 窓 +
+ *        failure cap を確認した上で、同 commentId の retry を一定 cap まで許可する。これにより
+ *        一過性 flake (transient git failure / Claude prompt 揺れ) で bot が永久停止しない
  *   4. 完了後 worktree 削除
  *
  * 副作用 (claude spawn / git worktree / git rev-parse / fetch) は `FixJobDeps` 経由で注入し、
@@ -28,7 +30,7 @@ import {
 import { hashBody } from "./dedup.js";
 import { fmtDuration, log, warn } from "./log.js";
 import { buildFixPrompt } from "./prompt-fix.js";
-import { setPR, type State } from "./state.js";
+import { setPR, type PRState, type State } from "./state.js";
 import { createBranchWorktree, removeWorktree, type Worktree } from "./worktree.js";
 
 const execFileP = promisify(execFile);
@@ -111,8 +113,11 @@ export async function runFixJob(
     );
 
     if (result.timedOut) {
-      warn(tag, `claude timed out after ${claudeDur} → anti-loop bookmark (log=${logFile})`);
-      return await markAddressedAndIncrement(input);
+      warn(
+        tag,
+        `claude timed out after ${claudeDur} → record failure (will retry after backoff). log=${logFile}`,
+      );
+      return await recordFixFailure(input);
     }
     if (result.exitCode !== 0) {
       warn(
@@ -125,9 +130,9 @@ export async function runFixJob(
     if (parsed.fixFailedReason !== null) {
       warn(
         tag,
-        `FIX_FAILED reported: ${parsed.fixFailedReason} → anti-loop bookmark; inspect: cat ${logFile}`,
+        `FIX_FAILED reported: ${parsed.fixFailedReason} → record failure (will retry after backoff); inspect: cat ${logFile}`,
       );
-      return await markAddressedAndIncrement(input);
+      return await recordFixFailure(input);
     }
 
     log(tag, `verifying push: comparing worktree HEAD vs origin/${input.branch}...`);
@@ -146,8 +151,8 @@ export async function runFixJob(
       `push verification: before=${beforeSha.slice(0, 7)}, after=${afterSha.slice(0, 7)}, origin=${originSha.slice(0, 7)} → ${pushed ? "PUSHED" : "NOT PUSHED"}`,
     );
     if (!pushed) {
-      warn(tag, `push not detected → anti-loop bookmark`);
-      return await markAddressedAndIncrement(input);
+      warn(tag, `push not detected → record failure (will retry after backoff)`);
+      return await recordFixFailure(input);
     }
 
     const next = await input.updateState((s) => {
@@ -157,14 +162,15 @@ export async function runFixJob(
         lastAddressedAt: new Date().toISOString(),
         lastAddressedBodyHash: hashBody(input.reviewBody),
         iterations: cur.iterations + 1,
+        ...FIX_FAILURE_CLEAR,
       });
     });
     const itersAfter = next.prs[String(input.prNumber)]?.iterations ?? 0;
     log(tag, `state updated: lastAddressedCommentId=${input.commentId}, iterations=${itersAfter}`);
     return next;
   } catch (err) {
-    warn(tag, `unexpected failure → anti-loop bookmark:`, err);
-    return await markAddressedAndIncrement(input);
+    warn(tag, `unexpected failure → record failure (will retry after backoff):`, err);
+    return await recordFixFailure(input);
   } finally {
     if (wt) {
       log(tag, `removing worktree...`);
@@ -176,15 +182,39 @@ export async function runFixJob(
   }
 }
 
-/** commentId を bookmark + iteration を 1 進める (FIX_FAILED / timeout / push 失敗等の anti-loop 用)。 */
-async function markAddressedAndIncrement(input: FixJobInput): Promise<State> {
+/**
+ * 成功 path で渡す partial。failure 系 fields を `undefined` で上書きクリアし、
+ * `setPR` の `{...current, ...partial}` 経由で残骸を消す。JSON.stringify は
+ * undefined キーを drop するので state.json も clean になる。
+ */
+const FIX_FAILURE_CLEAR: Pick<
+  PRState,
+  "fixFailureCount" | "lastFailedFixCommentId" | "lastFixFailedAt"
+> = {
+  fixFailureCount: undefined,
+  lastFailedFixCommentId: undefined,
+  lastFixFailedAt: undefined,
+};
+
+/**
+ * 失敗を記録するが commentId は bookmark しない (FIX_FAILED / timeout / push 失敗 / throw 等)。
+ * 同じ commentId に対する失敗なら count++、commentId が変われば 1 から再カウント。
+ * `iterations` は触らない (round-trip cap を失敗で消費しない)。
+ *
+ * poll 側で backoff 窓 + failure cap を確認することで、一過性 flake は retry し、
+ * pathological な review は cap で止まる。
+ */
+async function recordFixFailure(input: FixJobInput): Promise<State> {
   return await input.updateState((s) => {
     const cur = s.prs[String(input.prNumber)] ?? { iterations: 0 };
-    return setPR(s, input.prNumber, {
-      lastAddressedCommentId: input.commentId,
-      lastAddressedAt: new Date().toISOString(),
-      iterations: cur.iterations + 1,
-    });
+    const sameComment = cur.lastFailedFixCommentId === input.commentId;
+    const nextCount = sameComment ? (cur.fixFailureCount ?? 0) + 1 : 1;
+    const partial: Partial<PRState> = {
+      fixFailureCount: nextCount,
+      lastFailedFixCommentId: input.commentId,
+      lastFixFailedAt: new Date().toISOString(),
+    };
+    return setPR(s, input.prNumber, partial);
   });
 }
 

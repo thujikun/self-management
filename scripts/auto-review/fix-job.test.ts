@@ -2,10 +2,12 @@
  * fix-job.ts の path 別 test。
  *
  * 検証する分岐:
- *   - timeout → commentId bookmark + iteration++ (anti-loop)
+ *   - timeout → 失敗記録 (fixFailureCount, lastFailedFixCommentId, lastFixFailedAt)、commentId bookmark しない
  *   - FIX_FAILED marker → 同上
  *   - push 検出失敗 (Claude crash / commit ゼロ / push エラー) → 同上
  *   - push 検出成功 → success として state 更新 + iteration++
+ *   - 同 commentId で連続失敗 → fixFailureCount が積み上がる
+ *   - 失敗 commentId が変わる → fixFailureCount が 1 から再カウント
  *   - worktree は finally で必ず削除
  */
 
@@ -82,7 +84,7 @@ function makeInput(
 }
 
 describe("runFixJob", () => {
-  it("timeout: commentId bookmark + iteration++、push 検証 skip", async () => {
+  it("timeout: 失敗記録のみ (commentId bookmark せず、iteration 据え置き)、push 検証 skip", async () => {
     const { deps, harness } = makeDeps(
       "",
       { before: "AAA", after: "AAA", origin: "AAA" },
@@ -91,13 +93,16 @@ describe("runFixJob", () => {
     const { input, getState } = makeInput({ prs: { "9": { iterations: 1 } } });
     await runFixJob(input, deps);
     const after = getState().prs["9"];
-    expect(after?.lastAddressedCommentId).toStrictEqual(12345);
-    expect(after?.iterations).toStrictEqual(2);
+    expect(after?.lastAddressedCommentId).toStrictEqual(undefined);
+    expect(after?.iterations).toStrictEqual(1);
+    expect(after?.fixFailureCount).toStrictEqual(1);
+    expect(after?.lastFailedFixCommentId).toStrictEqual(12345);
+    expect(after?.lastFixFailedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(harness.fetched).toStrictEqual([]);
     expect(harness.worktreeOps).toStrictEqual(["create-9", "remove-9"]);
   });
 
-  it("FIX_FAILED: commentId bookmark + iteration++、push 検証 skip", async () => {
+  it("FIX_FAILED: 失敗記録のみ (commentId bookmark せず)、push 検証 skip", async () => {
     const { deps, harness } = makeDeps("<!-- FIX_FAILED:conflict 解消できず -->\n", {
       before: "AAA",
       after: "AAA",
@@ -106,12 +111,13 @@ describe("runFixJob", () => {
     const { input, getState } = makeInput({ prs: {} });
     await runFixJob(input, deps);
     const after = getState().prs["9"];
-    expect(after?.lastAddressedCommentId).toStrictEqual(12345);
-    expect(after?.iterations).toStrictEqual(1);
+    expect(after?.lastAddressedCommentId).toStrictEqual(undefined);
+    expect(after?.fixFailureCount).toStrictEqual(1);
+    expect(after?.lastFailedFixCommentId).toStrictEqual(12345);
     expect(harness.fetched).toStrictEqual([]);
   });
 
-  it("push 検出失敗 (HEAD 不変): success にせず anti-loop", async () => {
+  it("push 検出失敗 (HEAD 不変): success にせず失敗記録", async () => {
     const { deps, harness } = makeDeps("", {
       before: "AAA",
       after: "AAA", // Claude が commit しなかった
@@ -120,9 +126,8 @@ describe("runFixJob", () => {
     const { input, getState } = makeInput({ prs: { "9": { iterations: 0 } } });
     await runFixJob(input, deps);
     const after = getState().prs["9"];
-    expect(after?.lastAddressedCommentId).toStrictEqual(12345);
-    expect(after?.iterations).toStrictEqual(1);
-    // bodyHash は付与されない (success path に入っていないため)
+    expect(after?.lastAddressedCommentId).toStrictEqual(undefined);
+    expect(after?.fixFailureCount).toStrictEqual(1);
     expect(after?.lastAddressedBodyHash).toStrictEqual(undefined);
     expect(harness.fetched).toStrictEqual(["feat/sample"]);
   });
@@ -136,8 +141,53 @@ describe("runFixJob", () => {
     const { input, getState } = makeInput({ prs: {} });
     await runFixJob(input, deps);
     const after = getState().prs["9"];
-    expect(after?.iterations).toStrictEqual(1);
+    expect(after?.fixFailureCount).toStrictEqual(1);
     expect(after?.lastAddressedBodyHash).toStrictEqual(undefined);
+  });
+
+  it("同 commentId で連続失敗: fixFailureCount が積み上がる", async () => {
+    const { deps } = makeDeps("<!-- FIX_FAILED:still bad -->\n", {
+      before: "AAA",
+      after: "AAA",
+      origin: "AAA",
+    });
+    const { input, getState } = makeInput({
+      prs: {
+        "9": {
+          iterations: 0,
+          fixFailureCount: 2,
+          lastFailedFixCommentId: 12345,
+          lastFixFailedAt: "2026-05-10T00:00:00.000Z",
+        },
+      },
+    });
+    await runFixJob(input, deps);
+    expect(getState().prs["9"]?.fixFailureCount).toStrictEqual(3);
+    expect(getState().prs["9"]?.lastFailedFixCommentId).toStrictEqual(12345);
+  });
+
+  it("失敗 commentId が変わる: fixFailureCount が 1 から再カウント", async () => {
+    const { deps } = makeDeps("<!-- FIX_FAILED:other -->\n", {
+      before: "AAA",
+      after: "AAA",
+      origin: "AAA",
+    });
+    const { input, getState } = makeInput(
+      {
+        prs: {
+          "9": {
+            iterations: 0,
+            fixFailureCount: 5,
+            lastFailedFixCommentId: 99999,
+            lastFixFailedAt: "2026-05-10T00:00:00.000Z",
+          },
+        },
+      },
+      12345,
+    );
+    await runFixJob(input, deps);
+    expect(getState().prs["9"]?.fixFailureCount).toStrictEqual(1);
+    expect(getState().prs["9"]?.lastFailedFixCommentId).toStrictEqual(12345);
   });
 
   it("push 検出成功 (HEAD 移動 + origin 一致): bookmark + bodyHash + iteration++", async () => {
@@ -156,7 +206,27 @@ describe("runFixJob", () => {
     expect(harness.fetched).toStrictEqual(["feat/sample"]);
   });
 
-  it("Claude spawn が throw: anti-loop で bookmark + iteration++、worktree は finally 削除", async () => {
+  it("失敗 → 成功 (push 検出) で failure 系 fields がクリアされる", async () => {
+    const { deps } = makeDeps("", { before: "AAA", after: "BBB", origin: "BBB" });
+    const { input, getState } = makeInput({
+      prs: {
+        "9": {
+          iterations: 0,
+          fixFailureCount: 2,
+          lastFailedFixCommentId: 12345,
+          lastFixFailedAt: "2026-05-10T00:00:00.000Z",
+        },
+      },
+    });
+    await runFixJob(input, deps);
+    const after = getState().prs["9"];
+    expect(after?.lastAddressedCommentId).toStrictEqual(12345);
+    expect(after?.fixFailureCount).toStrictEqual(undefined);
+    expect(after?.lastFailedFixCommentId).toStrictEqual(undefined);
+    expect(after?.lastFixFailedAt).toStrictEqual(undefined);
+  });
+
+  it("Claude spawn が throw: 失敗記録 (iteration 据え置き)、worktree は finally 削除", async () => {
     const { deps, harness } = makeDeps("", { before: "AAA", after: "AAA", origin: "AAA" });
     const failingDeps: FixJobDeps = {
       ...deps,
@@ -168,11 +238,12 @@ describe("runFixJob", () => {
     await runFixJob(input, failingDeps);
     expect(harness.worktreeOps).toStrictEqual(["create-9", "remove-9"]);
     const after = getState().prs["9"];
-    expect(after?.lastAddressedCommentId).toStrictEqual(12345);
-    expect(after?.iterations).toStrictEqual(1);
+    expect(after?.lastAddressedCommentId).toStrictEqual(undefined);
+    expect(after?.iterations).toStrictEqual(0);
+    expect(after?.fixFailureCount).toStrictEqual(1);
   });
 
-  it("createWorktree が throw (例: branch already used): anti-loop で bookmark + iteration++、worktree 削除呼び出し無し", async () => {
+  it("createWorktree が throw (例: branch already used): 失敗記録 (iteration 据え置き)、worktree 削除呼び出し無し", async () => {
     const { deps, harness } = makeDeps("", { before: "AAA", after: "AAA", origin: "AAA" });
     const failingDeps: FixJobDeps = {
       ...deps,
@@ -187,7 +258,8 @@ describe("runFixJob", () => {
     // worktree 作成失敗時は removeWorktree を呼ばない (wt が null のまま finally に行く)
     expect(harness.worktreeOps).toStrictEqual([]);
     const after = getState().prs["9"];
-    expect(after?.lastAddressedCommentId).toStrictEqual(12345);
-    expect(after?.iterations).toStrictEqual(1);
+    expect(after?.lastAddressedCommentId).toStrictEqual(undefined);
+    expect(after?.iterations).toStrictEqual(0);
+    expect(after?.fixFailureCount).toStrictEqual(1);
   });
 });

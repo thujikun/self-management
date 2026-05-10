@@ -28,20 +28,25 @@ env:
 | `AUTO_REVIEW_REPO` | `thujikun/self-management` | 対象 repo |
 | `AUTO_REVIEW_POLL_INTERVAL_MS` | `60000` | poll 間隔 (ms) |
 | `AUTO_REVIEW_MAX_CONCURRENT` | `2` | 並行 job 上限 (vitest 競合を避けて控えめ) |
-| `AUTO_REVIEW_MAX_ITERATIONS` | `10` | 同 PR の review post + fix push のそれぞれで +1 (= round-trip 1 回で +2)。超えると stalled に倒して停止。timeout / parse failure / FIX_FAILED / push 検出失敗の何れもこの counter を進める (= 必ず cap で止まる) |
+| `AUTO_REVIEW_MAX_ITERATIONS` | `10` | 同 PR の round-trip cap。**成功 review post / 成功 fix push / merge retry でのみ +1** (= round-trip 1 回で +2)。APPROVE で 0 reset。超えると stalled。**失敗 (timeout / parse failure / FIX_FAILED / push 検出失敗) では +1 しない** — それらは下の `*FAILURES` / `*BACKOFF_MS` の別系統で制御する |
+| `AUTO_REVIEW_MAX_REVIEW_FAILURES` | `3` | 同 head_sha に対する review 失敗回数の cap。timeout / parse failure / throw が連続して cap 到達したら新 commit が来るまで skip。新 commit が push されれば SHA が変わって自動 reset |
+| `AUTO_REVIEW_REVIEW_BACKOFF_MS` | `300000` (5 分) | review 失敗後、次 retry までの最小待機時間 (ms)。一過性 Claude flake の自然回復用 |
+| `AUTO_REVIEW_MAX_FIX_FAILURES` | `3` | 同 commentId に対する fix 失敗回数の cap。新 review (= 新 commentId) が来るまで skip |
+| `AUTO_REVIEW_FIX_BACKOFF_MS` | `300000` (5 分) | fix 失敗後、次 retry までの最小待機時間 (ms) |
 | `AUTO_REVIEW_REPO_ROOT` | `process.cwd()` | git worktree base となるメイン repo path |
 | `CLAUDE_TIMEOUT_MS` | `1800000` (30 分) | claude -p 1 回の timeout |
 
 state は `~/.cache/self-management-auto-review/state.json` に atomic write (tmp → rename)。worktree は `~/.cache/self-management-auto-review/worktrees/` 以下 (macOS の `/private/var/folders/` auto-clean 回避)。
 
-## anti-loop 4 層
+## anti-loop 5 層
 
 | 層 | 対象 | 動作 |
 |---|---|---|
-| 1. reviewer dedup | `head_sha` | 同 SHA は再 review skip |
-| 2. author dedup | `commentId` | 同 commentId は再 fix skip |
-| 3. NO_OP marker | reviewer prompt 内 Step 4 | 投稿前に直近の自分の review body と正規化比較 → 同一なら `<!-- VERDICT:NO_OP -->` を stdout に → script は state.lastReviewedSha だけ更新して post skip |
-| 4. iteration cap | per-PR counter | **review post / fix push / merge retry それぞれで +1** (APPROVE で 0 reset)。`MAX_ITERATIONS_PER_PR=10` (default) を超えたら `stalled: true` で当該 PR の全モード停止 (manual unblock は state.json 編集)。timeout / parse failure / FIX_FAILED / push 検出失敗 / CI 未 pass / ciAllPass throw の何れも iteration を進める (= 全 path で必ず cap に達する、無限 retry させない) |
+| 1. reviewer dedup | `head_sha` | 成功 review 済 SHA は再 review skip (`lastReviewedSha`) |
+| 2. author dedup | `commentId` | 成功 fix 済 commentId は再 fix skip (`lastAddressedCommentId`) |
+| 3. NO_OP marker | reviewer prompt 内 Step 4 | 投稿前に直近の自分の review body と正規化比較 → 同一なら `<!-- VERDICT:NO_OP -->` を stdout に → script は `lastReviewedSha` だけ更新して post skip |
+| 4. iteration cap (round-trip 用) | per-PR counter | **成功 review post / 成功 fix push / merge retry それぞれで +1** (APPROVE で 0 reset)。`MAX_ITERATIONS_PER_PR=10` (default) を超えたら `stalled: true` で当該 PR の全モード停止 (manual unblock は state.json 編集)。CI 未 pass / ciAllPass throw も iteration を進めて止まる |
+| 5. failure cap + backoff | per-SHA / per-commentId counter | **失敗 (timeout / parse failure / FIX_FAILED / push 検出失敗 / throw)** 時に SHA / commentId は bookmark せず、`reviewFailureCount` / `fixFailureCount` を per-key で +1 し `lastReviewFailedAt` / `lastFixFailedAt` を記録。次 tick で (a) `*_FAILURE_BACKOFF_MS` (default 5 min) 未経過なら skip (b) `MAX_*_FAILURES` (default 3) 到達なら skip。それ以外は retry 可。新 commit / 新 review が来れば key が変わって counter 自動 reset。これにより一過性 Claude flake で永久停止を回避する |
 
 正規化規則 (`dedup.ts`):
 - VERDICT / BODY START/END marker 除去
@@ -106,10 +111,11 @@ scripts/auto-review/
 ├── fix-job.ts         # author 1 PR 分 (PR branch worktree → claude → commit + push)
 ├── merge-job.ts       # APPROVE + CI green で gh pr merge --squash --delete-branch
 ├── index-job.ts       # origin/main SHA 動いたら detached pnpm graph:build を kick
-├── claude.ts          # spawn claude -p、stdout から body / verdict 抽出
+├── claude.ts          # spawn claude -p、stdout から body / verdict 抽出 + per-job log file
 ├── worktree.ts        # git worktree 作成 / 削除 (read-only / branch 2 種)
 ├── prompt-review.ts   # review prompt builder (pure)
 ├── prompt-fix.ts      # fix prompt builder (pure)
+├── eligibility.ts     # review/fix 再エンキュー判定 (pure: dedup + failure cap + backoff 窓)
 ├── dedup.ts           # body 正規化 + SHA-256 hash
 ├── log.ts             # `[HH:MM:SS] [+Xs] [scope] msg` 形式の logger + fmtDuration helper
 ├── state.ts           # ~/.cache/self-management-auto-review/state.json + StateMutex
@@ -138,9 +144,11 @@ cortex の auto-review も同 pattern (個人運用 + `--dangerously-skip-permis
 
 - **claude が timeout** (default 30 分): `CLAUDE_TIMEOUT_MS` で延ばすか、PR を細かく分割
 - **iteration cap で stalled**: `state.json` の該当 PR エントリを削除すれば再開。再試行が必要な commentId が `lastAddressedCommentId` に bookmark されている場合も同じく state.json 編集で消す
+- **失敗 cap で skip され続ける** (`review failure cap reached (3/3) for sha=...`): 同 SHA で 3 回連続失敗した状態。新 commit が push されれば自動回復するが、即時 retry させたい場合は `state.json` の該当 PR の `reviewFailureCount` / `fixFailureCount` を 0 に編集
+- **claude が parse 失敗で何も投稿しない**: stdout を `~/.cache/self-management-auto-review/logs/claude-<scope>-pr<N>-<TS>.log` に保存しているので `cat` で確認。marker (`<!-- AUTO_REVIEW_BODY_START -->` 等) が出力されていなければ prompt 起因
 - **worktree が残った**: `git worktree prune` + `rm -rf ~/.cache/self-management-auto-review/worktrees`
 - **同じ指摘で無限ループ**: NO_OP 判定が機能していない可能性。`dedup.ts` の `normalizeBody` の正規化規則を見直し、本文中の差分要素が抜けていないか確認
-- **fix が走ったのに push されていない**: fix-job は worktree HEAD ↔ origin/<branch> の SHA 比較で push 検証する。検証 fail なら iteration を進めて state を bookmark し、同 commentId の永久 retry を遮断する
+- **fix が走ったのに push されていない**: fix-job は worktree HEAD ↔ origin/<branch> の SHA 比較で push 検証する。検証 fail なら failure cap + backoff (層 5) で skip 判定し、同 commentId の即時 retry を遮断する
 
 ## 関連
 

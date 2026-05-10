@@ -19,6 +19,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
+import { fixEligibility, reviewEligibility } from "./eligibility.js";
 import { runFixJob } from "./fix-job.js";
 import { runIndexJob } from "./index-job.js";
 import { JobQueue } from "./job-queue.js";
@@ -34,6 +35,35 @@ const POLL_INTERVAL_MS = parseInt(process.env.AUTO_REVIEW_POLL_INTERVAL_MS ?? "6
 const MAX_CONCURRENT = parseInt(process.env.AUTO_REVIEW_MAX_CONCURRENT ?? "2", 10);
 const MAX_ITERATIONS_PER_PR = parseInt(process.env.AUTO_REVIEW_MAX_ITERATIONS ?? "10", 10);
 const REPO_ROOT = process.env.AUTO_REVIEW_REPO_ROOT ?? process.cwd();
+/**
+ * 失敗 retry 制御:
+ *   - 同じ SHA / commentId に対する review/fix の失敗回数が `MAX_*_FAILURES` 未満かつ
+ *     最後の失敗から `*_FAILURE_BACKOFF_MS` 以上経過していれば再試行する
+ *   - cap 到達後は同 SHA / commentId は skip。新 commit / 新 review が来れば再カウントから始まる
+ *   - bookmark しない設計なので「parse 失敗 1 回で永久停止」を防ぐ。一過性 Claude flake が ~5-15 min で自然回復
+ */
+const MAX_REVIEW_FAILURES_PER_SHA = parseInt(
+  process.env.AUTO_REVIEW_MAX_REVIEW_FAILURES ?? "3",
+  10,
+);
+const REVIEW_FAILURE_BACKOFF_MS = parseInt(
+  process.env.AUTO_REVIEW_REVIEW_BACKOFF_MS ?? `${5 * 60 * 1000}`,
+  10,
+);
+const MAX_FIX_FAILURES_PER_COMMENT = parseInt(process.env.AUTO_REVIEW_MAX_FIX_FAILURES ?? "3", 10);
+const FIX_FAILURE_BACKOFF_MS = parseInt(
+  process.env.AUTO_REVIEW_FIX_BACKOFF_MS ?? `${5 * 60 * 1000}`,
+  10,
+);
+
+const REVIEW_ELIG_CFG = {
+  maxFailuresPerSha: MAX_REVIEW_FAILURES_PER_SHA,
+  backoffMs: REVIEW_FAILURE_BACKOFF_MS,
+};
+const FIX_ELIG_CFG = {
+  maxFailuresPerComment: MAX_FIX_FAILURES_PER_COMMENT,
+  backoffMs: FIX_FAILURE_BACKOFF_MS,
+};
 
 interface PR {
   number: number;
@@ -168,10 +198,11 @@ async function tick(): Promise<void> {
     );
 
     // Reviewer mode
-    if (cur.lastReviewedSha !== pr.headRefOid) {
+    const reviewElig = reviewEligibility(pr.headRefOid, cur, Date.now(), REVIEW_ELIG_CFG);
+    if (reviewElig.ok) {
       log(
         tag,
-        `  reviewer: lastReviewedSha=${cur.lastReviewedSha?.slice(0, 7) ?? "<none>"} ≠ ${pr.headRefOid.slice(0, 7)} → enqueue review`,
+        `  reviewer: lastReviewedSha=${cur.lastReviewedSha?.slice(0, 7) ?? "<none>"} ≠ ${pr.headRefOid.slice(0, 7)} → enqueue review (failures=${cur.reviewFailureCount ?? 0})`,
       );
       reviewEnqueued++;
       const accepted = queue.enqueue({
@@ -192,7 +223,7 @@ async function tick(): Promise<void> {
       });
       if (!accepted) log(tag, `  reviewer: dedup (already queued / running), skip`);
     } else {
-      log(tag, `  reviewer: lastReviewedSha matches → skip`);
+      log(tag, `  reviewer: skip (${reviewElig.reason})`);
     }
 
     // Author / merge mode: 直近 verdict comment を fetch
@@ -205,36 +236,39 @@ async function tick(): Promise<void> {
 
     // Author mode
     const latestRC = sorted.find((c) => c.body.includes("VERDICT:REQUEST_CHANGES"));
-    if (latestRC && latestRC.id !== cur.lastAddressedCommentId) {
-      log(
-        tag,
-        `  author: REQUEST_CHANGES comment #${latestRC.id} (lastAddressed=${cur.lastAddressedCommentId ?? "<none>"}) → enqueue fix`,
-      );
-      fixEnqueued++;
-      const reviewBody = latestRC.body;
-      const commentId = latestRC.id;
-      const accepted = queue.enqueue({
-        id: `fix-${pr.number}-${commentId}`,
-        prNumber: pr.number,
-        type: "fix",
-        run: async () => {
-          await runFixJob({
-            prNumber: pr.number,
-            repo: REPO,
-            repoRoot: REPO_ROOT,
-            branch: pr.headRefName,
-            reviewBody,
-            commentId,
-            state,
-            updateState: update,
-          });
-        },
-      });
-      if (!accepted) log(tag, `  author: dedup (already queued / running), skip`);
-    } else if (!latestRC) {
-      log(tag, `  author: no REQUEST_CHANGES comment → skip`);
+    if (latestRC) {
+      const fixElig = fixEligibility(latestRC.id, cur, Date.now(), FIX_ELIG_CFG);
+      if (fixElig.ok) {
+        log(
+          tag,
+          `  author: REQUEST_CHANGES comment #${latestRC.id} (lastAddressed=${cur.lastAddressedCommentId ?? "<none>"}) → enqueue fix (failures=${cur.fixFailureCount ?? 0})`,
+        );
+        fixEnqueued++;
+        const reviewBody = latestRC.body;
+        const commentId = latestRC.id;
+        const accepted = queue.enqueue({
+          id: `fix-${pr.number}-${commentId}`,
+          prNumber: pr.number,
+          type: "fix",
+          run: async () => {
+            await runFixJob({
+              prNumber: pr.number,
+              repo: REPO,
+              repoRoot: REPO_ROOT,
+              branch: pr.headRefName,
+              reviewBody,
+              commentId,
+              state,
+              updateState: update,
+            });
+          },
+        });
+        if (!accepted) log(tag, `  author: dedup (already queued / running), skip`);
+      } else {
+        log(tag, `  author: skip (${fixElig.reason})`);
+      }
     } else {
-      log(tag, `  author: comment #${latestRC.id} already addressed → skip`);
+      log(tag, `  author: no REQUEST_CHANGES comment → skip`);
     }
 
     // Merge mode
