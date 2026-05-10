@@ -359,6 +359,64 @@ new gcp.secretmanager.SecretIamMember("graph-neon-database-url-accessor", {
 export const neonDatabaseUrlSecretId = neonDatabaseUrlSecret.id;
 
 /**
+ * Better Auth 系 5 secret container。
+ *
+ * Better Auth runtime が要求する secret 群を GCP Secret Manager に集約する
+ * (Grafana / Neon と同パターン)。Pulumi は **container と IAM のみ管理**、値は
+ * Ryan が dev portal で OAuth app 作成 → `gcloud secrets versions add` で投入する運用。
+ *
+ * - `better-auth-secret`: 32+ char の暗号化 / 署名鍵 (`openssl rand -base64 32` で生成)
+ * - `github-oauth-client-id` / `github-oauth-client-secret`: GitHub OAuth App
+ *   (https://github.com/settings/developers で作成、callback URL は
+ *   `https://ryantsuji.dev/api/auth/callback/github` + dev は `http://localhost:3000/api/auth/callback/github`)
+ * - `x-oauth2-client-id` / `x-oauth2-client-secret`: X (Twitter) OAuth 2.0 client
+ *   (https://developer.x.com の App settings で OAuth 2.0 を有効化、xmcp が使う
+ *   OAuth1 とは独立。callback URL は `/api/auth/callback/twitter`)
+ *
+ * 消費経路:
+ * - dev (.envrc): `gcloud secrets versions access` で 5 つの env var に展開
+ * - production CF Workers: `wrangler secret put <NAME>` で binding に投入
+ *
+ * @graph-connects secret-manager [writes_to] Better Auth 5 secret container
+ */
+const authSecretIds = [
+  "better-auth-secret",
+  "github-oauth-client-id",
+  "github-oauth-client-secret",
+  "x-oauth2-client-id",
+  "x-oauth2-client-secret",
+] as const;
+/** @graph-connects none */
+const authSecrets: Record<string, gcp.secretmanager.Secret> = {};
+for (const id of authSecretIds) {
+  const secret = new gcp.secretmanager.Secret(
+    id,
+    {
+      secretId: id,
+      replication: { auto: {} },
+    },
+    { dependsOn: [apiServices["secretmanager"]] },
+  );
+  authSecrets[id] = secret;
+  new gcp.secretmanager.SecretIamMember(`graph-${id}-accessor`, {
+    secretId: secret.id,
+    role: "roles/secretmanager.secretAccessor",
+    member: pulumi.interpolate`serviceAccount:${graphSa.email}`,
+  });
+}
+
+/** @graph-connects none */
+export const betterAuthSecretId = authSecrets["better-auth-secret"].id;
+/** @graph-connects none */
+export const githubOauthClientIdSecretId = authSecrets["github-oauth-client-id"].id;
+/** @graph-connects none */
+export const githubOauthClientSecretSecretId = authSecrets["github-oauth-client-secret"].id;
+/** @graph-connects none */
+export const xOauth2ClientIdSecretId = authSecrets["x-oauth2-client-id"].id;
+/** @graph-connects none */
+export const xOauth2ClientSecretSecretId = authSecrets["x-oauth2-client-secret"].id;
+
+/**
  * xmcp (X API MCP server) の OAuth credentials。
  *
  * 構成:
