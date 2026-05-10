@@ -5,8 +5,12 @@
  *   1. read-only worktree 作成 (head_sha を detached checkout)
  *   2. claude -p に review prompt を投げる
  *   3. stdout から body / verdict を抽出
- *      - NO_OP / parse failure: 投稿せず state.lastReviewedSha + iterations を更新 (再 review skip + cap)
- *      - body + verdict あり: gh pr comment で投稿、state 更新 + iteration++
+ *      - 成功 (NO_OP / REQUEST_CHANGES / APPROVE): `lastReviewedSha` を bookmark し再 review を抑止。
+ *        REQUEST_CHANGES / APPROVE は `iterations` を更新 (round-trip cap 用)
+ *      - 失敗 (parse failure / timeout / throw): SHA は bookmark **しない**。代わりに per-SHA の
+ *        `reviewFailureCount` + `lastReviewFailedAt` を更新する。poll 側で backoff 窓と failure cap を
+ *        確認した上で、同 SHA の retry を一定 cap まで許可する。これにより一過性の Claude flake で
+ *        bot が永久停止せず、5-15 min 後に自然回復する
  *   4. 完了後 worktree 削除
  *
  * 副作用 (claude spawn / gh comment / git worktree) は `ReviewJobDeps` 経由で注入し、
@@ -27,7 +31,7 @@ import {
 import { hashBody } from "./dedup.js";
 import { fmtDuration, log, warn } from "./log.js";
 import { buildReviewPrompt } from "./prompt-review.js";
-import { setPR, type State } from "./state.js";
+import { setPR, type PRState, type State } from "./state.js";
 import { createReadOnlyWorktree, removeWorktree, type Worktree } from "./worktree.js";
 
 const CLAUDE_LOG_DIR = join(homedir(), ".cache/self-management-auto-review/logs");
@@ -90,8 +94,11 @@ export async function runReviewJob(
     );
 
     if (result.timedOut) {
-      warn(tag, `claude timed out after ${claudeDur} → anti-loop bookmark (log=${logFile})`);
-      return await markReviewedAndIncrement(input);
+      warn(
+        tag,
+        `claude timed out after ${claudeDur} → record failure (will retry after backoff). log=${logFile}`,
+      );
+      return await recordReviewFailure(input);
     }
     if (result.exitCode !== 0) {
       warn(
@@ -107,6 +114,7 @@ export async function runReviewJob(
         setPR(s, input.prNumber, {
           lastReviewedSha: input.headSha,
           lastReviewedAt: new Date().toISOString(),
+          ...REVIEW_FAILURE_CLEAR,
         }),
       );
     }
@@ -114,9 +122,9 @@ export async function runReviewJob(
     if (parsed.body === null || parsed.verdict === null) {
       warn(
         tag,
-        `parse failure (bodyParsed=${parsed.body !== null}, verdict=${parsed.verdict}) → anti-loop bookmark; inspect: cat ${logFile}`,
+        `parse failure (bodyParsed=${parsed.body !== null}, verdict=${parsed.verdict}) → record failure (will retry after backoff); inspect: cat ${logFile}`,
       );
-      return await markReviewedAndIncrement(input);
+      return await recordReviewFailure(input);
     }
 
     log(
@@ -136,6 +144,7 @@ export async function runReviewJob(
         lastReviewedAt: new Date().toISOString(),
         lastReviewBodyHash: hashBody(parsed.body),
         iterations: nextIterations,
+        ...REVIEW_FAILURE_CLEAR,
       });
     });
     const itersAfter = next.prs[String(input.prNumber)]?.iterations ?? 0;
@@ -145,8 +154,8 @@ export async function runReviewJob(
     );
     return next;
   } catch (err) {
-    warn(tag, `unexpected failure → anti-loop bookmark:`, err);
-    return await markReviewedAndIncrement(input);
+    warn(tag, `unexpected failure → record failure (will retry after backoff):`, err);
+    return await recordReviewFailure(input);
   } finally {
     if (wt) {
       log(tag, `removing worktree...`);
@@ -158,15 +167,40 @@ export async function runReviewJob(
   }
 }
 
-/** sha を bookmark + iteration を 1 進める (timeout / parse failure 等の anti-loop 用)。 */
-async function markReviewedAndIncrement(input: ReviewJobInput): Promise<State> {
+/**
+ * 成功 path で渡す partial。failure 系 fields を `undefined` で上書きクリアし、
+ * `setPR` の `{...current, ...partial}` 経由で残骸を消す。
+ * これがないと「失敗 → backoff → retry 成功」のシナリオで failure 系の値が
+ * state.json に残り続け、後の diagnosis / state inspection が読みづらくなる。
+ */
+const REVIEW_FAILURE_CLEAR: Pick<
+  PRState,
+  "reviewFailureCount" | "lastFailedReviewSha" | "lastReviewFailedAt"
+> = {
+  reviewFailureCount: undefined,
+  lastFailedReviewSha: undefined,
+  lastReviewFailedAt: undefined,
+};
+
+/**
+ * 失敗を記録するが SHA は bookmark しない (timeout / parse failure / throw 等)。
+ * 同じ SHA に対する失敗なら count++、SHA が変わっていれば 1 から再カウント。
+ * `iterations` は触らない (round-trip cap を失敗で消費しない)。
+ *
+ * poll 側で backoff 窓 + failure cap を確認することで、一過性 flake は retry し、
+ * pathological な PR は cap で止まる。
+ */
+async function recordReviewFailure(input: ReviewJobInput): Promise<State> {
   return await input.updateState((s) => {
     const cur = s.prs[String(input.prNumber)] ?? { iterations: 0 };
-    return setPR(s, input.prNumber, {
-      lastReviewedSha: input.headSha,
-      lastReviewedAt: new Date().toISOString(),
-      iterations: cur.iterations + 1,
-    });
+    const sameSha = cur.lastFailedReviewSha === input.headSha;
+    const nextCount = sameSha ? (cur.reviewFailureCount ?? 0) + 1 : 1;
+    const partial: Partial<PRState> = {
+      reviewFailureCount: nextCount,
+      lastFailedReviewSha: input.headSha,
+      lastReviewFailedAt: new Date().toISOString(),
+    };
+    return setPR(s, input.prNumber, partial);
   });
 }
 
