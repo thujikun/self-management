@@ -15,6 +15,8 @@
  */
 
 import { execFile } from "node:child_process";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { promisify } from "node:util";
 
 import {
@@ -30,6 +32,8 @@ import { setPR, type State } from "./state.js";
 import { createBranchWorktree, removeWorktree, type Worktree } from "./worktree.js";
 
 const execFileP = promisify(execFile);
+
+const CLAUDE_LOG_DIR = join(homedir(), ".cache/self-management-auto-review/logs");
 
 export interface FixJobInput {
   prNumber: number;
@@ -95,29 +99,34 @@ export async function runFixJob(
       branch: input.branch,
       reviewBody: input.reviewBody,
     });
-    log(tag, `spawning claude -p (prompt=${prompt.length} chars, cwd=${wt.path})...`);
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const logFile = join(CLAUDE_LOG_DIR, `claude-fix-pr${input.prNumber}-${ts}.log`);
+    log(tag, `spawning claude -p (prompt=${prompt.length} chars, cwd=${wt.path}, log=${logFile})`);
     const claudeStart = Date.now();
-    const result = await deps.runClaude({ prompt, cwd: wt.path });
+    const result = await deps.runClaude({ prompt, cwd: wt.path, logFile });
     const claudeDur = fmtDuration(Date.now() - claudeStart);
     log(
       tag,
-      `claude done (${claudeDur}, exit=${result.exitCode}, timedOut=${result.timedOut}, stdout=${result.stdout.length} chars)`,
+      `claude done (${claudeDur}, exit=${result.exitCode}, timedOut=${result.timedOut}, stdout=${result.stdout.length} chars, log=${logFile})`,
     );
 
     if (result.timedOut) {
-      warn(tag, `claude timed out after ${claudeDur} → anti-loop bookmark`);
+      warn(tag, `claude timed out after ${claudeDur} → anti-loop bookmark (log=${logFile})`);
       return await markAddressedAndIncrement(input);
     }
     if (result.exitCode !== 0) {
       warn(
         tag,
-        `claude non-zero exit ${result.exitCode}; stderr tail:\n${result.stderr.slice(-500)}`,
+        `claude non-zero exit ${result.exitCode}; stderr tail:\n${result.stderr.slice(-500)}\n  log=${logFile}`,
       );
     }
 
     const parsed = parseReviewOutput(result.stdout);
     if (parsed.fixFailedReason !== null) {
-      warn(tag, `FIX_FAILED reported: ${parsed.fixFailedReason} → anti-loop bookmark`);
+      warn(
+        tag,
+        `FIX_FAILED reported: ${parsed.fixFailedReason} → anti-loop bookmark; inspect: cat ${logFile}`,
+      );
       return await markAddressedAndIncrement(input);
     }
 
