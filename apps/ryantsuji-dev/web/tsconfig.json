@@ -13,7 +13,9 @@
       "~/*": ["./src/*"]
     },
     "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "noUnusedParameters": false,
+    "declaration": false,
+    "declarationMap": false
   },
   "include": ["src/**/*", "vite.config.ts"],
   "exclude": ["node_modules", ".output", "dist", ".tsc-out"]

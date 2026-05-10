@@ -33,6 +33,8 @@
 
 コード行 (コメント・空行除く) で 500 行を超えるファイルは禁止。`scripts/hooks/check-line-count.ts` で機械強制。超過したらファイル分割。
 
+**例外**: テストファイル (`*.test.{ts,tsx,js,jsx,mjs,cjs}` / `*.spec.*`) は cap 対象外。inline snapshot で各 case の網羅により行数が自然に伸びるため、cap は実装ファイルにのみ適用する。
+
 ## 5. インフラは Pulumi で集約管理
 
 GCP リソース (API enable / IAM / BQ / SA / Cloud Run / etc.) は **Pulumi 経由でのみ管理**。`gcloud projects add-iam-policy-binding` 等の手動 CLI 操作で drift を作らない。
