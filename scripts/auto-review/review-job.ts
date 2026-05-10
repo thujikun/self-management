@@ -14,6 +14,8 @@
  */
 
 import { spawn } from "node:child_process";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 import {
   buildBotCommentBody,
@@ -27,6 +29,8 @@ import { fmtDuration, log, warn } from "./log.js";
 import { buildReviewPrompt } from "./prompt-review.js";
 import { setPR, type State } from "./state.js";
 import { createReadOnlyWorktree, removeWorktree, type Worktree } from "./worktree.js";
+
+const CLAUDE_LOG_DIR = join(homedir(), ".cache/self-management-auto-review/logs");
 
 export interface ReviewJobInput {
   prNumber: number;
@@ -74,23 +78,25 @@ export async function runReviewJob(
       repo: input.repo,
       lastReviewBodyHash: input.lastReviewBodyHash,
     });
-    log(tag, `spawning claude -p (prompt=${prompt.length} chars, cwd=${wt.path})...`);
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const logFile = join(CLAUDE_LOG_DIR, `claude-review-pr${input.prNumber}-${ts}.log`);
+    log(tag, `spawning claude -p (prompt=${prompt.length} chars, cwd=${wt.path}, log=${logFile})`);
     const claudeStart = Date.now();
-    const result = await deps.runClaude({ prompt, cwd: wt.path });
+    const result = await deps.runClaude({ prompt, cwd: wt.path, logFile });
     const claudeDur = fmtDuration(Date.now() - claudeStart);
     log(
       tag,
-      `claude done (${claudeDur}, exit=${result.exitCode}, timedOut=${result.timedOut}, stdout=${result.stdout.length} chars)`,
+      `claude done (${claudeDur}, exit=${result.exitCode}, timedOut=${result.timedOut}, stdout=${result.stdout.length} chars, log=${logFile})`,
     );
 
     if (result.timedOut) {
-      warn(tag, `claude timed out after ${claudeDur} → anti-loop bookmark`);
+      warn(tag, `claude timed out after ${claudeDur} → anti-loop bookmark (log=${logFile})`);
       return await markReviewedAndIncrement(input);
     }
     if (result.exitCode !== 0) {
       warn(
         tag,
-        `claude non-zero exit ${result.exitCode}; stderr tail:\n${result.stderr.slice(-500)}`,
+        `claude non-zero exit ${result.exitCode}; stderr tail:\n${result.stderr.slice(-500)}\n  log=${logFile}`,
       );
     }
     const parsed = parseReviewOutput(result.stdout);
@@ -108,7 +114,7 @@ export async function runReviewJob(
     if (parsed.body === null || parsed.verdict === null) {
       warn(
         tag,
-        `parse failure (bodyParsed=${parsed.body !== null}, verdict=${parsed.verdict}) → anti-loop bookmark`,
+        `parse failure (bodyParsed=${parsed.body !== null}, verdict=${parsed.verdict}) → anti-loop bookmark; inspect: cat ${logFile}`,
       );
       return await markReviewedAndIncrement(input);
     }
