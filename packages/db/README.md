@@ -38,7 +38,28 @@ pnpm --filter @self/db drizzle:studio     # ブラウザ UI で row を眺める
 
 `drizzle:generate` は `src/schema/index.ts` を起点に diff を取って `migrations/0NNN_*.sql` を吐く。生成 SQL は **commit する** (review 対象)。
 
-`migrate:apply` は **空 DB / fresh apply のみ想定**。pre-flight check で既存 table を検知したら早期 exit、各 file 内の statement 群を `sql.transaction([])` で atomic に適用する。本格運用に入ったら drizzle-kit の正規 migrate runner に置き換える想定 (`drizzle:push` は TTY 必須で避ける)。
+`migrate:apply` は **`drizzle-orm/neon-http/migrator`** を使い、`drizzle.__drizzle_migrations` table で履歴を track する形 (再実行 idempotent)。drizzle-kit migrate と同じ tracker 体系で、`drizzle:push` は TTY 必須なので避ける。
+
+### bootstrap: 既存 DB を新 migrator に移行する場合
+
+PR #16 以前に旧 SQL split runner で migration を当てていた DB 上で `migrate:apply` を初回実行すると、`__drizzle_migrations` が無いため `0000` を再 apply しに行き `CREATE TABLE ... already exists` で停止する。1 回限りの bootstrap が必要:
+
+```sql
+-- 0000 の hash を tracker に手で seed (drizzle-kit migrate runner と同等の状態に)
+CREATE SCHEMA IF NOT EXISTS drizzle;
+CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
+  id SERIAL PRIMARY KEY,
+  hash TEXT NOT NULL,
+  created_at BIGINT
+);
+
+-- 既存 0000 の hash を migrations/meta/_journal.json から読んで insert
+-- 例 (実 hash は journal を参照):
+INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
+VALUES ('<hash from migrations/meta/_journal.json for tag 0000>', extract(epoch from now()) * 1000);
+```
+
+その後 `pnpm --filter @self/db migrate:apply` を流すと 0001 以降が incremental に当たる。新 dev branch / CI の DB seed 時は最初から `migrate:apply` だけで済む (空 DB なら全 migration が順次適用される)。
 
 ## consumer 側のハマり所: BigInt
 

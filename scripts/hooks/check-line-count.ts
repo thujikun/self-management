@@ -31,6 +31,14 @@ export const DEFAULT_CAP = 500;
 export const TARGET_EXT = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".sh", ".py"]);
 
 /**
+ * test ファイルは制限の対象外。inline snapshot や 各 case の網羅で正常系として
+ * 自然に行数が伸びるため、500 行 cap は実装ファイルにのみ適用する。
+ *
+ * @graph-connects none
+ */
+export const TEST_FILE_RE = /\.(test|spec)\.(ts|tsx|js|jsx|mjs|cjs)$/;
+
+/**
  * 指定ファイルの「コード行」を数える (空行・コメント行を除外)。
  *
  * 単純化のため `// ...` / `# ...` の行頭を行コメント、
@@ -88,7 +96,7 @@ export function countCodeLines(path: string): number {
  * @graph-connects none
  */
 export function runLineCountCheck(files: string[], cap: number = DEFAULT_CAP): number {
-  const targets = files.filter((f) => TARGET_EXT.has(extname(f)));
+  const targets = files.filter((f) => TARGET_EXT.has(extname(f)) && !TEST_FILE_RE.test(f));
   let overCount = 0;
   for (const f of targets) {
     const n = countCodeLines(f);
