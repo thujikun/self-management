@@ -99,6 +99,10 @@ catalog:
   prettier: ^3.8.3
   tsx: ^4.21.0
   turbo: ^2.5.0
+  # tsc を tsgo (TS 7 native Go port) に置換し、`tsc --noEmit` / `tsc` を `tsgo` で叩く。
+  # typescript パッケージ自体は typescript-eslint と ts-morph が JS API peer として要求する
+  # ため root 側に残す (binary の利用は無し)。tsgo binary は @typescript/native-preview 経由。
+  "@typescript/native-preview": ^7.0.0-dev.20260510.1
   typescript: ^5.7.0
   typescript-eslint: ^8.59.2
   vitest: ^4.1.5

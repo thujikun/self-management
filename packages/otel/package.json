@@ -13,7 +13,7 @@
   },
   "scripts": {
     "test": "echo 'see root vitest'",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
     "@google-cloud/secret-manager": "catalog:",
@@ -34,6 +34,6 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "typescript": "catalog:"
+    "@typescript/native-preview": "catalog:"
   }
 }

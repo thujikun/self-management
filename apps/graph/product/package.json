@@ -9,8 +9,8 @@
     "./types": "./src/schema/index.ts"
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "build": "tsgo",
+    "typecheck": "tsgo --noEmit",
     "init-bq": "tsx scripts/init-bq.ts",
     "alter-add-embedding": "tsx scripts/alter-add-embedding.ts",
     "grant-dataset-writer": "tsx scripts/grant-dataset-writer.ts",
@@ -35,6 +35,6 @@
     "@types/node": "catalog:",
     "@types/uuid": "catalog:",
     "tsx": "catalog:",
-    "typescript": "catalog:"
+    "@typescript/native-preview": "catalog:"
   }
 }
