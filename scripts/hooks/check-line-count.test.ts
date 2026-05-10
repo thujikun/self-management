@@ -151,4 +151,13 @@ describe("runLineCountCheck", () => {
     expect(failed).toBe(1);
     errSpy.mockRestore();
   });
+
+  it("test ファイル (*.test.ts / *.spec.tsx 等) は cap 対象外", async () => {
+    const test = join(dir, "huge.test.ts");
+    const spec = join(dir, "big.spec.tsx");
+    const big = Array.from({ length: 1000 }, (_, i) => `const x${i}=${i};`).join("\n");
+    await writeFile(test, big, "utf8");
+    await writeFile(spec, big, "utf8");
+    expect(runLineCountCheck([test, spec], 5)).toBe(0);
+  });
 });

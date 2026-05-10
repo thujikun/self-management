@@ -15,7 +15,9 @@
   },
   "dependencies": {
     "@self/content": "workspace:*",
+    "@self/db": "workspace:*",
     "@self/design-tokens": "workspace:*",
+    "better-auth": "catalog:",
     "gray-matter": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@tanstack/react-router-devtools": "catalog:",
