@@ -57,16 +57,34 @@ describe("/account", () => {
     expect(html).toMatch(/href="\/sign-in\?redirect=%2Faccount"/);
   });
 
-  it("認証済 → user.name / email + sign-out を表示", async () => {
+  it("認証済 (image あり) → user.name / email / avatar + sign-out を表示", async () => {
     mockUseSession.mockReturnValue({
-      data: { user: { name: "Ryan Tsuji", email: "ryan@example.com" } },
+      data: {
+        user: {
+          name: "Ryan Tsuji",
+          email: "ryan@example.com",
+          image: "https://avatars.githubusercontent.com/u/12345",
+        },
+      },
       isPending: false,
     });
     const html = await ssrAccount();
     expect(html).toMatch(/<h1>account<\/h1>/);
     expect(html).toMatch(/Ryan Tsuji/);
     expect(html).toMatch(/ryan@example\.com/);
+    expect(html).toMatch(/<img[^>]+class="auth__avatar"/);
+    expect(html).toMatch(/avatars\.githubusercontent\.com/);
     expect(html).toMatch(/sign out/);
+  });
+
+  it("認証済 (image なし) → avatar dd は em-dash の placeholder、img は出ない", async () => {
+    mockUseSession.mockReturnValue({
+      data: { user: { name: "Ryan", email: "ryan@example.com", image: null } },
+      isPending: false,
+    });
+    const html = await ssrAccount();
+    expect(html).toMatch(/<dt>avatar<\/dt><dd>—<\/dd>/);
+    expect(html).not.toMatch(/<img[^>]+class="auth__avatar"/);
   });
 });
 

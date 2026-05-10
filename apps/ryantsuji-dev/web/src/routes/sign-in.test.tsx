@@ -17,7 +17,7 @@ import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getRouter } from "../router.js";
-import { Route, SignInButton, startSocialSignIn } from "./sign-in.js";
+import { Route, SignInButton, buildOnClick, isSafeRedirect, startSocialSignIn } from "./sign-in.js";
 
 const mockSignInSocial = vi.fn();
 vi.mock("../lib/auth-client.js", () => ({
@@ -54,6 +54,29 @@ describe("/sign-in SSR", () => {
   });
 });
 
+describe("isSafeRedirect (open redirect ガード)", () => {
+  it.each([["/account"], ["/posts/foo"], ["/"], ["/x"]])("✓ %s", (input) => {
+    expect(isSafeRedirect(input)).toBe(true);
+  });
+
+  it.each([
+    ["//evil.com"],
+    ["//evil.com/path"],
+    ["/\\evil.com"], // backslash → ブラウザが `/` に正規化して protocol-relative 化
+    ["/\\evil.com/path"],
+    ["/%2fevil.com"], // URL-encoded slash
+    ["/%2Fevil.com"], // 大小無視
+    ["/%5cevil.com"], // URL-encoded backslash
+    ["/%5Cevil.com"],
+    ["http://evil.com"], // 絶対 URL
+    ["https://evil.com"],
+    ["evil.com/foo"], // path 以外
+    [""],
+  ])("✗ %s", (input) => {
+    expect(isSafeRedirect(input)).toBe(false);
+  });
+});
+
 describe("startSocialSignIn", () => {
   beforeEach(() => mockSignInSocial.mockReset());
   afterEach(() => mockSignInSocial.mockReset());
@@ -76,9 +99,6 @@ describe("startSocialSignIn", () => {
 });
 
 describe("SignInButton", () => {
-  beforeEach(() => mockSignInSocial.mockReset());
-  afterEach(() => mockSignInSocial.mockReset());
-
   it("button render に label と className が反映される", () => {
     const html = renderToString(
       createElement(SignInButton, {
@@ -91,32 +111,24 @@ describe("SignInButton", () => {
     expect(html).toMatch(/<button[^>]*class="auth__provider auth__provider--github"/);
     expect(html).toMatch(/continue with GitHub/);
   });
+});
 
-  it("button の onClick prop を直接呼ぶと signIn.social に渡る", () => {
-    // SSR では React は props を持つ要素を返すだけ。createElement で要素を作って
-    // props.onClick を引き出して呼ぶ形で onClick の中身をカバレッジに乗せる。
-    const element = createElement(SignInButton, {
-      provider: "twitter",
-      callbackURL: "/posts/foo",
-      label: "continue with X",
-      className: "auth__provider auth__provider--x",
+describe("buildOnClick", () => {
+  beforeEach(() => mockSignInSocial.mockReset());
+  afterEach(() => mockSignInSocial.mockReset());
+
+  it("provider + callbackURL を closure に焼いた handler を返す (github)", () => {
+    const handler = buildOnClick("github", "/account");
+    handler();
+    expect(mockSignInSocial).toHaveBeenCalledWith({
+      provider: "github",
+      callbackURL: "/account",
     });
-    // SignInButton は内部 button を返すので、render 結果から onClick を取り出す代わりに
-    // function 直接呼び出しでロジックを検証する: SignInButton はレンダ用 component
-    // であり、props 引き受け部分の純粋ロジックは startSocialSignIn を呼ぶこと。
-    // ここでは render が throw しないことを再確認 (上の test と合わせて branch coverage)。
-    expect(element).not.toBeNull();
-    // 直接 onClick を呼んで coverage を取るには render → onClick prop 抽出が必要。
-    // 簡易には button の生成 closure が呼ばれる経路を component 自体の invoke で確保する。
-    const result = (
-      SignInButton({
-        provider: "twitter",
-        callbackURL: "/posts/foo",
-        label: "continue with X",
-        className: "x",
-      }) as { props: { onClick: () => void } }
-    ).props.onClick();
-    expect(result).toBeUndefined();
+  });
+
+  it("provider + callbackURL を closure に焼いた handler を返す (twitter)", () => {
+    const handler = buildOnClick("twitter", "/posts/foo");
+    handler();
     expect(mockSignInSocial).toHaveBeenCalledWith({
       provider: "twitter",
       callbackURL: "/posts/foo",

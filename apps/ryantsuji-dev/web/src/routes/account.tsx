@@ -59,6 +59,14 @@ function AccountPage() {
     <main className="auth">
       <h1>account</h1>
       <dl className="auth__profile">
+        <dt>avatar</dt>
+        <dd>
+          {user.image ? (
+            <img src={user.image} alt="" width={48} height={48} className="auth__avatar" />
+          ) : (
+            "—"
+          )}
+        </dd>
         <dt>name</dt>
         <dd>{user.name}</dd>
         <dt>email</dt>

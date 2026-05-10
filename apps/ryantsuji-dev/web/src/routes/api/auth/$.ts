@@ -32,6 +32,7 @@ export function readEnvFromProcess(env: NodeJS.ProcessEnv = process.env): AuthEn
     GITHUB_CLIENT_SECRET: env.GITHUB_CLIENT_SECRET ?? "",
     X_OAUTH2_CLIENT_ID: env.X_OAUTH2_CLIENT_ID ?? "",
     X_OAUTH2_CLIENT_SECRET: env.X_OAUTH2_CLIENT_SECRET ?? "",
+    AUTH_ALLOWED_EMAILS: env.AUTH_ALLOWED_EMAILS,
   };
 }
 

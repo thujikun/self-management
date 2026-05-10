@@ -404,6 +404,12 @@ main {
   color: var(--text-primary);
 }
 
+.auth__avatar {
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
+  display: block;
+}
+
 .auth__signout {
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-md);

@@ -24,7 +24,7 @@ describe("/api/auth/$ Route", () => {
 });
 
 describe("readEnvFromProcess", () => {
-  it("env が空でも shape を返す (URL は default、他は空文字)", () => {
+  it("env が空でも shape を返す (URL は default、他は空文字、AUTH_ALLOWED_EMAILS は undefined)", () => {
     const out = readEnvFromProcess({});
     expect(out).toStrictEqual({
       DATABASE_URL: "",
@@ -34,6 +34,7 @@ describe("readEnvFromProcess", () => {
       GITHUB_CLIENT_SECRET: "",
       X_OAUTH2_CLIENT_ID: "",
       X_OAUTH2_CLIENT_SECRET: "",
+      AUTH_ALLOWED_EMAILS: undefined,
     });
   });
 

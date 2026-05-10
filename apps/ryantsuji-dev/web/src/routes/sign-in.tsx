@@ -23,15 +23,36 @@ import { z } from "zod";
 import { signIn } from "../lib/auth-client.js";
 
 /**
- * `?redirect=` で受け取る戻り先 path。**同一 origin の相対 path のみ** 許容
- * (open redirect 攻撃防止)。fallback は `/account`。
+ * `?redirect=` で受け取る戻り先 path の許容判定 (open redirect = CWE-601 ガード):
+ * - `/` で始まる相対 path のみ
+ * - 2 文字目が `/`, `\`, `%2f` / `%5c` (URL-encoded slash / backslash) なら reject
+ *   - `\` を許すと一部ブラウザが `Location:` 内で `/` に正規化し protocol-relative
+ *     URL (`//evil.com`) → 外部 redirect される
+ *   - `%2f` を許すと URL-decode 後に `//evil.com` 化する経路を防げない
+ * - 単独 `/` (root) は許す
+ * - fallback (空 / 不正値) は呼び出し側で `/account` を入れる前提
  *
  * @graph-connects none
  */
+export function isSafeRedirect(value: string): boolean {
+  if (!value.startsWith("/")) return false;
+  if (value === "/") return true;
+  const second = value.slice(1, 2);
+  if (second === "/" || second === "\\") return false;
+  // URL-encoded slash (%2f / %5c) を 2 文字目に持つ pattern も拒否。
+  const encodedHead = value.slice(1, 4).toLowerCase();
+  if (encodedHead.startsWith("%2f") || encodedHead.startsWith("%5c")) return false;
+  return true;
+}
+
+/** @graph-connects none */
 const SearchSchema = z.object({
   redirect: z
     .string()
-    .regex(/^\/[^/].*/, "must start with `/` and not be `//` or external")
+    .refine(
+      isSafeRedirect,
+      "must be a same-origin path (no `//`, `/\\`, or %-encoded slash prefix)",
+    )
     .optional(),
 });
 
@@ -53,9 +74,19 @@ export function startSocialSignIn(provider: Provider, callbackURL: string): void
 }
 
 /**
+ * provider + callbackURL を closure に焼き込んだ click handler factory。
+ * test から直接 invoke できるよう module 外に切り出してある (component 内の
+ * inline arrow に書くと React element shape 経由でしか呼べず壊れやすい)。
+ *
+ * @graph-connects better-auth [calls] startSocialSignIn 経由で signIn.social
+ */
+export function buildOnClick(provider: Provider, callbackURL: string): () => void {
+  return () => startSocialSignIn(provider, callbackURL);
+}
+
+/**
  * sign-in ボタン (1 provider 1 つ) を描画する小さい component。onClick は
- * `startSocialSignIn(provider, callbackURL)` を呼ぶ named local function に固定し、
- * JSX から inline arrow を排除して test 側から click handler を直接呼べる shape にする。
+ * `buildOnClick(provider, callbackURL)` で生成した handler を bind するだけ。
  *
  * @graph-connects none
  */
@@ -70,11 +101,8 @@ export function SignInButton({
   label: string;
   className: string;
 }) {
-  function onClick(): void {
-    startSocialSignIn(provider, callbackURL);
-  }
   return (
-    <button type="button" className={className} onClick={onClick}>
+    <button type="button" className={className} onClick={buildOnClick(provider, callbackURL)}>
       {label}
     </button>
   );
