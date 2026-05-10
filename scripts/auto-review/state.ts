@@ -31,6 +31,24 @@ export interface PRState {
   lastMergedSha?: string;
   /** auto-merge 成功時刻 (ISO timestamp)。 */
   lastMergedAt?: string;
+  /**
+   * review (parse 失敗 / timeout / throw) の per-SHA 失敗回数。
+   * SHA が変わったら 1 から再カウント。`MAX_REVIEW_FAILURES_PER_SHA` 到達で skip。
+   */
+  reviewFailureCount?: number;
+  /** review 失敗をカウントしている対象 SHA (新 SHA で count リセット判定に使う)。 */
+  lastFailedReviewSha?: string;
+  /** review 失敗の ISO timestamp。backoff 窓判定に使う。 */
+  lastReviewFailedAt?: string;
+  /**
+   * fix (FIX_FAILED / timeout / push 検出失敗 / throw) の per-commentId 失敗回数。
+   * commentId が変われば (= 新 review が来れば) 1 から再カウント。
+   */
+  fixFailureCount?: number;
+  /** fix 失敗をカウントしている対象 commentId。 */
+  lastFailedFixCommentId?: number;
+  /** fix 失敗の ISO timestamp。backoff 窓判定に使う。 */
+  lastFixFailedAt?: string;
 }
 
 export interface State {
