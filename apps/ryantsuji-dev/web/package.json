@@ -11,7 +11,7 @@
     "deploy": "vite build && wrangler deploy",
     "deploy:dry": "vite build && wrangler deploy --dry-run",
     "cf-typegen": "wrangler types",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
     "@self/content": "workspace:*",
@@ -38,7 +38,7 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "@vitejs/plugin-rsc": "catalog:",
-    "typescript": "catalog:",
+    "@typescript/native-preview": "catalog:",
     "vite": "catalog:",
     "wrangler": "catalog:"
   }

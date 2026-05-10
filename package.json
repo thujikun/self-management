@@ -46,6 +46,7 @@
     "prettier": "catalog:",
     "tsx": "catalog:",
     "turbo": "catalog:",
+    "@typescript/native-preview": "catalog:",
     "typescript": "catalog:",
     "typescript-eslint": "catalog:",
     "vitest": "catalog:"

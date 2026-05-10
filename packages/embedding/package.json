@@ -8,13 +8,13 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
     "google-auth-library": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "typescript": "catalog:"
+    "@typescript/native-preview": "catalog:"
   }
 }
