@@ -14,7 +14,16 @@
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { comments, likes, posts, viewCounts } from "./index.js";
+import {
+  account,
+  comments,
+  likes,
+  posts,
+  session,
+  user,
+  verification,
+  viewCounts,
+} from "./index.js";
 
 function summarize(table: ReturnType<typeof getTableConfig>) {
   return {
@@ -256,6 +265,282 @@ describe("viewCounts schema", () => {
           },
         ],
         "name": "view_counts",
+        "primaryKeys": [],
+      }
+    `);
+  });
+});
+
+describe("Better Auth schema", () => {
+  it("user schema は Better Auth 標準に追従", () => {
+    expect(summarize(getTableConfig(user))).toMatchInlineSnapshot(`
+      {
+        "columns": [
+          {
+            "hasDefault": false,
+            "name": "created_at",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "email",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "email_verified",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "id",
+            "notNull": true,
+            "primary": true,
+          },
+          {
+            "hasDefault": false,
+            "name": "image",
+            "notNull": false,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "name",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "updated_at",
+            "notNull": true,
+            "primary": false,
+          },
+        ],
+        "foreignKeys": [],
+        "name": "user",
+        "primaryKeys": [],
+      }
+    `);
+  });
+
+  it("session schema は user への cascade FK + token unique を持つ", () => {
+    expect(summarize(getTableConfig(session))).toMatchInlineSnapshot(`
+      {
+        "columns": [
+          {
+            "hasDefault": false,
+            "name": "created_at",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "expires_at",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "id",
+            "notNull": true,
+            "primary": true,
+          },
+          {
+            "hasDefault": false,
+            "name": "ip_address",
+            "notNull": false,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "token",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "updated_at",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "user_agent",
+            "notNull": false,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "user_id",
+            "notNull": true,
+            "primary": false,
+          },
+        ],
+        "foreignKeys": [
+          {
+            "columns": [
+              "user_id",
+            ],
+            "foreignColumns": [
+              "id",
+            ],
+            "foreignTable": "user",
+            "onDelete": "cascade",
+          },
+        ],
+        "name": "session",
+        "primaryKeys": [],
+      }
+    `);
+  });
+
+  it("account schema は OAuth provider linking 用 (cascade FK to user)", () => {
+    expect(summarize(getTableConfig(account))).toMatchInlineSnapshot(`
+      {
+        "columns": [
+          {
+            "hasDefault": false,
+            "name": "access_token",
+            "notNull": false,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "access_token_expires_at",
+            "notNull": false,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "account_id",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "created_at",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "id",
+            "notNull": true,
+            "primary": true,
+          },
+          {
+            "hasDefault": false,
+            "name": "id_token",
+            "notNull": false,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "password",
+            "notNull": false,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "provider_id",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "refresh_token",
+            "notNull": false,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "refresh_token_expires_at",
+            "notNull": false,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "scope",
+            "notNull": false,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "updated_at",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "user_id",
+            "notNull": true,
+            "primary": false,
+          },
+        ],
+        "foreignKeys": [
+          {
+            "columns": [
+              "user_id",
+            ],
+            "foreignColumns": [
+              "id",
+            ],
+            "foreignTable": "user",
+            "onDelete": "cascade",
+          },
+        ],
+        "name": "account",
+        "primaryKeys": [],
+      }
+    `);
+  });
+
+  it("verification schema は email/OTP token bag (FK なし)", () => {
+    expect(summarize(getTableConfig(verification))).toMatchInlineSnapshot(`
+      {
+        "columns": [
+          {
+            "hasDefault": false,
+            "name": "created_at",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "expires_at",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "id",
+            "notNull": true,
+            "primary": true,
+          },
+          {
+            "hasDefault": false,
+            "name": "identifier",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "updated_at",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "value",
+            "notNull": true,
+            "primary": false,
+          },
+        ],
+        "foreignKeys": [],
+        "name": "verification",
         "primaryKeys": [],
       }
     `);
