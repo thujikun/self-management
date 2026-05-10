@@ -1,52 +1,85 @@
 /**
- * Google AI Studio (Generative Language API) gemini-embedding-001 wrapper。
+ * Vertex AI gemini-embedding-2 wrapper。
  *
- * - 3072 次元 multimodal embedding model (Vertex AI の gemini-embedding-2 と互換次元)
- * - endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=<API_KEY>`
- * - 認証: AI Studio で発行する **API key** (`GEMINI_API_KEY` env)
- * - free tier あり (rate limit ~1500 RPM)、self-management の graph build スケールでは費用ゼロで運用できる
- * - batch endpoint なし、複数件は内部で並列 fetch
+ * - 3072 次元 multimodal embedding model (text / image / audio / video / pdf 対応)
+ * - endpoint: `https://aiplatform.googleapis.com/v1/projects/<PROJECT>/locations/global/publishers/google/models/gemini-embedding-2:embedContent`
+ *   (multimodal model のため `:embedContent` を使う。`:predict` は legacy text 系のみ)
+ * - 認証: GCP ADC (`GOOGLE_APPLICATION_CREDENTIALS` env、SA key) → google-auth-library で access token 取得
+ * - location は `global` 固定 (gemini-embedding-2 は global / us / eu に提供、global を採用)
+ * - 1 request = 1 instance、複数件は内部で並列 fetch
  *
  * 用途別 task_type:
  * - `RETRIEVAL_DOCUMENT` (default): index 投入時に使う (静的データ側)
  * - `RETRIEVAL_QUERY`: search 時の query 側 (動的入力)
  * - `SEMANTIC_SIMILARITY`: 対称な類似度比較
  *
- * 注: 過去の embedding は Vertex AI gemini-embedding-2 で生成されているが、graph:build で
- * 全件再生成すれば AI Studio gemini-embedding-001 ベースに揃うので互換性は問題にならない。
+ * 注: AI Studio (gemini-embedding-001) を一時的に使用していた経緯があるが、2026-03-23 の
+ * AI Studio prepay 移行で free tier が事実上終了したため Vertex AI に再切替。Vertex は
+ * GCP $300 trial credit / SA 認証で運用可能。
  *
  * @graph-stack ryan-product-graph
  * @graph-domain graph
- * @graph-business AI Studio gemini-embedding-001 への薄いクライアント。Vertex (paid) から AI Studio (free tier) に切替えて個人 repo の graph:build を費用ゼロで回せるようにした共有レイヤー。Migration (RETRIEVAL_DOCUMENT) と MCP search (RETRIEVAL_QUERY) の両方から再利用される
- * @graph-connects ai-studio [calls] :embedContent endpoint で embedding 取得
+ * @graph-business Vertex AI gemini-embedding-2 への薄いクライアント。Migration (RETRIEVAL_DOCUMENT) と MCP search (RETRIEVAL_QUERY) の両方から再利用される共有レイヤー。AI Studio の prepay 強制を回避し SA + ADC で課金経路を GCP billing に統一する設計
+ * @graph-connects vertex-ai [calls] :embedContent endpoint で embedding 取得
  */
 
+import { GoogleAuth } from "google-auth-library";
+
 /** @graph-connects none */
-export const EMBEDDING_MODEL = "gemini-embedding-001";
+export const EMBEDDING_MODEL = "gemini-embedding-2";
 /** @graph-connects none */
 export const EMBEDDING_DIMENSIONS = 3072;
+/** @graph-connects none */
+export const EMBEDDING_LOCATION = "global";
+
+/** @graph-connects none */
+const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT ?? "ryan-self-management";
+/** @graph-connects none */
+const ENDPOINT = `https://aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${EMBEDDING_LOCATION}/publishers/google/models/${EMBEDDING_MODEL}:embedContent`;
+
+/** @graph-connects none */
+let _auth: GoogleAuth | null = null;
 
 /**
- * AI Studio embedContent endpoint URL。`?key=<API_KEY>` で認証。
+ * GoogleAuth client を 1 度だけ生成して共有。test では `_setAuthForTest` で差し替え可。
  *
  * @graph-connects none
  */
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent`;
+function getAuth(): GoogleAuth {
+  if (!_auth) {
+    _auth = new GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+    });
+  }
+  return _auth;
+}
 
 /**
- * env から API key を取得。`.envrc` で `export GEMINI_API_KEY=...` を期待する。
- * AI Studio (https://aistudio.google.com/apikey) で発行した key を貼る。
+ * テスト hook: GoogleAuth を差し替え。production からは呼ばない。
  *
  * @graph-connects none
  */
-function getApiKey(): string {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key || key.length === 0) {
+export function _setAuthForTest(auth: GoogleAuth | null): void {
+  _auth = auth;
+}
+
+/**
+ * ADC から access token を取得。`GOOGLE_APPLICATION_CREDENTIALS` (SA key) または
+ * `gcloud auth application-default login` を期待。
+ *
+ * @graph-connects vertex-ai [calls] OAuth2 token endpoint 経由で access token を取得
+ */
+async function getAccessToken(): Promise<string> {
+  const auth = getAuth();
+  const client = await auth.getClient();
+  const tokenRes = await client.getAccessToken();
+  const token = tokenRes.token;
+  if (!token) {
     throw new Error(
-      "embedding: GEMINI_API_KEY env var が未設定。AI Studio (https://aistudio.google.com/apikey) で発行して .envrc に追加してください。",
+      "embedding: GCP access token の取得に失敗。GOOGLE_APPLICATION_CREDENTIALS (SA key) または `gcloud auth application-default login` を確認してください。",
     );
   }
-  return key;
+  return token;
 }
 
 interface EmbedContentResponse {
@@ -63,40 +96,42 @@ export type EmbedTaskType =
 /**
  * 単一テキストを embedding。長文は API 側で 8192 token まで truncate される。
  *
- * @graph-connects ai-studio [calls] :embedContent を 1 件呼び出し
+ * @graph-connects vertex-ai [calls] :embedContent を 1 件呼び出し
  */
 export async function embedText(text: string, taskType?: EmbedTaskType): Promise<number[]> {
   if (!text || text.trim().length === 0) {
     throw new Error("embedText: empty input");
   }
-  const key = getApiKey();
+  const token = await getAccessToken();
   const body: Record<string, unknown> = {
-    model: `models/${EMBEDDING_MODEL}`,
     content: { parts: [{ text }] },
   };
   if (taskType) body.taskType = taskType;
-  const res = await fetch(`${ENDPOINT}?key=${encodeURIComponent(key)}`, {
+  const res = await fetch(ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`AI Studio embedding failed (${res.status}): ${errText}`);
+    throw new Error(`Vertex AI embedding failed (${res.status}): ${errText}`);
   }
   const data = (await res.json()) as EmbedContentResponse;
   const values = data.embedding?.values;
   if (!values || values.length === 0) {
-    throw new Error(`AI Studio embedding returned no values: ${JSON.stringify(data)}`);
+    throw new Error(`Vertex AI embedding returned no values: ${JSON.stringify(data)}`);
   }
   return values;
 }
 
 /**
  * 複数テキストを並列 embedding。`:embedContent` には batch endpoint がないので
- * 内部で N 並列 fetch。concurrency=8 が default (AI Studio free tier 1500 RPM 安全圏)。
+ * 内部で N 並列 fetch する。concurrency=8 が default (Vertex AI quota 安全圏)。
  *
- * @graph-connects ai-studio [calls] :embedContent を N 並列呼び出し
+ * @graph-connects vertex-ai [calls] :embedContent を N 並列呼び出し
  */
 export async function embedBatch(
   texts: string[],
