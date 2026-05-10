@@ -13,6 +13,8 @@
 import type { GoogleAuth } from "google-auth-library";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const ORIGINAL_ENV = { ...process.env };
+
 /**
  * GoogleAuth の最小 mock。`getClient().getAccessToken()` で token 文字列を返す。
  *
@@ -30,6 +32,7 @@ describe("embedText", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    process.env.GOOGLE_CLOUD_PROJECT = "test-project";
     fetchSpy = vi.spyOn(globalThis, "fetch");
   });
 
@@ -37,6 +40,7 @@ describe("embedText", () => {
     fetchSpy.mockRestore();
     const { _setAuthForTest } = await import("./index.js");
     _setAuthForTest(null);
+    process.env = { ...ORIGINAL_ENV };
     vi.resetModules();
   });
 
@@ -50,8 +54,8 @@ describe("embedText", () => {
     expect(out).toStrictEqual([0.1, 0.2, 0.3]);
 
     const url = fetchSpy.mock.calls[0][0] as string;
-    expect(url).toMatch(
-      /^https:\/\/aiplatform\.googleapis\.com\/v1\/projects\/[^/]+\/locations\/global\/publishers\/google\/models\/gemini-embedding-2:embedContent$/,
+    expect(url).toBe(
+      "https://aiplatform.googleapis.com/v1/projects/test-project/locations/global/publishers/google/models/gemini-embedding-2:embedContent",
     );
     const init = fetchSpy.mock.calls[0][1] as RequestInit;
     const headers = init.headers as Record<string, string>;
@@ -106,12 +110,21 @@ describe("embedText", () => {
     await expect(embedText("hello")).rejects.toThrow(/access token/);
     await expect(embedText("hello")).rejects.toThrow(/GOOGLE_APPLICATION_CREDENTIALS/);
   });
+
+  it("GOOGLE_CLOUD_PROJECT 未設定ならエラー (silent fallback で意図外 project 課金を防ぐ)", async () => {
+    delete process.env.GOOGLE_CLOUD_PROJECT;
+    const { embedText, _setAuthForTest } = await import("./index.js");
+    _setAuthForTest(makeFakeAuth());
+    await expect(embedText("hello")).rejects.toThrow(/GOOGLE_CLOUD_PROJECT/);
+    await expect(embedText("hello")).rejects.toThrow(/\.envrc/);
+  });
 });
 
 describe("embedBatch", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    process.env.GOOGLE_CLOUD_PROJECT = "test-project";
     fetchSpy = vi.spyOn(globalThis, "fetch");
   });
 
@@ -119,6 +132,7 @@ describe("embedBatch", () => {
     fetchSpy.mockRestore();
     const { _setAuthForTest } = await import("./index.js");
     _setAuthForTest(null);
+    process.env = { ...ORIGINAL_ENV };
     vi.resetModules();
   });
 

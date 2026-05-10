@@ -32,10 +32,23 @@ export const EMBEDDING_DIMENSIONS = 3072;
 /** @graph-connects none */
 export const EMBEDDING_LOCATION = "global";
 
-/** @graph-connects none */
-const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT ?? "ryan-self-management";
-/** @graph-connects none */
-const ENDPOINT = `https://aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${EMBEDDING_LOCATION}/publishers/google/models/${EMBEDDING_MODEL}:embedContent`;
+/**
+ * `:embedContent` endpoint URL を組み立てる。`GOOGLE_CLOUD_PROJECT` env を毎回読むので、
+ * direnv reload や test での env 切替に追随する。`.envrc` は workspace root で
+ * `GOOGLE_CLOUD_PROJECT` を必ず export する想定で、未設定なら fallback せず throw して
+ * silent に意図外 project に課金が乗るのを防ぐ。
+ *
+ * @graph-connects none
+ */
+function getEndpoint(): string {
+  const project = process.env.GOOGLE_CLOUD_PROJECT;
+  if (!project) {
+    throw new Error(
+      "embedding: GOOGLE_CLOUD_PROJECT env var が未設定。`.envrc` 経由で direnv が export する想定 (workspace root から実行)。",
+    );
+  }
+  return `https://aiplatform.googleapis.com/v1/projects/${project}/locations/${EMBEDDING_LOCATION}/publishers/google/models/${EMBEDDING_MODEL}:embedContent`;
+}
 
 /** @graph-connects none */
 let _auth: GoogleAuth | null = null;
@@ -107,7 +120,7 @@ export async function embedText(text: string, taskType?: EmbedTaskType): Promise
     content: { parts: [{ text }] },
   };
   if (taskType) body.taskType = taskType;
-  const res = await fetch(ENDPOINT, {
+  const res = await fetch(getEndpoint(), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
