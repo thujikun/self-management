@@ -190,6 +190,51 @@ describe("runReviewJob", () => {
     expect(getState().prs["7"]?.iterations).toStrictEqual(0);
   });
 
+  it("失敗 → 成功 (REQUEST_CHANGES) で failure 系 fields がクリアされる", async () => {
+    const stdout = [
+      "<!-- AUTO_REVIEW_BODY_START -->",
+      "## Major\n- foo.ts:1 で X",
+      "<!-- AUTO_REVIEW_BODY_END -->",
+      "<!-- VERDICT:REQUEST_CHANGES -->",
+    ].join("\n");
+    const { deps } = makeDeps(stdout);
+    const { input, getState } = makeInput({
+      prs: {
+        "7": {
+          iterations: 0,
+          reviewFailureCount: 2,
+          lastFailedReviewSha: "abc123",
+          lastReviewFailedAt: "2026-05-10T00:00:00.000Z",
+        },
+      },
+    });
+    await runReviewJob(input, deps);
+    const after = getState().prs["7"];
+    expect(after?.lastReviewedSha).toStrictEqual("abc123");
+    expect(after?.reviewFailureCount).toStrictEqual(undefined);
+    expect(after?.lastFailedReviewSha).toStrictEqual(undefined);
+    expect(after?.lastReviewFailedAt).toStrictEqual(undefined);
+  });
+
+  it("失敗 → 成功 (NO_OP) でも failure 系 fields がクリアされる", async () => {
+    const { deps } = makeDeps("<!-- VERDICT:NO_OP -->\n");
+    const { input, getState } = makeInput({
+      prs: {
+        "7": {
+          iterations: 0,
+          reviewFailureCount: 1,
+          lastFailedReviewSha: "abc123",
+          lastReviewFailedAt: "2026-05-10T00:00:00.000Z",
+        },
+      },
+    });
+    await runReviewJob(input, deps);
+    const after = getState().prs["7"];
+    expect(after?.reviewFailureCount).toStrictEqual(undefined);
+    expect(after?.lastFailedReviewSha).toStrictEqual(undefined);
+    expect(after?.lastReviewFailedAt).toStrictEqual(undefined);
+  });
+
   it("post が throw: 失敗記録 (iteration 据え置き)、worktree は finally 削除", async () => {
     const stdout = [
       "<!-- AUTO_REVIEW_BODY_START -->",

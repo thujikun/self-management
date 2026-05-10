@@ -162,6 +162,7 @@ export async function runFixJob(
         lastAddressedAt: new Date().toISOString(),
         lastAddressedBodyHash: hashBody(input.reviewBody),
         iterations: cur.iterations + 1,
+        ...FIX_FAILURE_CLEAR,
       });
     });
     const itersAfter = next.prs[String(input.prNumber)]?.iterations ?? 0;
@@ -180,6 +181,20 @@ export async function runFixJob(
     log(tag, `done (total ${fmtDuration(Date.now() - jobStart)})`);
   }
 }
+
+/**
+ * 成功 path で渡す partial。failure 系 fields を `undefined` で上書きクリアし、
+ * `setPR` の `{...current, ...partial}` 経由で残骸を消す。JSON.stringify は
+ * undefined キーを drop するので state.json も clean になる。
+ */
+const FIX_FAILURE_CLEAR: Pick<
+  PRState,
+  "fixFailureCount" | "lastFailedFixCommentId" | "lastFixFailedAt"
+> = {
+  fixFailureCount: undefined,
+  lastFailedFixCommentId: undefined,
+  lastFixFailedAt: undefined,
+};
 
 /**
  * 失敗を記録するが commentId は bookmark しない (FIX_FAILED / timeout / push 失敗 / throw 等)。

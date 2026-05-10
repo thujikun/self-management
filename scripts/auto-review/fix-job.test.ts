@@ -206,6 +206,26 @@ describe("runFixJob", () => {
     expect(harness.fetched).toStrictEqual(["feat/sample"]);
   });
 
+  it("失敗 → 成功 (push 検出) で failure 系 fields がクリアされる", async () => {
+    const { deps } = makeDeps("", { before: "AAA", after: "BBB", origin: "BBB" });
+    const { input, getState } = makeInput({
+      prs: {
+        "9": {
+          iterations: 0,
+          fixFailureCount: 2,
+          lastFailedFixCommentId: 12345,
+          lastFixFailedAt: "2026-05-10T00:00:00.000Z",
+        },
+      },
+    });
+    await runFixJob(input, deps);
+    const after = getState().prs["9"];
+    expect(after?.lastAddressedCommentId).toStrictEqual(12345);
+    expect(after?.fixFailureCount).toStrictEqual(undefined);
+    expect(after?.lastFailedFixCommentId).toStrictEqual(undefined);
+    expect(after?.lastFixFailedAt).toStrictEqual(undefined);
+  });
+
   it("Claude spawn が throw: 失敗記録 (iteration 据え置き)、worktree は finally 削除", async () => {
     const { deps, harness } = makeDeps("", { before: "AAA", after: "AAA", origin: "AAA" });
     const failingDeps: FixJobDeps = {

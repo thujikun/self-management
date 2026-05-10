@@ -114,6 +114,7 @@ export async function runReviewJob(
         setPR(s, input.prNumber, {
           lastReviewedSha: input.headSha,
           lastReviewedAt: new Date().toISOString(),
+          ...REVIEW_FAILURE_CLEAR,
         }),
       );
     }
@@ -143,6 +144,7 @@ export async function runReviewJob(
         lastReviewedAt: new Date().toISOString(),
         lastReviewBodyHash: hashBody(parsed.body),
         iterations: nextIterations,
+        ...REVIEW_FAILURE_CLEAR,
       });
     });
     const itersAfter = next.prs[String(input.prNumber)]?.iterations ?? 0;
@@ -164,6 +166,21 @@ export async function runReviewJob(
     log(tag, `done (total ${fmtDuration(Date.now() - jobStart)})`);
   }
 }
+
+/**
+ * 成功 path で渡す partial。failure 系 fields を `undefined` で上書きクリアし、
+ * `setPR` の `{...current, ...partial}` 経由で残骸を消す。
+ * これがないと「失敗 → backoff → retry 成功」のシナリオで failure 系の値が
+ * state.json に残り続け、後の diagnosis / state inspection が読みづらくなる。
+ */
+const REVIEW_FAILURE_CLEAR: Pick<
+  PRState,
+  "reviewFailureCount" | "lastFailedReviewSha" | "lastReviewFailedAt"
+> = {
+  reviewFailureCount: undefined,
+  lastFailedReviewSha: undefined,
+  lastReviewFailedAt: undefined,
+};
 
 /**
  * 失敗を記録するが SHA は bookmark しない (timeout / parse failure / throw 等)。
