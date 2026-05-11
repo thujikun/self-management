@@ -69,6 +69,16 @@ export default defineConfig({
         // 既にテスト対象。ここの unit test は real-API 統合テストか E2E でやる。
         "apps/graph/product/src/migrate/common/bq-merge.ts",
         "apps/graph/product/src/migrate/common/embedding.ts",
+        // ryantsuji-dev/web の DB / 認証 runtime ラッパー: Drizzle/Neon HTTP / Better Auth
+        // への外部 IO が本体。pure 入力 validation は engagement-validate.ts に切出してテスト
+        // 対象、route 経由の整合は $slug.test.tsx 等で担保する。同型 (bq-merge.ts) と同じ exclude 方針。
+        "apps/ryantsuji-dev/web/src/server/db.ts",
+        "apps/ryantsuji-dev/web/src/server/auth-session.ts",
+        "apps/ryantsuji-dev/web/src/server/engagement.ts",
+        // .server.ts: client bundle 隔離のための薄い委譲ファイル。実体は engagement.ts /
+        // auth-session.ts に。test は run* を直接呼ぶ ($slug.test.tsx 内) ので動作担保はある
+        // が、coverage 計測は exclude (薄い wiring + 上記 module の delegation のみ)。
+        "apps/ryantsuji-dev/web/src/routes/posts/$slug.server.ts",
         // 中間 type 定義のみ (実行時ロジックなし)
         "apps/graph/product/src/migrate/common/types.ts",
         // CLI entry-point: process.argv / staged file 取得 / process.exit のみ。

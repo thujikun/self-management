@@ -18,5 +18,8 @@ export default defineConfig({
     name: "ryantsuji-dev-web",
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     setupFiles: ["./src/test-setup.ts"],
+    // React component の click / submit dispatch を test するため happy-dom を採用。
+    // SSR test (renderToString) も happy-dom 上で問題なく動く (DOM API を使わないため)。
+    environment: "happy-dom",
   },
 });
