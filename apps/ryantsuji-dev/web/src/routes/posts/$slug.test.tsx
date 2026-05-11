@@ -575,7 +575,7 @@ describe("dispatchCommentSubmit", () => {
     expect(deps.setComments).toHaveBeenCalledWith([created, prev[0]]);
     expect(deps.setDraft).toHaveBeenCalledWith("");
     expect(deps.invalidate).toHaveBeenCalledTimes(1);
-    expect(deps.setError).not.toHaveBeenCalledWith(expect.any(String));
+    expect(deps.setError).toHaveBeenCalledWith(null);
   });
 
   it("空 body → setError('コメントを...') + 投稿しない", async () => {
