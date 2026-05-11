@@ -12,7 +12,7 @@
   },
   "scripts": {
     "start": "tsx bin/ryan-graph.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
     "@google-cloud/bigquery": "catalog:",
@@ -25,6 +25,6 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "tsx": "catalog:",
-    "typescript": "catalog:"
+    "@typescript/native-preview": "catalog:"
   }
 }

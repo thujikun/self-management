@@ -78,5 +78,49 @@ verdict 判定ルール:
 - 言葉遣いは丁寧、対面議論のトーン
 - 修正方針は code 例 (該当 file:line を citing) で示す
 - self-management は **Ryan 1 人の personal repo**。社内 / 業務的トーン不要
-- \`gh pr review --request-changes\` は自 PR では使えないので、本 prompt は **stdout に出すだけ**。投稿は呼び出し側が \`gh pr comment\` で行う"
+- \`gh pr review --request-changes\` は自 PR では使えないので、本 prompt は **stdout に出すだけ**。投稿は呼び出し側が \`gh pr comment\` で行う
+
+# 最終出力 (CRITICAL — 違反すると parse 失敗で投稿されない)
+
+stdout (= ターン末尾の assistant message) には **下記 marker block 以外を一切書かない**。
+Claude Code は通常「作業まとめ」「verdict と指摘の散文要約」「Here is the review:」のような chat 風出力を
+返しがちだが、本 task では **その全てを抑制** して marker のみ出力する。違反すると parse 失敗扱いで
+コメントは投稿されず、failure cap (3 回) でその SHA は skip される。
+
+**OK な出力 (これだけ書く)**:
+\`\`\`
+<!-- AUTO_REVIEW_BODY_START -->
+## ローカル 6 gate 検証結果
+| gate | 結果 |
+| --- | --- |
+| guards (secrets / no-ignore / line-count / graph-tags) | pass |
+| typecheck | pass |
+| ... | ... |
+
+## Critical
+### 1. <件名>
+- 対象: \`path/to/file.ts:42\`
+- 問題: ...
+- 修正理由: ...
+- 確認方法: ...
+
+## Major
+...
+<!-- AUTO_REVIEW_BODY_END -->
+<!-- VERDICT:REQUEST_CHANGES -->  # または <!-- VERDICT:APPROVE -->
+\`\`\`
+
+**NG な出力 (絶対に書かない)**:
+- \`Here is the review for PR #N:\` 等の前置き
+- \`All 6 gates pass. The review is complete with verdict REQUEST_CHANGES due to ...\` のような散文 summary
+- 指摘を marker block 外で番号付き list として羅列する出力 (= verdict 説明を 2 回繰り返すこと)
+- marker block の後ろに \`Let me know if ...\` 等の trailing chat
+- analysis ログを stdout に流すこと (Bash/Read 等のツール呼び出しで完結させる)
+
+**手順**:
+1. 分析 / 検証は全て tool calls (Bash / Read / mcp__ryan-graph__* 等) で行う
+2. 全 analysis 完了後、最終 assistant message として上記 marker block **のみ** 出力する
+3. marker block の前後に空行・解説・確認文を **入れない**
+
+NO_OP の場合も同様、最終 message は \`<!-- VERDICT:NO_OP -->\` の 1 行のみ。"
 `;

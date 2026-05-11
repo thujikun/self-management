@@ -10,8 +10,8 @@
     "./client": "./src/client.ts"
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "build": "tsgo",
+    "typecheck": "tsgo --noEmit",
     "drizzle:generate": "drizzle-kit generate",
     "drizzle:studio": "drizzle-kit studio",
     "migrate:apply": "tsx scripts/apply-migrations.ts"
@@ -24,6 +24,6 @@
     "@types/node": "catalog:",
     "drizzle-kit": "catalog:",
     "tsx": "catalog:",
-    "typescript": "catalog:"
+    "@typescript/native-preview": "catalog:"
   }
 }
