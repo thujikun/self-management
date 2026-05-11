@@ -51,8 +51,6 @@ pnpm deploy       # 本番 deploy (要 wrangler login)
 
 ## 後続 PR
 
-- **PR (db schema)**: `packages/db` (Drizzle + Neon) で comment / like の schema 定義
-- **PR (auth)**: Better Auth で GitHub / Google / Facebook (Apple は v2)
 - **PR (syndicator)**: dev.to API publish (canonical_url=ryantsuji.dev) + Zenn URL HEAD verify
 - **OG image / RSS feed / sitemap**: SEO 系
 - **Phase 1 design discovery**: design tokens の OKLCH 値再調整
@@ -64,6 +62,9 @@ pnpm deploy       # 本番 deploy (要 wrangler login)
 - content: `@self/content` (markdown render pipeline)
 - /posts: 投稿一覧 + 詳細 route + content/posts/*.md 統合
 - **RSC isolation: shiki / unified を rsc env に閉じ込め client bundle 540KB 化**
+- **db schema**: `packages/db` (Drizzle + Neon) — posts / comments / likes / view_counts schema
+- **auth**: Better Auth (GitHub / X OAuth 2.0) + `AUTH_ALLOWED_EMAILS` allowlist
+- **engagement**: `/posts/$slug` に views (+1 per loader call) / likes (toggle、auth 必須) / comments (投稿、auth 必須) を追加
 
 ## RPC client
 
