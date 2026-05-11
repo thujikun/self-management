@@ -16,7 +16,7 @@
 
 import { getRequestHeaders } from "@tanstack/react-start/server";
 
-import { readEnvFromProcess } from "../api/auth/$.js";
+import { readEnvFromProcess } from "../../server/auth.js";
 import { getSessionFromHeaders } from "../../server/auth-session.js";
 import { createDbFromProcess } from "../../server/db.js";
 import {

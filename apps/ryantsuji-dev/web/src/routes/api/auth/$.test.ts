@@ -13,7 +13,8 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { Route, authHandler, readEnvFromProcess } from "./$.js";
+import { Route, authHandler } from "./$.js";
+import { readEnvFromProcess } from "../../../server/auth.js";
 
 describe("/api/auth/$ Route", () => {
   it("server.handlers に GET / POST が登録されている", () => {

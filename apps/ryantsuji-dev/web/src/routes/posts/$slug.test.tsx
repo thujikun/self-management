@@ -58,10 +58,11 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
   };
 });
 
-// DB は test 環境で叩けないので createDbFromProcess を no-op stub に。engagement.ts 側の
-// 関数を vi.mock で全部差し替えてしまうので、戻り値の Db オブジェクトは使われない。
+// DB は test 環境で叩けないので createDbFromProcess を no-op stub に。mockDb は
+// toHaveBeenCalledWith の db 引数検証に使う。
+const mockDb = {};
 vi.mock("../../server/db.js", () => ({
-  createDbFromProcess: vi.fn(() => ({})),
+  createDbFromProcess: vi.fn(() => mockDb),
   readDatabaseUrl: vi.fn(() => "postgresql://test"),
 }));
 
@@ -85,10 +86,9 @@ vi.mock("../../server/engagement.js", () => ({
   addComment: (...args: unknown[]) => mockAddComment(...args),
 }));
 
-// /api/auth route の readEnvFromProcess だけ差し替え。Route export は残すため
-// importOriginal で actual を取り、対象関数のみ override する。
-vi.mock("../api/auth/$.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../api/auth/$.js")>();
+// server/auth の readEnvFromProcess だけ差し替え。他の export (getAuth 等) は actual を継承。
+vi.mock("../../server/auth.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../server/auth.js")>();
   return {
     ...actual,
     readEnvFromProcess: vi.fn(() => ({
@@ -281,10 +281,11 @@ describe("/posts/$slug — engagement (SSR、認証済み)", () => {
   it("loadEngagementServer は session 経由で identifier=userId を渡す", async () => {
     await ssrAt("/posts/minimal");
     expect(mockGetSession).toHaveBeenCalled();
-    expect(mockLoadEngagement).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ slug: "minimal", identifier: "u1", bumpView: true }),
-    );
+    expect(mockLoadEngagement).toHaveBeenCalledWith(mockDb, {
+      slug: "minimal",
+      identifier: "u1",
+      bumpView: true,
+    });
   });
 });
 
@@ -306,7 +307,7 @@ describe("server fn handlers (run*)", () => {
       });
       const out = await runLoadEngagement("foo");
       expect(out.viewCount).toStrictEqual("1");
-      expect(mockLoadEngagement).toHaveBeenCalledWith(expect.anything(), {
+      expect(mockLoadEngagement).toHaveBeenCalledWith(mockDb, {
         slug: "foo",
         identifier: null,
         bumpView: true,
@@ -324,7 +325,7 @@ describe("server fn handlers (run*)", () => {
         comments: [],
       });
       await runLoadEngagement("bar");
-      expect(mockLoadEngagement).toHaveBeenCalledWith(expect.anything(), {
+      expect(mockLoadEngagement).toHaveBeenCalledWith(mockDb, {
         slug: "bar",
         identifier: "u42",
         bumpView: true,
@@ -347,7 +348,7 @@ describe("server fn handlers (run*)", () => {
       mockToggleLike.mockResolvedValue({ liked: true, count: 1 });
       const out = await runToggleLike("foo");
       expect(out).toStrictEqual({ liked: true, count: 1 });
-      expect(mockToggleLike).toHaveBeenCalledWith(expect.anything(), "foo", "u1");
+      expect(mockToggleLike).toHaveBeenCalledWith(mockDb, "foo", "u1");
     });
   });
 
@@ -371,7 +372,7 @@ describe("server fn handlers (run*)", () => {
         createdAt: "2026-05-10T00:00:00Z",
       });
       await runAddComment({ slug: "foo", body: "great" });
-      expect(mockAddComment).toHaveBeenCalledWith(expect.anything(), {
+      expect(mockAddComment).toHaveBeenCalledWith(mockDb, {
         slug: "foo",
         authorId: "u1",
         authorName: "Ryan",

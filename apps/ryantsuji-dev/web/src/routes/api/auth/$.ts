@@ -15,26 +15,7 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 
-import { getAuth, type AuthEnv } from "../../../server/auth.js";
-
-/**
- * `process.env` から `AuthEnv` を取り出す。CF Workers の env binding が入った時は
- * 本関数を `(event) => readEnv(event)` 形に拡張する。test から直接呼べるよう export。
- *
- * @graph-connects none
- */
-export function readEnvFromProcess(env: NodeJS.ProcessEnv = process.env): AuthEnv {
-  return {
-    DATABASE_URL: env.DATABASE_URL ?? "",
-    BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET ?? "",
-    BETTER_AUTH_URL: env.BETTER_AUTH_URL ?? "http://localhost:3000",
-    GITHUB_CLIENT_ID: env.GITHUB_CLIENT_ID ?? "",
-    GITHUB_CLIENT_SECRET: env.GITHUB_CLIENT_SECRET ?? "",
-    X_OAUTH2_CLIENT_ID: env.X_OAUTH2_CLIENT_ID ?? "",
-    X_OAUTH2_CLIENT_SECRET: env.X_OAUTH2_CLIENT_SECRET ?? "",
-    AUTH_ALLOWED_EMAILS: env.AUTH_ALLOWED_EMAILS,
-  };
-}
+import { getAuth, readEnvFromProcess } from "../../../server/auth.js";
 
 /**
  * Request を受けて Better Auth handler に流す薄い wrapper。test から直接呼べるよう export。
