@@ -58,13 +58,25 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
   };
 });
 
-// DB は test 環境で叩けないので createDbFromProcess を no-op stub に。mockDb は
+// DB は test 環境で叩けないので createDbFromEnv を no-op stub に。mockDb は
 // toHaveBeenCalledWith の db 引数検証に使う。
 const mockDb = {};
 vi.mock("../../server/db.js", () => ({
-  createDbFromProcess: vi.fn(() => mockDb),
+  createDbFromEnv: vi.fn(() => mockDb),
   readDatabaseUrl: vi.fn(() => "postgresql://test"),
 }));
+
+// run* 系 server fn body は (env, slug) を受け取る。test では Env binding を fake する。
+const TEST_ENV = {
+  ASSETS: {} as Fetcher,
+  DATABASE_URL: "postgresql://test",
+  BETTER_AUTH_SECRET: "x".repeat(32),
+  BETTER_AUTH_URL: "http://localhost:3000",
+  GITHUB_CLIENT_ID: "g",
+  GITHUB_CLIENT_SECRET: "g",
+  X_OAUTH2_CLIENT_ID: "x",
+  X_OAUTH2_CLIENT_SECRET: "x",
+};
 
 // auth session: 既定で未認証 (null) を返す。it ごとに mockReturnValue で session ありに切替可能。
 const mockGetSession = vi.fn().mockResolvedValue(null);
@@ -85,23 +97,6 @@ vi.mock("../../server/engagement.js", () => ({
   toggleLike: (...args: unknown[]) => mockToggleLike(...args),
   addComment: (...args: unknown[]) => mockAddComment(...args),
 }));
-
-// server/auth の readEnvFromProcess だけ差し替え。他の export (getAuth 等) は actual を継承。
-vi.mock("../../server/auth.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../server/auth.js")>();
-  return {
-    ...actual,
-    readEnvFromProcess: vi.fn(() => ({
-      DATABASE_URL: "postgresql://test",
-      BETTER_AUTH_SECRET: "x".repeat(32),
-      BETTER_AUTH_URL: "http://localhost:3000",
-      GITHUB_CLIENT_ID: "g",
-      GITHUB_CLIENT_SECRET: "g",
-      X_OAUTH2_CLIENT_ID: "x",
-      X_OAUTH2_CLIENT_SECRET: "x",
-    })),
-  };
-});
 
 async function ssrAt(path: string): Promise<string> {
   const router = getRouter({
@@ -305,7 +300,7 @@ describe("server fn handlers (run*)", () => {
         likes: { count: 0, liked: false },
         comments: [],
       });
-      const out = await runLoadEngagement("foo");
+      const out = await runLoadEngagement(TEST_ENV, "foo");
       expect(out.viewCount).toStrictEqual("1");
       expect(mockLoadEngagement).toHaveBeenCalledWith(mockDb, {
         slug: "foo",
@@ -324,7 +319,7 @@ describe("server fn handlers (run*)", () => {
         likes: { count: 1, liked: true },
         comments: [],
       });
-      await runLoadEngagement("bar");
+      await runLoadEngagement(TEST_ENV, "bar");
       expect(mockLoadEngagement).toHaveBeenCalledWith(mockDb, {
         slug: "bar",
         identifier: "u42",
@@ -336,7 +331,7 @@ describe("server fn handlers (run*)", () => {
   describe("runToggleLike", () => {
     it("未認証 → UNAUTHENTICATED throw", async () => {
       mockGetSession.mockResolvedValue(null);
-      await expect(runToggleLike("foo")).rejects.toThrow(/UNAUTHENTICATED/);
+      await expect(runToggleLike(TEST_ENV, "foo")).rejects.toThrow(/UNAUTHENTICATED/);
       expect(mockToggleLike).not.toHaveBeenCalled();
     });
 
@@ -346,7 +341,7 @@ describe("server fn handlers (run*)", () => {
         session: { id: "s", userId: "u1", expiresAt: new Date("2099-01-01") },
       });
       mockToggleLike.mockResolvedValue({ liked: true, count: 1 });
-      const out = await runToggleLike("foo");
+      const out = await runToggleLike(TEST_ENV, "foo");
       expect(out).toStrictEqual({ liked: true, count: 1 });
       expect(mockToggleLike).toHaveBeenCalledWith(mockDb, "foo", "u1");
     });
@@ -355,7 +350,9 @@ describe("server fn handlers (run*)", () => {
   describe("runAddComment", () => {
     it("未認証 → UNAUTHENTICATED throw", async () => {
       mockGetSession.mockResolvedValue(null);
-      await expect(runAddComment({ slug: "foo", body: "hi" })).rejects.toThrow(/UNAUTHENTICATED/);
+      await expect(runAddComment(TEST_ENV, { slug: "foo", body: "hi" })).rejects.toThrow(
+        /UNAUTHENTICATED/,
+      );
       expect(mockAddComment).not.toHaveBeenCalled();
     });
 
@@ -371,7 +368,7 @@ describe("server fn handlers (run*)", () => {
         body: "great",
         createdAt: "2026-05-10T00:00:00Z",
       });
-      await runAddComment({ slug: "foo", body: "great" });
+      await runAddComment(TEST_ENV, { slug: "foo", body: "great" });
       expect(mockAddComment).toHaveBeenCalledWith(mockDb, {
         slug: "foo",
         authorId: "u1",

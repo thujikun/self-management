@@ -1,22 +1,29 @@
 /**
- * ryantsuji.dev web の Vite + TanStack Start + RSC 設定。
+ * ryantsuji.dev web の Vite + TanStack Start + RSC + Cloudflare Workers 設定。
  *
- * TanStack Start v1.167 で deployment target option (`target: 'cloudflare-module'`)
- * は plugin schema から削除され、deploy 先は build 出力の wrapping で決める方式に変わった。
- * このため `vite build` は generic SSR bundle を吐き、`server.ts` (Worker entry) が
- * その SSR handler を import して CF Workers の `fetch(req, env, ctx)` 形式に変換する。
+ * `@cloudflare/vite-plugin` を **先頭** に置くことで、TanStack Start の ssr environment
+ * を Worker module として bundle し、`wrangler.jsonc:main` の `@tanstack/react-start/server-entry`
+ * を解決する (TanStack `start-core/deployment` SKILL 推奨パターン)。`viteEnvironment: { name: "ssr" }`
+ * で「どの vite environment を Worker bundle にするか」を明示する。
  *
  * `tanstackStart({ rsc: { enabled: true } })` + `@vitejs/plugin-rsc` で 5 environment
  * (api / middleware / **rsc** / client / ssr) build に展開。`createServerFn().handler()`
- * 内から呼ぶ重 dep (shiki / unified) は rsc env のみに bundle され、client にも ssr
- * にも漏れない。spike record は `docs/spike/rsc.md`。
+ * 内から呼ぶ重 dep (shiki / unified) は rsc env のみに bundle され、client にも ssr にも
+ * 漏れない。spike record は `docs/spike/rsc.md`。
+ *
+ * `server.entry: "./src/server.ts"` で本 app 固有の Worker entry を wire し、Workers
+ * が渡す `(req, env, ctx)` を TanStack Start handler の `requestContext: { env, ctx }`
+ * に forward する。これにより server fn / middleware から `context.env.X` で型付き
+ * binding を読める (process.env を介さない)。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business 個人ブログ web app の Vite build パイプライン。TanStack Start (SSR + RSC + file-based routing) を有効化、`@vitejs/plugin-rsc` で React Flight protocol を成立させ、shiki 等の重 dep を rsc env (server bundle) に閉じ込める。CF Workers 適応は別途 `server.ts` の Worker entry が担う構造に倒す
- * @graph-connects tanstack-start [embeds] tanstackStart({ rsc: { enabled: true } }) で router 自動生成 + SSR + RSC build を成立させる
+ * @graph-business 個人ブログ web app の Vite build パイプライン。`@cloudflare/vite-plugin` を先頭に置いて ssr environment を Worker bundle 化し、TanStack Start の RSC build と React SWC を後段に重ねる。`server.entry` で本 app 固有の Worker entry を指し、env binding を requestContext に forward する設計
+ * @graph-connects tanstack-start [embeds] tanstackStart({ rsc, server }) で router 自動生成 + SSR + RSC + 独自 server entry を統合
+ * @graph-connects cloudflare [embeds] @cloudflare/vite-plugin で ssr env を Worker module bundle に変換、wrangler が main を解決する
  */
 
+import { cloudflare } from "@cloudflare/vite-plugin";
 import { defineConfig } from "vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
@@ -29,5 +36,10 @@ export default defineConfig({
       "~": resolve(__dirname, "./src"),
     },
   },
-  plugins: [tanstackStart({ rsc: { enabled: true } }), rsc(), viteReact()],
+  plugins: [
+    cloudflare({ viteEnvironment: { name: "ssr" } }),
+    tanstackStart({ rsc: { enabled: true }, server: { entry: "./src/server.ts" } }),
+    rsc(),
+    viteReact(),
+  ],
 });

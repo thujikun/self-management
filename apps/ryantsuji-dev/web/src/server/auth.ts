@@ -1,11 +1,10 @@
 /**
- * Better Auth server config (singleton per request)。
+ * Better Auth server config。env binding を **`createServerFn` / route handler の
+ * `context.env`** から受け取り、Drizzle adapter + social providers (GitHub / X) +
+ * email allowlist で sign-up を制限する。`@self/db` の `createDb` で生成した client
+ * を adapter に流す。
  *
- * `getAuth(env)` で env binding (Cloudflare Workers) を受け取り、Drizzle adapter +
- * social providers (GitHub / X) + email allowlist で sign-up を制限する。
- * `@self/db` の `createDb` で生成した client を adapter に流す。
- *
- * env binding contract (CF Workers `env.X` / dev は `process.env`):
+ * env binding contract (CF Workers の env binding shape、`start.ts:Env` 参照):
  * - `DATABASE_URL` — Neon pooled connection string
  * - `BETTER_AUTH_SECRET` — 32+ char random
  * - `BETTER_AUTH_URL` — 公開 URL (例: `https://ryantsuji.dev`、dev は `http://localhost:3000`)
@@ -13,13 +12,22 @@
  * - `X_OAUTH2_CLIENT_ID` / `X_OAUTH2_CLIENT_SECRET` — X (Twitter) OAuth 2.0 client
  * - `AUTH_ALLOWED_EMAILS` — sign-up を許可する email の CSV (空なら open + warn)
  *
+ * `process.env` 経路は廃止 (CF Workers では module scope で undefined になる)。
+ * `src/server.ts` (Worker entry) が `(req, env, ctx)` を `requestContext` に詰めて、
+ * 各 handler で `context.env.X` で型付きアクセス。dev では `@cloudflare/vite-plugin`
+ * が `.dev.vars` から env を inject する同 shape。
+ *
  * 認証境界の方針: ryantsuji.dev は **個人サイト**。comments / likes は Ryan が承認した
  * email のみが書き込める運用。`AUTH_ALLOWED_EMAILS` で allowlist を切り、不在の email
  * の sign-up を `databaseHooks.user.create.before` で reject する。
  *
+ * 性能: `getAuth(env)` は betterAuth instance を Workers isolate ごとに **1 度だけ**
+ * 構築して `globalThis` cache (`Cache key` で同 env なら reuse)。Workers isolate 寿命中
+ * (~分単位、region 内 reuse) は cache hit、cold start のみ構築コスト。
+ *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business Better Auth runtime config。Drizzle adapter で @self/db を SSoT に、social providers (github/twitter) を有効化、AUTH_ALLOWED_EMAILS で sign-up を allowlist 制御 (個人サイトの認証境界)。env binding は CF Workers と dev で同 shape を期待
+ * @graph-business Better Auth runtime config。Drizzle adapter で @self/db を SSoT に、social providers (github/twitter) を有効化、AUTH_ALLOWED_EMAILS で sign-up を allowlist 制御 (個人サイトの認証境界)。env は CF Workers binding 由来 (process.env 不使用)、isolate ごとに globalThis cache で per-request 再構築を回避
  * @graph-connects better-auth [calls] betterAuth() で auth instance を構築、各 route handler に flow
  * @graph-connects content [embeds] @self/db を drizzleAdapter に渡して Postgres を SSoT に
  */
@@ -29,8 +37,7 @@ import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
 /**
- * Better Auth が期待する env binding。CF Workers 上では `env`、dev では `process.env`
- * から取り出して渡す。
+ * Better Auth が期待する env binding subset。`start.ts:Env` の認証関連 field の subset。
  *
  * @graph-connects none
  */
@@ -44,25 +51,6 @@ export interface AuthEnv {
   X_OAUTH2_CLIENT_SECRET: string;
   /** sign-up を許可する email の CSV。空なら open (warn 出力)。 */
   AUTH_ALLOWED_EMAILS?: string;
-}
-
-/**
- * `process.env` から `AuthEnv` を取り出す。CF Workers の env binding が入った時は
- * 本関数を `(event) => readEnvFromProcess(event)` 形に拡張する。
- *
- * @graph-connects none
- */
-export function readEnvFromProcess(env: NodeJS.ProcessEnv = process.env): AuthEnv {
-  return {
-    DATABASE_URL: env.DATABASE_URL ?? "",
-    BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET ?? "",
-    BETTER_AUTH_URL: env.BETTER_AUTH_URL ?? "http://localhost:3000",
-    GITHUB_CLIENT_ID: env.GITHUB_CLIENT_ID ?? "",
-    GITHUB_CLIENT_SECRET: env.GITHUB_CLIENT_SECRET ?? "",
-    X_OAUTH2_CLIENT_ID: env.X_OAUTH2_CLIENT_ID ?? "",
-    X_OAUTH2_CLIENT_SECRET: env.X_OAUTH2_CLIENT_SECRET ?? "",
-    AUTH_ALLOWED_EMAILS: env.AUTH_ALLOWED_EMAILS,
-  };
 }
 
 /**
@@ -111,12 +99,13 @@ export function makeUserCreateBeforeHook(allowed: Set<string> | null) {
 }
 
 /**
- * env から Better Auth instance を構築。1 request 1 instance を想定 (Workers
- * isolate モデルに合わせて lazy、CF Workers 本番化 PR で per-isolate cache 化検討)。
+ * env から Better Auth instance を構築する pure factory。本関数自体は cache 無し。
+ * `getAuth(env)` (export) が globalThis cache を被せた wrapper として呼ぶ。test では
+ * 直接 invoke しても cache の影響を受けない設計。
  *
- * @graph-connects better-auth [provides] betterAuth instance を返す
+ * @graph-connects better-auth [provides] betterAuth instance を構築
  */
-export function getAuth(env: AuthEnv) {
+export function buildAuth(env: AuthEnv) {
   const db = createDb(env.DATABASE_URL);
   const allowedEmails = parseAllowedEmails(env.AUTH_ALLOWED_EMAILS);
   if (!allowedEmails) {
@@ -151,5 +140,69 @@ export function getAuth(env: AuthEnv) {
   });
 }
 
+/**
+ * cache key を env から決定する。OAuth/DB credential が変われば key が変わるので、
+ * stale credential で auth する事故を防ぐ。AUTH_ALLOWED_EMAILS は再現可能性のため
+ * 含める (allowlist 変更が即反映される)。
+ *
+ * @graph-connects none
+ */
+export function authCacheKey(env: AuthEnv): string {
+  return [
+    env.DATABASE_URL,
+    env.BETTER_AUTH_SECRET,
+    env.BETTER_AUTH_URL,
+    env.GITHUB_CLIENT_ID,
+    env.GITHUB_CLIENT_SECRET,
+    env.X_OAUTH2_CLIENT_ID,
+    env.X_OAUTH2_CLIENT_SECRET,
+    env.AUTH_ALLOWED_EMAILS ?? "",
+  ].join("|");
+}
+
+/**
+ * globalThis 上に置く isolate-scoped cache。Workers isolate 寿命中は同 env なら同 instance を
+ * reuse。Workers の cold start で globalThis は新規 isolate 用に空からスタートするので
+ * stale leak のリスクは isolate lifetime のみ。
+ *
+ * @graph-connects none
+ */
+interface IsolateAuthCache {
+  key: string;
+  auth: ReturnType<typeof buildAuth>;
+}
+/** @graph-connects none */
+const AUTH_CACHE_SYMBOL = Symbol.for("@self/ryantsuji-dev-web/auth-cache");
+/** @graph-connects none */
+type GlobalWithAuthCache = typeof globalThis & {
+  [AUTH_CACHE_SYMBOL]?: IsolateAuthCache;
+};
+
+/**
+ * env から Better Auth instance を取得。Workers isolate ごとに同 env なら **再構築せず
+ * cache** から返す。env (cache key) が変わった時は build しなおして cache を差し替え。
+ *
+ * @graph-connects better-auth [provides] betterAuth instance を返す (isolate cache 経由)
+ */
+export function getAuth(env: AuthEnv) {
+  const g = globalThis as GlobalWithAuthCache;
+  const key = authCacheKey(env);
+  const cached = g[AUTH_CACHE_SYMBOL];
+  if (cached && cached.key === key) return cached.auth;
+  const auth = buildAuth(env);
+  g[AUTH_CACHE_SYMBOL] = { key, auth };
+  return auth;
+}
+
 /** @graph-connects none */
 export type Auth = ReturnType<typeof getAuth>;
+
+/**
+ * test 用に cache を明示的に reset する。production code からは呼ばない。
+ *
+ * @graph-connects none
+ */
+export function _resetAuthCacheForTest(): void {
+  const g = globalThis as GlobalWithAuthCache;
+  delete g[AUTH_CACHE_SYMBOL];
+}

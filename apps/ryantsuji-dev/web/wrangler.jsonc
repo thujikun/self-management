@@ -1,7 +1,10 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ryantsuji-dev-web",
-  "main": "./dist/server/server.js",
+  // `@cloudflare/vite-plugin` が ssr environment を Worker bundle に変換し、`src/server.ts`
+  // (= `tanstackStart({ server: { entry } })` で指定) を default export として解決する。
+  // 直接 dist パスを書かないことで build 出力構造の変更に追従する (SKILL 推奨パターン)。
+  "main": "./src/server.ts",
   "compatibility_date": "2025-09-23",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
