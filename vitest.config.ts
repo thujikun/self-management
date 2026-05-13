@@ -79,6 +79,11 @@ export default defineConfig({
         // auth-session.ts に。test は run* を直接呼ぶ ($slug.test.tsx 内) ので動作担保はある
         // が、coverage 計測は exclude (薄い wiring + 上記 module の delegation のみ)。
         "apps/ryantsuji-dev/web/src/routes/posts/$slug.server.ts",
+        // CF Workers entry / startInstance: Worker runtime でのみ実行されるため node test
+        // からは到達不可。env binding 経路の正しさは route 側 ($slug.test.tsx) が踏み、
+        // 実 deploy は wrangler deploy --dry-run + 手動 smoke で検証する方針。
+        "apps/ryantsuji-dev/web/src/server.ts",
+        "apps/ryantsuji-dev/web/src/start.ts",
         // 中間 type 定義のみ (実行時ロジックなし)
         "apps/graph/product/src/migrate/common/types.ts",
         // CLI entry-point: process.argv / staged file 取得 / process.exit のみ。

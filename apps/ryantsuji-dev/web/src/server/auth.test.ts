@@ -14,7 +14,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  _resetAuthCacheForTest,
   assertSignUpAllowed,
+  authCacheKey,
+  buildAuth,
   getAuth,
   makeUserCreateBeforeHook,
   parseAllowedEmails,
@@ -50,7 +53,7 @@ describe("parseAllowedEmails", () => {
   });
 });
 
-describe("getAuth", () => {
+describe("buildAuth (pure factory、cache 非経由)", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -60,28 +63,70 @@ describe("getAuth", () => {
   });
 
   it("env を渡すと Better Auth instance を返す (handler + api 系を備える)", () => {
-    const auth = getAuth(TEST_ENV);
+    const auth = buildAuth(TEST_ENV);
     const surface = ["handler", "api", "$context"] as const;
     const present = surface.filter((m) => m in auth);
     expect(present).toStrictEqual([...surface]);
   });
 
-  it("呼ぶたびに別 instance を返す (per-request lazy)", () => {
-    const a = getAuth(TEST_ENV);
-    const b = getAuth(TEST_ENV);
+  it("呼ぶたびに別 instance を返す (cache 無し、per-request lazy)", () => {
+    const a = buildAuth(TEST_ENV);
+    const b = buildAuth(TEST_ENV);
     expect(a).not.toBe(b);
   });
 
   it("AUTH_ALLOWED_EMAILS が空なら open mode の warn を出す", () => {
-    getAuth({ ...TEST_ENV, AUTH_ALLOWED_EMAILS: "" });
+    buildAuth({ ...TEST_ENV, AUTH_ALLOWED_EMAILS: "" });
     expect(warnSpy).toHaveBeenCalled();
     const message = String(warnSpy.mock.calls[0]?.[0] ?? "");
     expect(message).toMatch(/AUTH_ALLOWED_EMAILS is empty/);
   });
 
   it("AUTH_ALLOWED_EMAILS に値があれば warn を出さない", () => {
-    getAuth(TEST_ENV);
+    buildAuth(TEST_ENV);
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("getAuth (isolate cache 経由)", () => {
+  beforeEach(() => _resetAuthCacheForTest());
+  afterEach(() => _resetAuthCacheForTest());
+
+  it("同 env で 2 回呼ぶと同 instance を返す (cache hit)", () => {
+    const a = getAuth(TEST_ENV);
+    const b = getAuth(TEST_ENV);
+    expect(a).toBe(b);
+  });
+
+  it("env が変わると別 instance を返す (cache miss + 差し替え)", () => {
+    const a = getAuth(TEST_ENV);
+    const b = getAuth({ ...TEST_ENV, BETTER_AUTH_SECRET: "y".repeat(32) });
+    expect(a).not.toBe(b);
+  });
+
+  it("_resetAuthCacheForTest で cache がクリアされる", () => {
+    const a = getAuth(TEST_ENV);
+    _resetAuthCacheForTest();
+    const b = getAuth(TEST_ENV);
+    expect(a).not.toBe(b);
+  });
+});
+
+describe("authCacheKey", () => {
+  it("同 env なら同 key", () => {
+    expect(authCacheKey(TEST_ENV)).toStrictEqual(authCacheKey(TEST_ENV));
+  });
+
+  it("BETTER_AUTH_SECRET が変わると key が変わる", () => {
+    const a = authCacheKey(TEST_ENV);
+    const b = authCacheKey({ ...TEST_ENV, BETTER_AUTH_SECRET: "z".repeat(32) });
+    expect(a).not.toStrictEqual(b);
+  });
+
+  it("AUTH_ALLOWED_EMAILS の有無で key が変わる (allowlist 変更を即反映)", () => {
+    const a = authCacheKey({ ...TEST_ENV, AUTH_ALLOWED_EMAILS: "a@x" });
+    const b = authCacheKey({ ...TEST_ENV, AUTH_ALLOWED_EMAILS: "b@x" });
+    expect(a).not.toStrictEqual(b);
   });
 });
 
