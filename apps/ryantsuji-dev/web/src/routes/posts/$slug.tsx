@@ -77,7 +77,7 @@ const renderPostServer = createServerFn()
  */
 const loadEngagementServer = createServerFn()
   .inputValidator((data: unknown) => SlugSchema.parse(data))
-  .handler(async ({ data: slug }) => runLoadEngagement(slug));
+  .handler(async ({ data: slug, context }) => runLoadEngagement(context.env, slug));
 
 /**
  * server function: like を toggle。auth 必須。未認証で呼ばれたら UNAUTHENTICATED を throw。
@@ -86,7 +86,7 @@ const loadEngagementServer = createServerFn()
  */
 const toggleLikeServer = createServerFn()
   .inputValidator((data: unknown) => SlugSchema.parse(data))
-  .handler(async ({ data: slug }) => runToggleLike(slug));
+  .handler(async ({ data: slug, context }) => runToggleLike(context.env, slug));
 
 /**
  * server function: comment 投稿。auth 必須。空 body / 上限超は server 側でも reject。
@@ -95,7 +95,7 @@ const toggleLikeServer = createServerFn()
  */
 const addCommentServer = createServerFn()
   .inputValidator((data: unknown) => CommentInputSchema.parse(data))
-  .handler(async ({ data }) => runAddComment(data));
+  .handler(async ({ data, context }) => runAddComment(context.env, data));
 
 /** @graph-connects tanstack-router [provides] /posts/$slug route */
 export const Route = createFileRoute("/posts/$slug")({

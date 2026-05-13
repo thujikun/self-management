@@ -8,6 +8,7 @@ ryantsuji.dev のフロントエンド + API。**TanStack Start (SSR + RSC) + Ho
 - TanStack Query を root context に同居 (loader / hook で共有 cache)
 - Hono を `/api/*` の catch-all に embed (RPC type を `ApiType` として export)
 - **RSC 有効化** (`tanstackStart({ rsc: { enabled: true } })` + `@vitejs/plugin-rsc`)。`createServerFn` の handler 経由で重 dep (shiki / unified) は **rsc env のみに bundle** され client / ssr bundle に漏れない
+- **CF Workers binding を `context.env` で型付きアクセス** (`process.env` 経路は廃止)
 - 1 CF Worker に SSR + API を統合 (deploy unit を 1 つに)
 
 ## ビルド構造
@@ -22,7 +23,30 @@ ryantsuji.dev のフロントエンド + API。**TanStack Start (SSR + RSC) + Ho
 | client | hydration + flight stream consumer | `dist/client/` |
 | ssr | initial HTML render (client bundle と同 input) | `dist/server/` |
 
-`server.ts` (Worker entry) は `dist/server/server.js` を import し CF Workers の `fetch(req, env, ctx)` 形式に変換。
+`@cloudflare/vite-plugin` が ssr environment を Worker module に変換し、`wrangler.jsonc:main`
+で指す `src/server.ts` (本 app 固有 Worker entry) が `(req, env, ctx)` を TanStack Start
+handler の `requestContext` に forward する。
+
+## env binding (CF Workers)
+
+`src/start.ts` で `Register['server']['requestContext']` を `{ env: Env; ctx: ExecutionContext }`
+に augment。各 server fn / route handler から `context.env.<BINDING>` で型付きアクセス。
+
+```ts
+// 例: api/auth route
+export function authHandler({ request, context }: { request: Request; context: { env: Env } }) {
+  return getAuth(context.env).handler(request);
+}
+
+// 例: posts/$slug の createServerFn
+const loadEngagementServer = createServerFn()
+  .inputValidator(...)
+  .handler(async ({ data, context }) => runLoadEngagement(context.env, data));
+```
+
+dev 環境 (`vite dev`) では `@cloudflare/vite-plugin` が `.dev.vars` を `env` に inject。
+production (Workers) では `wrangler secret put` で設定した secret + `wrangler.jsonc:vars` が
+`env` に入る。
 
 ## 開発
 
@@ -31,23 +55,84 @@ ryantsuji.dev のフロントエンド + API。**TanStack Start (SSR + RSC) + Ho
 cd ../../..
 pnpm install
 
-# 2. dev server
+# 2. .dev.vars に dev 用 env を書く (gitignore 済)
 cd apps/ryantsuji-dev/web
+cat > .dev.vars <<EOF
+DATABASE_URL=postgresql://...
+BETTER_AUTH_SECRET=$(openssl rand -hex 32)
+BETTER_AUTH_URL=http://localhost:3000
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+X_OAUTH2_CLIENT_ID=...
+X_OAUTH2_CLIENT_SECRET=...
+AUTH_ALLOWED_EMAILS=ryan@example.com
+EOF
+
+# 3. dev server
 pnpm dev          # http://localhost:3000
 
-# 3. CF Workers にデプロイ
-pnpm deploy:dry   # build + dry-run (確認)
-pnpm deploy       # 本番 deploy (要 wrangler login)
+# 4. build + dry-run
+pnpm deploy:dry
 ```
 
-初回 deploy で `https://ryantsuji-dev-web.<account>.workers.dev` に publish される。
+## 本番 deploy 手順 (初回)
 
-## カスタムドメイン (`ryantsuji.dev`)
+1. **wrangler login** (1 度だけ)
 
-初回 worker deploy 後に、`infra/ryantsuji-dev/` の Pulumi スタック側で
-`cloudflare.WorkerCustomDomain` リソースを追加して `ryantsuji.dev` に bind する。
+   ```bash
+   pnpm exec wrangler login
+   ```
 
-(`wrangler.jsonc` 側に書く方式もあるが、Pulumi で declarative に管理する方が drift しない)
+2. **secret を登録** (6 個、`AUTH_ALLOWED_EMAILS` は vars でも secret でも可)
+
+   ```bash
+   cd apps/ryantsuji-dev/web
+   pnpm exec wrangler secret put DATABASE_URL              # Neon pooled URL
+   pnpm exec wrangler secret put BETTER_AUTH_SECRET        # openssl rand -hex 32
+   pnpm exec wrangler secret put BETTER_AUTH_URL           # https://ryantsuji.dev
+   pnpm exec wrangler secret put GITHUB_CLIENT_ID
+   pnpm exec wrangler secret put GITHUB_CLIENT_SECRET
+   pnpm exec wrangler secret put X_OAUTH2_CLIENT_ID
+   pnpm exec wrangler secret put X_OAUTH2_CLIENT_SECRET
+   pnpm exec wrangler secret put AUTH_ALLOWED_EMAILS       # ryan@example.com (CSV)
+   ```
+
+   secret 値は **`gcloud secrets versions access`** で個人 GCP project の secret container
+   から取り出して貼る (`docs/guidelines/secrets.md` 参照、SSoT は GCP Secret Manager)。
+
+3. **dry-run でビルド成功 + binding を確認**
+
+   ```bash
+   pnpm deploy:dry   # 出力に env.ASSETS / secret list が並ぶこと
+   ```
+
+4. **初回 deploy** (workers.dev preview に publish)
+
+   ```bash
+   pnpm deploy
+   ```
+
+   `https://ryantsuji-dev-web.<account>.workers.dev` に上がる。`/sign-in` で OAuth →
+   `/account` → `/posts/<slug>` で view +1 / like / comment を手動 smoke。
+
+5. **カスタムドメイン bind** (deploy 成功後、Pulumi 経由)
+
+   ```bash
+   cd ../../../infra/ryantsuji-dev
+   # index.ts に cloudflare.WorkerCustomDomain (ryantsuji.dev + www) を追加
+   pnpm exec pulumi up
+   ```
+
+6. **`wrangler.jsonc:routes`** で apex / www の custom_domain を有効化 (上記 Pulumi で
+   override 不可なら wrangler 側に書く、現状は **wrangler 側に既に記述**)
+
+## 通常運用 (2 回目以降)
+
+```bash
+pnpm deploy       # build + 本番 deploy。secret は keep される
+```
+
+secret を 1 個だけ rotate する場合: `pnpm exec wrangler secret put <NAME>`。
 
 ## 後続 PR
 

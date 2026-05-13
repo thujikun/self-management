@@ -11,3 +11,6 @@ threads/
 
 # TanStack Router 自動生成 routeTree (gitignore 済、generator 出力を直接 commit しない方針)
 **/routeTree.gen.ts
+
+# Wrangler の build artifact (`pnpm build` で .wrangler/ が生成される、gitignore 済)
+.wrangler/

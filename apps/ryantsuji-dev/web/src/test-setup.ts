@@ -20,10 +20,28 @@
 
 import { vi } from "vitest";
 
+/**
+ * test 用に注入する **fake Env binding** (CF Workers の `context.env` shape)。
+ * `createServerFn` passthrough mock が handler に渡す context.env をここで定義し、
+ * env 経路 (`context.env.DATABASE_URL` 等) を踏む統合 test を成立させる。
+ *
+ * @graph-connects none
+ */
+export const TEST_FAKE_ENV = {
+  ASSETS: {} as unknown,
+  DATABASE_URL: "postgresql://test:test@host.neon.tech/db?sslmode=require",
+  BETTER_AUTH_SECRET: "x".repeat(32),
+  BETTER_AUTH_URL: "http://localhost:3000",
+  GITHUB_CLIENT_ID: "g",
+  GITHUB_CLIENT_SECRET: "g",
+  X_OAUTH2_CLIENT_ID: "x",
+  X_OAUTH2_CLIENT_SECRET: "x",
+} as const;
+
 vi.mock("@tanstack/react-start", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-start")>();
   type Validator = (data: unknown) => unknown;
-  type Handler = (args: { data: unknown }) => unknown;
+  type Handler = (args: { data: unknown; context: unknown }) => unknown;
 
   function createMock() {
     let validator: Validator | null = null;
@@ -35,7 +53,9 @@ vi.mock("@tanstack/react-start", async (importOriginal) => {
       handler(fn: Handler) {
         return async (args: { data: unknown } = { data: undefined }) => {
           const data = validator ? validator(args.data) : args.data;
-          return await fn({ data });
+          // production では Worker が (req, env, ctx) を context に詰めるが、test では
+          // TEST_FAKE_ENV を fake binding として handler に渡し、env 経路を踏む。
+          return await fn({ data, context: { env: TEST_FAKE_ENV, ctx: {} } });
         };
       },
     };
