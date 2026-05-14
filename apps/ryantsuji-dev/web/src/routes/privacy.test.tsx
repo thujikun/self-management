@@ -1,0 +1,41 @@
+/**
+ * `/privacy` (privacy policy) のユニット test。
+ *
+ * OAuth provider が要求する Privacy Policy URL の実体ページが render され、必須項目
+ * (連絡先 / 取得 data / third-party 一覧 / 削除手順) が含まれることを確認する。
+ *
+ * @graph-stack ryantsuji-dev
+ * @graph-domain publishing
+ * @graph-business privacy route の SSR contract 保証。連絡先 email / data collection 説明 / Neon / Cloudflare / GitHub / X の third-party 明示 / 削除手順 が壊れていないことを SSR で確認
+ * @graph-connects none
+ */
+
+import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
+import { renderToString } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+
+import { getRouter } from "../router.js";
+import { Route } from "./privacy.js";
+
+describe("/privacy", () => {
+  it("Route export は object として実体化されている", () => {
+    expect(Route).toBeTypeOf("object");
+    expect(Route).not.toBeNull();
+  });
+
+  it("Privacy Policy ページが必須項目を含めて SSR される", async () => {
+    const router = getRouter({
+      history: createMemoryHistory({ initialEntries: ["/privacy"] }),
+    });
+    await router.load();
+    const html = renderToString(<RouterProvider router={router} />);
+    expect(html).toMatch(/<h1>Privacy Policy<\/h1>/);
+    expect(html).toContain("tsuji.0107@gmail.com");
+    expect(html).toContain("Neon");
+    expect(html).toContain("Cloudflare");
+    expect(html).toContain("GitHub OAuth");
+    expect(html).toContain("X OAuth 2.0");
+    expect(html).toContain("Retention");
+    expect(html).toMatch(/← back to home/);
+  });
+});
