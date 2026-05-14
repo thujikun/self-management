@@ -417,6 +417,46 @@ export const xOauth2ClientIdSecretId = authSecrets["x-oauth2-client-id"].id;
 export const xOauth2ClientSecretSecretId = authSecrets["x-oauth2-client-secret"].id;
 
 /**
+ * Cloudflare API token (Workers deploy 用)。
+ *
+ * 用途: `wrangler deploy` / `wrangler secret put` を non-interactive (Bash tool /
+ * CI) から叩く時に `CLOUDFLARE_API_TOKEN` env として必要。Ryan が CF Dashboard
+ * (https://dash.cloudflare.com/profile/api-tokens) で **minimal scope** の
+ * custom token を発行して `gcloud secrets versions add cloudflare-api-token` で
+ * 投入する運用。Pulumi は container と IAM のみ管理。
+ *
+ * scope (Create Custom Token で必要なだけ):
+ * - Account permission: `Workers Scripts: Edit`
+ * - Zone permission: `Workers Routes: Edit` on `ryantsuji.dev`
+ *
+ * (Account Settings: Read は `wrangler whoami` で必要、deploy だけなら不要)
+ *
+ * 消費経路:
+ * - dev (.envrc): `gcloud secrets versions access` で `CLOUDFLARE_API_TOKEN` を export
+ * - CI / Bash tool: 同 env 経由で wrangler が non-interactive deploy 可能に
+ *
+ * @graph-connects secret-manager [writes_to] cloudflare-api-token secret container
+ */
+const cloudflareApiTokenSecret = new gcp.secretmanager.Secret(
+  "cloudflare-api-token",
+  {
+    secretId: "cloudflare-api-token",
+    replication: { auto: {} },
+  },
+  { dependsOn: [apiServices["secretmanager"]] },
+);
+
+/** @graph-connects iam [writes_to] graph-app SA に cloudflare-api-token secret の read 権限 */
+new gcp.secretmanager.SecretIamMember("graph-cloudflare-api-token-accessor", {
+  secretId: cloudflareApiTokenSecret.id,
+  role: "roles/secretmanager.secretAccessor",
+  member: pulumi.interpolate`serviceAccount:${graphSa.email}`,
+});
+
+/** @graph-connects none */
+export const cloudflareApiTokenSecretId = cloudflareApiTokenSecret.id;
+
+/**
  * xmcp (X API MCP server) の OAuth credentials。
  *
  * 構成:
