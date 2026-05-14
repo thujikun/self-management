@@ -49,6 +49,20 @@ const CommentInputSchema = z.object({
 });
 
 /**
+ * loadEngagement 用の input schema。slug + post meta (title / publishedAt) を受ける。
+ * post meta は `posts` 行の upsert に使う (FK target 確保)。
+ *
+ * @graph-connects none
+ */
+const EngagementInputSchema = z.object({
+  slug: z.string().min(1),
+  post: z.object({
+    title: z.string().min(1),
+    publishedAt: z.string().min(1),
+  }),
+});
+
+/**
  * server function: slug → markdown source 取得 → renderMarkdown で render。
  * shiki / unified は本 handler 内 import 経由で rsc env だけに bundle される。
  *
@@ -76,8 +90,8 @@ const renderPostServer = createServerFn()
  * @graph-connects content [calls] runLoadEngagement へ委譲
  */
 const loadEngagementServer = createServerFn()
-  .inputValidator((data: unknown) => SlugSchema.parse(data))
-  .handler(async ({ data: slug, context }) => runLoadEngagement(context.env, slug));
+  .inputValidator((data: unknown) => EngagementInputSchema.parse(data))
+  .handler(async ({ data, context }) => runLoadEngagement(context.env, data));
 
 /**
  * server function: like を toggle。auth 必須。未認証で呼ばれたら UNAUTHENTICATED を throw。
@@ -100,10 +114,16 @@ const addCommentServer = createServerFn()
 /** @graph-connects tanstack-router [provides] /posts/$slug route */
 export const Route = createFileRoute("/posts/$slug")({
   loader: async ({ params }) => {
-    const [doc, engagement] = await Promise.all([
-      renderPostServer({ data: params.slug }),
-      loadEngagementServer({ data: params.slug }),
-    ]);
+    // renderPost を先に解決して frontmatter (title / publishedAt) を取り出し、
+    // posts 行の upsert に使う。Promise.all で並列化できない (engagement が
+    // frontmatter に依存) ので serial。
+    const doc = await renderPostServer({ data: params.slug });
+    const engagement = await loadEngagementServer({
+      data: {
+        slug: params.slug,
+        post: { title: doc.frontmatter.title, publishedAt: doc.frontmatter.publishedAt },
+      },
+    });
     return { ...doc, engagement };
   },
   component: PostDetail,
