@@ -102,6 +102,23 @@ describe("runFixJob", () => {
     expect(harness.worktreeOps).toStrictEqual(["create-9", "remove-9"]);
   });
 
+  it("exit !=0 (runtime failure, 例: auth error): parse 試行せず record、push 検証 skip", async () => {
+    const { deps, harness } = makeDeps(
+      "Invalid API key · Fix external API key",
+      { before: "AAA", after: "AAA", origin: "AAA" },
+      { exitCode: 1 },
+    );
+    const { input, getState } = makeInput({ prs: { "9": { iterations: 2 } } });
+    await runFixJob(input, deps);
+    const after = getState().prs["9"];
+    expect(after?.lastAddressedCommentId).toStrictEqual(undefined);
+    expect(after?.iterations).toStrictEqual(2);
+    expect(after?.fixFailureCount).toStrictEqual(1);
+    expect(after?.lastFailedFixCommentId).toStrictEqual(12345);
+    // fetch も push 検証も走らない (early return)
+    expect(harness.fetched).toStrictEqual([]);
+  });
+
   it("FIX_FAILED: 失敗記録のみ (commentId bookmark せず)、push 検証 skip", async () => {
     const { deps, harness } = makeDeps("<!-- FIX_FAILED:conflict 解消できず -->\n", {
       before: "AAA",
