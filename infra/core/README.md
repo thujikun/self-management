@@ -107,8 +107,9 @@ pulumi destroy
 repo settings → Secrets and variables → Actions:
 
 **Secrets**:
-- `PULUMI_ACCESS_TOKEN` — Pulumi Cloud personal access token (`pulumi auth tokens list` で確認、`app.pulumi.com/account/tokens` で発行)
-- `PULUMI_CONFIG_PASSPHRASE` — stack config 暗号化 passphrase (`.config/pulumi-passphrase` と同値)
+- `PULUMI_ACCESS_TOKEN` — Pulumi Cloud personal access token (`app.pulumi.com/account/tokens` で発行)
+
+Pulumi state encryption は Cloud KMS で完結するため `PULUMI_CONFIG_PASSPHRASE` は不要 (passphrase-encrypted な `secure:` config を残さない方針)。Cloudflare provider token は WIF 経由で `cloudflare-api-token` secret から workflow が動的取得する (yaml に直書きしない)。
 
 **Variables** (secret じゃない、値は公開しても害なし):
 - `GCP_PROJECT_ID` = `ryan-self-management`

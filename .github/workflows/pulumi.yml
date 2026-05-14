@@ -9,11 +9,14 @@
 #
 # secrets / vars (GitHub repo settings):
 # - secret: PULUMI_ACCESS_TOKEN (Pulumi Cloud personal access token)
-# - secret: PULUMI_CONFIG_PASSPHRASE (stack config 暗号化)
 # - var: GCP_PROJECT_ID (例: "ryan-self-management")
 # - var: GCP_PROJECT_NUMBER (例: "600456222971"、WIF provider URI 構築用)
 # - var: PULUMI_CI_SA_EMAIL (例: "pulumi-ci@ryan-self-management.iam.gserviceaccount.com")
 # - var: PULUMI_ORG (例: "tsuji-0107-gmail-com")
+#
+# 注: Pulumi state encryption は Cloud KMS で完結するため PULUMI_CONFIG_PASSPHRASE は不要。
+# Cloudflare provider token は WIF 経由で GCP Secret Manager `cloudflare-api-token` から
+# 動的取得し、CLOUDFLARE_API_TOKEN env として step に flow する (ryantsuji-dev job のみ必要)。
 name: Pulumi
 
 on:
@@ -69,7 +72,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID }}
 
   ryantsuji-dev:
@@ -87,10 +89,22 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Authenticate to Google Cloud (WIF)
+        id: gcp-auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions/providers/github-actions
           service_account: ${{ vars.PULUMI_CI_SA_EMAIL }}
+
+      # ryantsuji-dev stack の cloudflare provider は CLOUDFLARE_API_TOKEN env を読む。
+      # Secret Manager から動的取得して job env に注入 (workflow yaml に直書きしない)。
+      - name: Fetch CLOUDFLARE_API_TOKEN from Secret Manager
+        id: cf-token
+        run: |
+          token=$(gcloud secrets versions access latest \
+            --secret=cloudflare-api-token \
+            --project=${{ vars.GCP_PROJECT_ID }})
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
 
       - name: Pulumi ${{ github.event_name == 'pull_request' && 'preview' || 'up' }}
         uses: pulumi/actions@v6
@@ -102,5 +116,5 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ steps.cf-token.outputs.token }}
