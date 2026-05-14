@@ -18,9 +18,8 @@ import { getRouter } from "../router.js";
 import { Route } from "./privacy.js";
 
 describe("/privacy", () => {
-  it("Route export は object として実体化されている", () => {
-    expect(Route).toBeTypeOf("object");
-    expect(Route).not.toBeNull();
+  it("Route の component が PrivacyPage として登録されている", () => {
+    expect(Route.options.component?.name).toStrictEqual("PrivacyPage");
   });
 
   it("Privacy Policy ページが必須項目を含めて SSR される", async () => {
@@ -30,12 +29,12 @@ describe("/privacy", () => {
     await router.load();
     const html = renderToString(<RouterProvider router={router} />);
     expect(html).toMatch(/<h1>Privacy Policy<\/h1>/);
-    expect(html).toContain("tsuji.0107@gmail.com");
-    expect(html).toContain("Neon");
-    expect(html).toContain("Cloudflare");
-    expect(html).toContain("GitHub OAuth");
-    expect(html).toContain("X OAuth 2.0");
-    expect(html).toContain("Retention");
+    expect(html).toMatch(/tsuji\.0107@gmail\.com/);
+    expect(html).toMatch(/Neon Postgres/);
+    expect(html).toMatch(/Cloudflare Workers/);
+    expect(html).toMatch(/GitHub OAuth/);
+    expect(html).toMatch(/X OAuth 2\.0/);
+    expect(html).toMatch(/Retention/);
     expect(html).toMatch(/← back to home/);
   });
 });

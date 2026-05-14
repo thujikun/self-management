@@ -1,7 +1,8 @@
 /**
  * `/posts/$slug` — 投稿詳細 page。markdown render + engagement (views / likes / comments)。
  *
- * loader は **Promise.all で markdown + engagement を並列取得** する:
+ * loader は **renderPost → loadEngagement の serial 化**で動く:
+ * (frontmatter が engagement の post upsert に必要なため Promise.all 不可)
  * - `renderPostServer` — slug → renderMarkdown (rsc env のみで shiki/unified を bundle)
  * - `loadEngagementServer` — view count を +1 + likes summary + comments list を 1 まとめ取得
  *

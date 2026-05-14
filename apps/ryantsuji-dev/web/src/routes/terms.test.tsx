@@ -18,9 +18,8 @@ import { getRouter } from "../router.js";
 import { Route } from "./terms.js";
 
 describe("/terms", () => {
-  it("Route export は object として実体化されている", () => {
-    expect(Route).toBeTypeOf("object");
-    expect(Route).not.toBeNull();
+  it("Route の component が TermsPage として登録されている", () => {
+    expect(Route.options.component?.name).toStrictEqual("TermsPage");
   });
 
   it("Terms of Service ページが必須項目を含めて SSR される", async () => {
@@ -30,11 +29,11 @@ describe("/terms", () => {
     await router.load();
     const html = renderToString(<RouterProvider router={router} />);
     expect(html).toMatch(/<h1>Terms of Service<\/h1>/);
-    expect(html).toContain("Acceptable use");
-    expect(html).toContain("No warranty");
-    expect(html).toContain("Governing law");
-    expect(html).toContain("Japan");
-    expect(html).toContain("tsuji.0107@gmail.com");
+    expect(html).toMatch(/Acceptable use/);
+    expect(html).toMatch(/No warranty/);
+    expect(html).toMatch(/Governing law/);
+    expect(html).toMatch(/Japan/);
+    expect(html).toMatch(/tsuji\.0107@gmail\.com/);
     expect(html).toMatch(/← back to home/);
   });
 });
