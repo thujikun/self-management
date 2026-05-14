@@ -5,4 +5,3 @@ config:
   # `cloudflare-api-token` container、.envrc で auto export)。
   # `pulumi config set --secret cloudflare:apiToken` で個別設定する必要はない。
   # token に必要な scope: Workers Scripts:Edit + Workers Routes:Edit (+ Zone:Read)。
-encryptionsalt: v1:6+UYcA94eco=:v1:iSyOSzMdMIYsYjUW:S5GD4g4z5PKWGRwLkx+sgCVMoH+RQg==
