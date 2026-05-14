@@ -6,7 +6,7 @@ self-management のインフラ構成 (Pulumi)。個人 GCP プロジェクト `
 
 | stack | 役割 | 依存 |
 |-------|------|------|
-| `infra/core/` | BQ dataset、service account、IAM、Secret Manager | (なし、最初) |
+| `infra/core/` | BQ dataset、service account、IAM、Secret Manager、GitHub Actions WIF (pulumi-ci SA) | (なし、最初) |
 | `infra/ryan-product-graph/` (将来) | mcp-ryan-product-graph 用 Cloud Run、Cloud Scheduler | `core` |
 
 ## 共通方針
@@ -36,8 +36,10 @@ pulumi up
 - `bqDatasetId`: 例 `ryan`
 - `graphServiceAccountEmail`: app から BQ 書き込みに使う SA
 - `graphServiceAccountKey` (secret): `apps/graph/` がローカル開発で使う JSON key
+- `pulumiCiServiceAccountEmail`: GitHub Actions Pulumi runner SA のメールアドレス (`google-github-actions/auth@v2` の `service_account` に指定)
+- `githubWifProviderResource`: WIF provider のリソース名 (`google-github-actions/auth@v2` の `workload_identity_provider` に指定)
 
-これらを `apps/graph/product/scripts/init-bq.ts` 等が参照する。
+これらを `apps/graph/product/scripts/init-bq.ts` 等が参照する。`pulumiCiServiceAccountEmail` / `githubWifProviderResource` は GitHub Actions workflow の `google-github-actions/auth@v2` ステップで参照する。
 
 ## 関連
 

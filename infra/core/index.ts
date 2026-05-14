@@ -758,19 +758,6 @@ for (const role of pulumiCiAdminRoles) {
   });
 }
 
-/**
- * pulumi-ci が graph-app SA を impersonate する用途 (一部 resource が graph-app
- * 経由でしか provision できない場合の出口)。現状は不要だが、後で `actAs` で
- * graph-app に降りる場合のために serviceAccountUser を bind しておく。
- *
- * @graph-connects iam [writes_to] pulumi-ci → graph-app の actAs 許可
- */
-new gcp.serviceaccount.IAMMember("pulumi-ci-act-as-graph", {
-  serviceAccountId: graphSa.name,
-  role: "roles/iam.serviceAccountUser",
-  member: pulumi.interpolate`serviceAccount:${pulumiCiSa.email}`,
-});
-
 /** @graph-connects none */
 export const pulumiCiServiceAccountEmail = pulumiCiSa.email;
 /** @graph-connects none */
