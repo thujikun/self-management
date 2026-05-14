@@ -21,8 +21,16 @@ import { BQ_DATASET } from "../../../schema/shared.js";
 /** since_id 取得対象の "kind"。それ以外 (liked/bookmark) は X API が since_id 非対応。 */
 export type IncrementalKind = "own" | "mention";
 
-/** @graph-connects none */
-const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT ?? "ryan-self-management";
+/**
+ * GCP project id を resolve する。env > default fallback の順。
+ * 関数として export することで、test 時に `vi.stubEnv` で両 branch (env set / unset) を網羅可能にする
+ * (module-level const だと評価が 1 回固定で片方の branch しか走らない)。
+ *
+ * @graph-connects none
+ */
+export function resolveProjectId(): string {
+  return process.env.GOOGLE_CLOUD_PROJECT ?? "ryan-self-management";
+}
 /** @graph-connects none */
 const LOCATION = "asia-northeast1";
 
@@ -53,7 +61,10 @@ export interface BqQueryClient {
  * @graph-connects bigquery [reads_from] contents 表
  */
 export function defaultBqClient(): BqQueryClient {
-  return new BigQuery({ projectId: PROJECT_ID, location: LOCATION }) as unknown as BqQueryClient;
+  return new BigQuery({
+    projectId: resolveProjectId(),
+    location: LOCATION,
+  }) as unknown as BqQueryClient;
 }
 
 /**
@@ -70,7 +81,7 @@ export async function getLastSeenTweetId(
   const filter = KIND_FILTER[kind];
   const sql = `
     SELECT CAST(MAX(CAST(external_id AS NUMERIC)) AS STRING) AS max_id
-    FROM \`${PROJECT_ID}.${BQ_DATASET}.contents\`
+    FROM \`${resolveProjectId()}.${BQ_DATASET}.contents\`
     WHERE source = 'x' AND ${filter}
   `;
   const [job] = await client.createQueryJob({
