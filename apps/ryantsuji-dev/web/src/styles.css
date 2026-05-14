@@ -601,3 +601,83 @@ main {
   white-space: nowrap;
   border: 0;
 }
+
+/* ─── /privacy, /terms (legal pages) ─── */
+
+.legal {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: var(--space-12) var(--space-6);
+}
+
+.legal__header {
+  margin-bottom: var(--space-12);
+}
+
+.legal__header h1 {
+  font-family: var(--font-family-serif);
+  font-size: var(--font-size-3xl);
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--space-2);
+}
+
+.legal__header .meta {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.legal section {
+  margin: 0 0 var(--space-8);
+}
+
+.legal h2 {
+  font-family: var(--font-family-serif);
+  font-size: var(--font-size-lg);
+  margin: 0 0 var(--space-3);
+  letter-spacing: -0.01em;
+}
+
+.legal p {
+  margin: 0 0 var(--space-3);
+  color: var(--text-primary);
+  line-height: var(--line-height-relaxed);
+}
+
+.legal ul {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-6);
+  color: var(--text-primary);
+  line-height: var(--line-height-relaxed);
+}
+
+.legal li {
+  margin-bottom: var(--space-2);
+}
+
+.legal__nav {
+  margin-top: var(--space-12);
+  font-size: var(--font-size-sm);
+}
+
+/* ─── site footer (全 page 共通) ─── */
+
+.site-footer {
+  max-width: 44rem;
+  margin: var(--space-12) auto var(--space-8);
+  padding: var(--space-6);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.site-footer a {
+  color: var(--text-muted);
+}
+
+.site-footer a:hover {
+  color: var(--text-secondary);
+}
