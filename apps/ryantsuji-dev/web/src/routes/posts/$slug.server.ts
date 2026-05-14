@@ -37,7 +37,7 @@ import {
  */
 export async function runLoadEngagement(
   env: Env,
-  slug: string,
+  args: { slug: string; post: { title: string; publishedAt: string } },
 ): Promise<{
   viewCount: string;
   likes: { count: number; liked: boolean };
@@ -46,7 +46,12 @@ export async function runLoadEngagement(
   const db = createDbFromEnv(env);
   const session = await getSessionFromHeaders(new Headers(getRequestHeaders()), env);
   const userId = session?.user.id ?? null;
-  return await loadPostEngagement(db, { slug, identifier: userId, bumpView: true });
+  return await loadPostEngagement(db, {
+    slug: args.slug,
+    identifier: userId,
+    bumpView: true,
+    post: args.post,
+  });
 }
 
 /**

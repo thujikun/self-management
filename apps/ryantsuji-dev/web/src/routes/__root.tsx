@@ -10,7 +10,13 @@
  * @graph-connects tanstack-router [provides] Root Route を export してファイルベースルーティングの起点になる
  */
 
-import { HeadContent, Outlet, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
+import {
+  HeadContent,
+  Link,
+  Outlet,
+  Scripts,
+  createRootRouteWithContext,
+} from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
@@ -53,8 +59,27 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body>
         {children}
+        <SiteFooter />
         <Scripts />
       </body>
     </html>
+  );
+}
+
+/**
+ * 全 page 共通の footer。/privacy と /terms へのリンクが OAuth provider 要件
+ * (X "Request email from users" などで公開 URL の登録を要求される) を満たす入口。
+ *
+ * @graph-connects tanstack-router [calls] Link で /privacy / /terms に飛ばす
+ */
+function SiteFooter() {
+  return (
+    <footer className="site-footer">
+      <Link to="/privacy">privacy</Link>
+      <span aria-hidden="true">·</span>
+      <Link to="/terms">terms</Link>
+      <span aria-hidden="true">·</span>
+      <a href="https://github.com/thujikun">github</a>
+    </footer>
   );
 }

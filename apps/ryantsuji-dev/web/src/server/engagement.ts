@@ -20,9 +20,40 @@
 
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
-import { comments, likes, viewCounts, type Db } from "@self/db";
+import { comments, likes, posts, viewCounts, type Db } from "@self/db";
 
 import { normalizeTimestamp, validateCommentBody } from "./engagement-validate.js";
+
+/**
+ * `posts` row が無ければ insert、有れば title / publishedAt を最新化する upsert。
+ *
+ * markdown SSoT の post に対する `comments` / `likes` / `view_counts` の FK 受け皿
+ * (posts.slug primary key) が DB 側に常に存在することを保証するため、engagement の
+ * 各 mutation の前段で呼ぶ。failure 時 (例: title が一時的に空など) も最小限の row
+ * は作るので、view counter / like の動線が壊れない。
+ *
+ * @graph-connects content [calls] posts に UPSERT (slug primary key)
+ */
+export async function ensurePost(
+  db: Db,
+  args: { slug: string; title: string; publishedAt: string },
+): Promise<void> {
+  await db
+    .insert(posts)
+    .values({
+      slug: args.slug,
+      title: args.title,
+      publishedAt: new Date(args.publishedAt),
+    })
+    .onConflictDoUpdate({
+      target: posts.slug,
+      set: {
+        title: args.title,
+        publishedAt: new Date(args.publishedAt),
+        updatedAt: sql`now()`,
+      },
+    });
+}
 
 /**
  * View count を atomic に +1 する。row が無ければ 1 で create、有れば count = count + 1。
@@ -212,12 +243,24 @@ export async function addComment(
  */
 export async function loadPostEngagement(
   db: Db,
-  args: { slug: string; identifier: string | null; bumpView: boolean },
+  args: {
+    slug: string;
+    identifier: string | null;
+    bumpView: boolean;
+    post: { title: string; publishedAt: string };
+  },
 ): Promise<{
   viewCount: string;
   likes: { count: number; liked: boolean };
   comments: CommentView[];
 }> {
+  // posts 行を毎回 upsert で確保。markdown SSoT の content 変更を DB にも反映、
+  // FK target が無くて comments / likes / view_counts が落ちるのを防ぐ。
+  await ensurePost(db, {
+    slug: args.slug,
+    title: args.post.title,
+    publishedAt: args.post.publishedAt,
+  });
   const view = args.bumpView
     ? await bumpViewCount(db, args.slug)
     : await getViewCount(db, args.slug);

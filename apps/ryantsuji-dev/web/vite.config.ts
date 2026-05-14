@@ -37,7 +37,7 @@ export default defineConfig({
     },
   },
   plugins: [
-    cloudflare({ viteEnvironment: { name: "ssr" } }),
+    cloudflare({ viteEnvironment: { name: "ssr", childEnvironments: ["rsc"] } }),
     tanstackStart({ rsc: { enabled: true }, server: { entry: "./src/server.ts" } }),
     rsc(),
     viteReact(),

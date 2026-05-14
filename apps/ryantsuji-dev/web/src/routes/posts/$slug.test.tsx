@@ -276,11 +276,10 @@ describe("/posts/$slug — engagement (SSR、認証済み)", () => {
   it("loadEngagementServer は session 経由で identifier=userId を渡す", async () => {
     await ssrAt("/posts/minimal");
     expect(mockGetSession).toHaveBeenCalled();
-    expect(mockLoadEngagement).toHaveBeenCalledWith(mockDb, {
-      slug: "minimal",
-      identifier: "u1",
-      bumpView: true,
-    });
+    expect(mockLoadEngagement).toHaveBeenCalledWith(
+      mockDb,
+      expect.objectContaining({ slug: "minimal", identifier: "u1", bumpView: true }),
+    );
   });
 });
 
@@ -293,6 +292,8 @@ describe("server fn handlers (run*)", () => {
   });
 
   describe("runLoadEngagement", () => {
+    const POST_META = { title: "Hello", publishedAt: "2026-05-10" };
+
     it("未認証 (session=null) → identifier=null で loadPostEngagement", async () => {
       mockGetSession.mockResolvedValue(null);
       mockLoadEngagement.mockResolvedValue({
@@ -300,12 +301,13 @@ describe("server fn handlers (run*)", () => {
         likes: { count: 0, liked: false },
         comments: [],
       });
-      const out = await runLoadEngagement(TEST_ENV, "foo");
+      const out = await runLoadEngagement(TEST_ENV, { slug: "foo", post: POST_META });
       expect(out.viewCount).toStrictEqual("1");
       expect(mockLoadEngagement).toHaveBeenCalledWith(mockDb, {
         slug: "foo",
         identifier: null,
         bumpView: true,
+        post: POST_META,
       });
     });
 
@@ -319,11 +321,12 @@ describe("server fn handlers (run*)", () => {
         likes: { count: 1, liked: true },
         comments: [],
       });
-      await runLoadEngagement(TEST_ENV, "bar");
+      await runLoadEngagement(TEST_ENV, { slug: "bar", post: POST_META });
       expect(mockLoadEngagement).toHaveBeenCalledWith(mockDb, {
         slug: "bar",
         identifier: "u42",
         bumpView: true,
+        post: POST_META,
       });
     });
   });

@@ -20,12 +20,14 @@
 
 import matter from "gray-matter";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
-import rehypeShiki from "@shikijs/rehype";
+import rehypeShikiFromHighlighter from "@shikijs/rehype/core";
 import rehypeSlug from "rehype-slug";
 import rehypeStringify from "rehype-stringify";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
+import { getSingletonHighlighter } from "shiki";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { unified } from "unified";
 
 import { parseFrontmatter, type Frontmatter } from "./frontmatter.js";
@@ -61,6 +63,54 @@ const SHIKI_OPTIONS = {
 } as const;
 
 /**
+ * 本サイトの post で使う最小集合の言語。**全 bundledLanguages (200+) を読み込むと
+ * CF Workers の CPU 制限を超過する** (cold start 時に highlighter compile が走るため)。
+ * 必要に応じて post を書く時に追加。
+ *
+ * @graph-connects none
+ */
+const SHIKI_LANGS = [
+  "typescript",
+  "javascript",
+  "tsx",
+  "jsx",
+  "bash",
+  "shell",
+  "json",
+  "jsonc",
+  "yaml",
+  "toml",
+  "markdown",
+  "css",
+  "html",
+  "go",
+  "python",
+  "rust",
+  "sql",
+  "diff",
+];
+
+/**
+ * shiki highlighter singleton。CF Workers runtime は wasm code generation を
+ * 許可しない (`WebAssembly.instantiate disallowed by embedder`) ので、
+ * **JavaScript regex engine** に差し替える (oniguruma WASM default を回避)。
+ *
+ * 言語を `SHIKI_LANGS` に絞ることで cold start の CPU 消費を Workers 制限内に。
+ * `@shikijs/rehype` の default entry は `getSingletonHighlighter` を engine 指定なしで
+ * 呼ぶので、明示的に core entry (`rehypeShikiFromHighlighter`) に自作 highlighter を
+ * 渡す形に切替。
+ *
+ * @graph-connects shiki [calls] getSingletonHighlighter({ engine: js-regex, langs: 限定 })
+ */
+async function getShikiHighlighter() {
+  return await getSingletonHighlighter({
+    themes: [SHIKI_OPTIONS.themes.light, SHIKI_OPTIONS.themes.dark],
+    langs: SHIKI_LANGS,
+    engine: createJavaScriptRegexEngine(),
+  });
+}
+
+/**
  * 1 つの markdown source 文字列を parse + render する。
  *
  * @graph-connects none
@@ -70,13 +120,14 @@ export async function renderMarkdown(source: string): Promise<RenderedDoc> {
   const frontmatter = parseFrontmatter(parsed.data);
   const body = parsed.content;
 
+  const highlighter = await getShikiHighlighter();
   const file = await unified()
     .use(remarkParse)
     .use(remarkGfm)
     .use(remarkRehype)
     .use(rehypeSlug)
     .use(rehypeAutolinkHeadings, { behavior: "wrap" })
-    .use(rehypeShiki, SHIKI_OPTIONS)
+    .use(rehypeShikiFromHighlighter, highlighter, SHIKI_OPTIONS)
     .use(rehypeStringify)
     .process(body);
 
