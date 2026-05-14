@@ -1,0 +1,106 @@
+# Pulumi infra workflow。
+#
+# - PR: `infra/**` 配下に変更があれば各 stack で `pulumi preview` を走らせ、
+#   PR comment に diff を貼る (pulumi/actions の `comment-on-pr` 機能)
+# - main: `infra/**` 配下に変更があれば各 stack で `pulumi up --yes` を走らせる (auto-apply)
+#
+# auth: GCP Workload Identity Federation。GitHub OIDC token を `pulumi-ci@` SA に
+# impersonate。long-lived JSON key 不使用 (infra/core/index.ts で declarative 管理)。
+#
+# secrets / vars (GitHub repo settings):
+# - secret: PULUMI_ACCESS_TOKEN (Pulumi Cloud personal access token)
+# - secret: PULUMI_CONFIG_PASSPHRASE (stack config 暗号化)
+# - var: GCP_PROJECT_ID (例: "ryan-self-management")
+# - var: GCP_PROJECT_NUMBER (例: "600456222971"、WIF provider URI 構築用)
+# - var: PULUMI_CI_SA_EMAIL (例: "pulumi-ci@ryan-self-management.iam.gserviceaccount.com")
+# - var: PULUMI_ORG (例: "tsuji-0107-gmail-com")
+name: Pulumi
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/pulumi.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/pulumi.yml"
+
+# 同一 PR / branch では先行 run を cancel して最新だけ残す。
+concurrency:
+  group: pulumi-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+# WIF を使うために id-token: write が必須。
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  core:
+    name: Pulumi core (preview on PR / up on main)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/core
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions/providers/github-actions
+          service_account: ${{ vars.PULUMI_CI_SA_EMAIL }}
+
+      - name: Pulumi ${{ github.event_name == 'pull_request' && 'preview' || 'up' }}
+        uses: pulumi/actions@v6
+        with:
+          command: ${{ github.event_name == 'pull_request' && 'preview' || 'up' }}
+          stack-name: ${{ vars.PULUMI_ORG }}/ryan
+          work-dir: infra/core
+          comment-on-pr: ${{ github.event_name == 'pull_request' }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID }}
+
+  ryantsuji-dev:
+    name: Pulumi ryantsuji-dev (preview on PR / up on main)
+    runs-on: ubuntu-latest
+    needs: core
+    defaults:
+      run:
+        working-directory: infra/ryantsuji-dev
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions/providers/github-actions
+          service_account: ${{ vars.PULUMI_CI_SA_EMAIL }}
+
+      - name: Pulumi ${{ github.event_name == 'pull_request' && 'preview' || 'up' }}
+        uses: pulumi/actions@v6
+        with:
+          command: ${{ github.event_name == 'pull_request' && 'preview' || 'up' }}
+          stack-name: ${{ vars.PULUMI_ORG }}/ryan
+          work-dir: infra/ryantsuji-dev
+          comment-on-pr: ${{ github.event_name == 'pull_request' }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID }}

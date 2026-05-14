@@ -22,6 +22,7 @@ self-management の core インフラ。
   - `cloudflare-api-token` — CF Workers deploy 用 API token (`CLOUDFLARE_API_TOKEN`)。Ryan が CF Dashboard で Workers Scripts:Edit + Workers Routes:Edit (ryantsuji.dev) の minimal scope token を発行して手動投入
 - Cloud Run job `graph-migrate` + Artifact Registry repo `self-mgmt` (graph migrate ジョブ用)
 - Grafana Cloud Stack 連携 (OTLP endpoint + write token を declarative 管理)
+- **GitHub Actions WIF** — pool `github-actions` + provider `github-actions` + SA `pulumi-ci` (long-lived key 不使用)。本 repo (thujikun/self-management) からの workflow のみ impersonate 可
 
 ## Secret 値の投入 (初回 / 更新時)
 
@@ -96,3 +97,33 @@ pulumi destroy
 ```
 
 注: `pulumi destroy` は dataset 内の table を含めて全削除する。データがあるときは慎重に。
+
+## GitHub Actions Pulumi workflow
+
+`.github/workflows/pulumi.yml` が `infra/**` 変更 PR で **preview + comment**、main merge で **`pulumi up --yes`** を auto-apply する。auth は WIF (GitHub OIDC → `pulumi-ci@` SA、long-lived key 不使用)。
+
+### 必要な GitHub secrets / variables
+
+repo settings → Secrets and variables → Actions:
+
+**Secrets**:
+- `PULUMI_ACCESS_TOKEN` — Pulumi Cloud personal access token (`pulumi auth tokens list` で確認、`app.pulumi.com/account/tokens` で発行)
+- `PULUMI_CONFIG_PASSPHRASE` — stack config 暗号化 passphrase (`.config/pulumi-passphrase` と同値)
+
+**Variables** (secret じゃない、値は公開しても害なし):
+- `GCP_PROJECT_ID` = `ryan-self-management`
+- `GCP_PROJECT_NUMBER` = `600456222971` (`gcloud projects describe ryan-self-management --format="value(projectNumber)"`)
+- `PULUMI_CI_SA_EMAIL` = `pulumi-ci@ryan-self-management.iam.gserviceaccount.com`
+- `PULUMI_ORG` = `tsuji-0107-gmail-com` (Pulumi Cloud organization slug)
+
+### bootstrap (初回のみ、手で 1 回 `pulumi up` を local から)
+
+WIF pool / provider / pulumi-ci SA は本 stack で declarative 管理されているが、stack 自体を初回 apply する時はまだ pool が存在しないので、**ローカル credential** で 1 回 up を回す必要がある。2 回目以降は CI が WIF で自走する。
+
+```bash
+cd infra/core
+direnv allow
+pnpm exec pulumi up    # local backend → cloud backend どちらでも OK
+```
+
+これで pool / provider / SA が作成された後、上記の secrets / vars を GitHub に投入すれば CI で動く。

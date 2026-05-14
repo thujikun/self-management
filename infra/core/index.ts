@@ -649,6 +649,132 @@ export const artifactRegistryRepoId = arRepo.repositoryId;
 /** @graph-connects none */
 export const graphMigrateJobName = graphMigrateJob.name;
 
+/**
+ * GitHub Actions OIDC → GCP impersonation (Workload Identity Federation)。
+ *
+ * GitHub Actions の OIDC token を直接 GCP service account に変換 (long-lived JSON key
+ * 不使用)。`pulumi-ci` SA に CI 実行に必要な admin role を集約し、本 repository から
+ * 起動された workflow のみがその SA を借りられるよう attribute condition で絞り込む。
+ *
+ * pool / provider / SA / IAM bindings は本 stack で一括 declarative 管理。初回 `pulumi up`
+ * で pool 作成 → provider URI と SA email が outputs に出る → GitHub Actions workflow が
+ * その値を参照して `google-github-actions/auth@v2` で impersonate する流れ。
+ *
+ * security 設計:
+ * - attribute condition で `repository == thujikun/self-management` のみ許可
+ *   (他 repo / fork からの impersonation を防ぐ)
+ * - SA の権限は graph-app と同 admin role (CI で Pulumi up を回すために必要)
+ * - secret 値 (CF token / DB URL 等) は SA 経由 secretAccessor で動的取得 (workflow yaml に直書きしない)
+ *
+ * @graph-stack core
+ * @graph-domain infra
+ * @graph-business GitHub Actions から Pulumi up を回すための WIF 構成。OIDC で SA impersonation
+ *   して JSON key を持たずに済ませる pattern。pool / provider / SA / IAM bindings を declarative 管理
+ * @graph-connects iam [writes_to] WIF pool + provider + pulumi-ci SA + admin IAM bindings
+ * @graph-connects github-actions [delegates_to] OIDC token を pulumi-ci SA に変換する経路
+ */
+/** @graph-connects iam [writes_to] CI 専用 SA (Pulumi up 用) */
+const pulumiCiSa = new gcp.serviceaccount.Account("pulumi-ci-sa", {
+  accountId: "pulumi-ci",
+  displayName: "GitHub Actions Pulumi runner (WIF, no key)",
+  description: "Impersonated via WIF from GitHub Actions to run pulumi preview / up.",
+});
+
+/** @graph-connects iam [writes_to] WIF pool (GitHub OIDC trust の入口) */
+const githubWifPool = new gcp.iam.WorkloadIdentityPool(
+  "github-actions-pool",
+  {
+    workloadIdentityPoolId: "github-actions",
+    displayName: "GitHub Actions",
+    description: "OIDC trust for GitHub Actions in thujikun/self-management.",
+  },
+  { dependsOn: [apiServices["iam"]] },
+);
+
+/**
+ * GitHub OIDC issuer (`token.actions.githubusercontent.com`) を pool に bind。
+ *
+ * `attribute_condition` で本 repository からの token のみ許可。fork や別 org からの
+ * 流入をブロックする (Google 公式推奨 pattern)。
+ *
+ * @graph-connects iam [writes_to] OIDC provider with attribute condition
+ */
+const githubWifProvider = new gcp.iam.WorkloadIdentityPoolProvider("github-actions-provider", {
+  workloadIdentityPoolId: githubWifPool.workloadIdentityPoolId,
+  workloadIdentityPoolProviderId: "github-actions",
+  displayName: "GitHub Actions",
+  description: "GitHub OIDC provider (thujikun/self-management only).",
+  attributeMapping: {
+    "google.subject": "assertion.sub",
+    "attribute.repository": "assertion.repository",
+    "attribute.ref": "assertion.ref",
+    "attribute.actor": "assertion.actor",
+  },
+  attributeCondition: 'assertion.repository == "thujikun/self-management"',
+  oidc: {
+    issuerUri: "https://token.actions.githubusercontent.com",
+  },
+});
+
+/**
+ * pulumi-ci SA に WIF からの impersonation を許可。`principalSet://...` で
+ * pool 配下の特定 attribute (repository) 経由の subject 群を許可する。
+ *
+ * @graph-connects iam [writes_to] pulumi-ci SA に workloadIdentityUser を bind
+ */
+new gcp.serviceaccount.IAMMember("pulumi-ci-wif-binding", {
+  serviceAccountId: pulumiCiSa.name,
+  role: "roles/iam.workloadIdentityUser",
+  member: pulumi.interpolate`principalSet://iam.googleapis.com/${githubWifPool.name}/attribute.repository/thujikun/self-management`,
+});
+
+/**
+ * pulumi-ci SA に Pulumi up に必要な admin role 群を bind (graph-app と同セット)。
+ * stack を実 apply するため admin 権限が要る。`dependsOn` は不要 (SA 作成順は宣言順)。
+ *
+ * @graph-connects iam [writes_to] pulumi-ci SA に Pulumi 実行 admin role bind
+ */
+const pulumiCiAdminRoles = [
+  "roles/serviceusage.serviceUsageAdmin",
+  "roles/resourcemanager.projectIamAdmin",
+  "roles/iam.serviceAccountAdmin",
+  "roles/iam.serviceAccountKeyAdmin",
+  "roles/iam.workloadIdentityPoolAdmin",
+  "roles/compute.networkViewer",
+  "roles/secretmanager.admin",
+  "roles/bigquery.admin",
+  "roles/aiplatform.admin",
+  "roles/run.admin",
+  "roles/artifactregistry.admin",
+  "roles/cloudscheduler.admin",
+];
+for (const role of pulumiCiAdminRoles) {
+  const slug = role.replace(/^roles\//, "").replace(/\./g, "-");
+  new gcp.projects.IAMMember(`pulumi-ci-${slug}`, {
+    project: projectId,
+    role,
+    member: pulumi.interpolate`serviceAccount:${pulumiCiSa.email}`,
+  });
+}
+
+/**
+ * pulumi-ci が graph-app SA を impersonate する用途 (一部 resource が graph-app
+ * 経由でしか provision できない場合の出口)。現状は不要だが、後で `actAs` で
+ * graph-app に降りる場合のために serviceAccountUser を bind しておく。
+ *
+ * @graph-connects iam [writes_to] pulumi-ci → graph-app の actAs 許可
+ */
+new gcp.serviceaccount.IAMMember("pulumi-ci-act-as-graph", {
+  serviceAccountId: graphSa.name,
+  role: "roles/iam.serviceAccountUser",
+  member: pulumi.interpolate`serviceAccount:${pulumiCiSa.email}`,
+});
+
+/** @graph-connects none */
+export const pulumiCiServiceAccountEmail = pulumiCiSa.email;
+/** @graph-connects none */
+export const githubWifProviderResource = githubWifProvider.name;
+
 /** @graph-connects none */
 export const datasetId = ryanDataset.datasetId;
 /** @graph-connects none */
