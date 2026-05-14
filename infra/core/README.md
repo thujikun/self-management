@@ -19,6 +19,7 @@ self-management の core インフラ。
   - `neon-database-url` — Neon Postgres connection string (`DATABASE_URL`)
   - `xmcp-app-credentials` — X dev app の consumer key/secret + bearer token
   - `xmcp-user-{ryantsuji,ryanaircloset}` — X user account の OAuth1 access token
+  - `cloudflare-api-token` — CF Workers deploy 用 API token (`CLOUDFLARE_API_TOKEN`)。Ryan が CF Dashboard で Workers Scripts:Edit + Workers Routes:Edit (ryantsuji.dev) の minimal scope token を発行して手動投入
 - Cloud Run job `graph-migrate` + Artifact Registry repo `self-mgmt` (graph migrate ジョブ用)
 - Grafana Cloud Stack 連携 (OTLP endpoint + write token を declarative 管理)
 

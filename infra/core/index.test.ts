@@ -61,6 +61,7 @@ describe("infra/core stack", () => {
     expect(m.XMCP_ACCOUNTS).toEqual(["ryantsuji", "ryanaircloset"]);
     expect(m.artifactRegistryRepoId).toBeDefined();
     expect(m.graphMigrateJobName).toBeDefined();
+    expect(m.cloudflareApiTokenSecretId).toBeDefined();
   });
 
   it("datasetId は 'ryan'", async () => {
