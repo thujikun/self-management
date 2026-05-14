@@ -124,6 +124,19 @@ log(
   `state loaded: ${Object.keys(state.prs).length} PR entries, lastIndexedMainSha=${state.global?.lastIndexedMainSha ?? "<none>"}`,
 );
 
+// bot が spawn する `claude -p` は env に CLAUDE_CODE_OAUTH_TOKEN があれば Keychain を読まない。
+// 無いと interactive Claude Code と Keychain OAuth credential を共有することになり、
+// refresh token rotation が衝突して interactive 側が logout される (実測: 短時間で複数 logout)。
+// `claude setup-token` で long-lived token を発行し `.envrc.local` 等で export しておくこと
+if (process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+  log("[auto-review]", `auth: CLAUDE_CODE_OAUTH_TOKEN is set (isolated from Keychain)`);
+} else {
+  warn(
+    "[auto-review]",
+    `auth: CLAUDE_CODE_OAUTH_TOKEN is NOT set — bot will share Keychain OAuth with interactive Claude Code sessions, which can cause logout. Run \`claude setup-token\` and export the token to fix`,
+  );
+}
+
 const queue = new JobQueue({ maxConcurrent: MAX_CONCURRENT });
 
 async function update(updater: (s: State) => State): Promise<State> {
