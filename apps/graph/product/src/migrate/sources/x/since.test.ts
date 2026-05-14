@@ -7,8 +7,14 @@
  * @graph-connects none
  */
 
-import { describe, expect, it, vi } from "vitest";
-import { KIND_FILTER, defaultBqClient, getLastSeenTweetId, type BqQueryClient } from "./since.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  KIND_FILTER,
+  defaultBqClient,
+  getLastSeenTweetId,
+  resolveProjectId,
+  type BqQueryClient,
+} from "./since.js";
 
 function makeMockClient(rows: Array<Record<string, unknown>>): {
   client: BqQueryClient;
@@ -42,6 +48,20 @@ describe("KIND_FILTER", () => {
     expect(KIND_FILTER.mention).toContain("x_external");
     expect(KIND_FILTER.mention).toContain("mention");
     expect(KIND_FILTER.mention).toContain("$.ingested_for");
+  });
+});
+
+describe("resolveProjectId", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("uses GOOGLE_CLOUD_PROJECT env when set", () => {
+    vi.stubEnv("GOOGLE_CLOUD_PROJECT", "my-custom-project");
+    expect(resolveProjectId()).toBe("my-custom-project");
+  });
+
+  it("falls back to ryan-self-management when env unset", () => {
+    vi.stubEnv("GOOGLE_CLOUD_PROJECT", undefined);
+    expect(resolveProjectId()).toBe("ryan-self-management");
   });
 });
 

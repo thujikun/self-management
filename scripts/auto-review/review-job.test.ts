@@ -103,6 +103,21 @@ describe("runReviewJob", () => {
     expect(after?.lastReviewFailedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
+  it("exit !=0 (runtime failure, 例: auth error): parse 試行せず record、post なし", async () => {
+    // 実例: "Invalid API key · Fix external API key" を stdout に吐いて exit 1 する
+    const { deps, harness } = makeDeps("Invalid API key · Fix external API key", {
+      exitCode: 1,
+    });
+    const { input, getState } = makeInput({ prs: { "7": { iterations: 2 } } });
+    await runReviewJob(input, deps);
+    expect(harness.posted).toStrictEqual([]);
+    const after = getState().prs["7"];
+    expect(after?.lastReviewedSha).toStrictEqual(undefined);
+    expect(after?.iterations).toStrictEqual(2);
+    expect(after?.reviewFailureCount).toStrictEqual(1);
+    expect(after?.lastFailedReviewSha).toStrictEqual("abc123");
+  });
+
   it("同 SHA で連続失敗: reviewFailureCount が積み上がる", async () => {
     const { deps } = makeDeps("garbage 1");
     const { input, getState } = makeInput({

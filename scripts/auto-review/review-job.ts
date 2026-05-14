@@ -101,10 +101,15 @@ export async function runReviewJob(
       return await recordReviewFailure(input);
     }
     if (result.exitCode !== 0) {
+      // exit != 0 は auth error / spawn 失敗 / CLI 内部エラー等の runtime failure。
+      // parse を試みても無意味なので、ここで明示的に record して return する
+      // (旧 logic は warn 出して parse へ落とし、誤って「parse failure」と log していた)
+      const tail = (result.stderr.trim() || result.stdout.trim()).slice(-500);
       warn(
         tag,
-        `claude non-zero exit ${result.exitCode}; stderr tail:\n${result.stderr.slice(-500)}\n  log=${logFile}`,
+        `claude non-zero exit ${result.exitCode} (runtime failure, not a parse issue) → record failure (will retry after backoff); tail:\n${tail}\n  log=${logFile}`,
       );
+      return await recordReviewFailure(input);
     }
     const parsed = parseReviewOutput(result.stdout);
 
