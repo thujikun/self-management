@@ -1,4 +1,3 @@
-encryptionsalt: v1:R53gYp74vOQ=:v1:MZc3SHz/J657yP6i:9oWf7yNaPDi7u93URi3xDriy7aGO3A==
 config:
   gcp:project: ryan-self-management
   gcp:region: asia-northeast1
