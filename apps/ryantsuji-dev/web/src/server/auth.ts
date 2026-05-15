@@ -31,7 +31,7 @@
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business Better Auth runtime config。Drizzle adapter で @self/db を SSoT に、social providers (github/twitter) を有効化、sign-up は open (OAuth provider 経由の身元確認に委ねる方針)。env は CF Workers binding 由来 (process.env 不使用)、isolate ごとに globalThis cache で per-request 再構築を回避
+ * @graph-business Better Auth runtime config。Drizzle adapter で @self/db を SSoT に、social providers (github/twitter/google/apple/facebook) を有効化、sign-up は open (OAuth provider 経由の身元確認に委ねる方針)。env は CF Workers binding 由来 (process.env 不使用)、isolate ごとに globalThis cache で per-request 再構築を回避
  * @graph-connects better-auth [calls] betterAuth() で auth instance を構築、各 route handler に flow
  * @graph-connects content [embeds] @self/db を drizzleAdapter に渡して Postgres を SSoT に
  */
