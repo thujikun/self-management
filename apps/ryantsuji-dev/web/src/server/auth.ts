@@ -1,8 +1,8 @@
 /**
  * Better Auth server config。env binding を **`createServerFn` / route handler の
- * `context.env`** から受け取り、Drizzle adapter + social providers (GitHub / X) +
- * email allowlist で sign-up を制限する。`@self/db` の `createDb` で生成した client
- * を adapter に流す。
+ * `context.env`** から受け取り、Drizzle adapter + social providers (GitHub / X /
+ * Google / Apple / Facebook) で sign-in を成立させる。`@self/db` の `createDb` で
+ * 生成した client を adapter に流す。
  *
  * env binding contract (CF Workers の env binding shape、`start.ts:Env` 参照):
  * - `DATABASE_URL` — Neon pooled connection string
@@ -10,16 +10,20 @@
  * - `BETTER_AUTH_URL` — 公開 URL (例: `https://ryantsuji.dev`、dev は `http://localhost:3000`)
  * - `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` — GitHub OAuth App
  * - `X_OAUTH2_CLIENT_ID` / `X_OAUTH2_CLIENT_SECRET` — X (Twitter) OAuth 2.0 client
- * - `AUTH_ALLOWED_EMAILS` — sign-up を許可する email の CSV (空なら open + warn)
+ * - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google Cloud OAuth 2.0 client
+ * - `APPLE_CLIENT_ID` / `APPLE_CLIENT_SECRET` — Apple Service ID + 短期 JWT
+ *   (JWT は Ryan が `~6 month` ごとに手動 rotation、Apple の private key で生成)
+ * - `FACEBOOK_CLIENT_ID` / `FACEBOOK_CLIENT_SECRET` — Meta for Developers app
  *
  * `process.env` 経路は廃止 (CF Workers では module scope で undefined になる)。
  * `src/server.ts` (Worker entry) が `(req, env, ctx)` を `requestContext` に詰めて、
  * 各 handler で `context.env.X` で型付きアクセス。dev では `@cloudflare/vite-plugin`
  * が `.dev.vars` から env を inject する同 shape。
  *
- * 認証境界の方針: ryantsuji.dev は **個人サイト**。comments / likes は Ryan が承認した
- * email のみが書き込める運用。`AUTH_ALLOWED_EMAILS` で allowlist を切り、不在の email
- * の sign-up を `databaseHooks.user.create.before` で reject する。
+ * sign-up の方針: **open** (GitHub / X OAuth を完走した任意の user が sign-up 可能)。
+ * 本人確認と spam 防御は OAuth provider (GitHub / X) の account 検証に委ねる設計で、
+ * ryantsuji.dev 側では allowlist を持たない。問題が出てきたら moderation (soft-delete)
+ * や rate limit を追加する方向で対処する。
  *
  * 性能: `getAuth(env)` は betterAuth instance を Workers isolate ごとに **1 度だけ**
  * 構築して `globalThis` cache (`Cache key` で同 env なら reuse)。Workers isolate 寿命中
@@ -27,13 +31,13 @@
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business Better Auth runtime config。Drizzle adapter で @self/db を SSoT に、social providers (github/twitter) を有効化、AUTH_ALLOWED_EMAILS で sign-up を allowlist 制御 (個人サイトの認証境界)。env は CF Workers binding 由来 (process.env 不使用)、isolate ごとに globalThis cache で per-request 再構築を回避
+ * @graph-business Better Auth runtime config。Drizzle adapter で @self/db を SSoT に、social providers (github/twitter/google/apple/facebook) を有効化、sign-up は open (OAuth provider 経由の身元確認に委ねる方針)。env は CF Workers binding 由来 (process.env 不使用)、isolate ごとに globalThis cache で per-request 再構築を回避
  * @graph-connects better-auth [calls] betterAuth() で auth instance を構築、各 route handler に flow
  * @graph-connects content [embeds] @self/db を drizzleAdapter に渡して Postgres を SSoT に
  */
 
 import { account, createDb, session, user, verification } from "@self/db";
-import { APIError, betterAuth } from "better-auth";
+import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
 /**
@@ -49,53 +53,12 @@ export interface AuthEnv {
   GITHUB_CLIENT_SECRET: string;
   X_OAUTH2_CLIENT_ID: string;
   X_OAUTH2_CLIENT_SECRET: string;
-  /** sign-up を許可する email の CSV。空なら open (warn 出力)。 */
-  AUTH_ALLOWED_EMAILS?: string;
-}
-
-/**
- * `AUTH_ALLOWED_EMAILS` (CSV) を Set に正規化。empty / 空白のみは null を返す
- * (= open sign-up 扱い)。比較は小文字化した email で。
- *
- * @graph-connects none
- */
-export function parseAllowedEmails(csv: string | undefined): Set<string> | null {
-  if (!csv) return null;
-  const list = csv
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter((s) => s.length > 0);
-  if (list.length === 0) return null;
-  return new Set(list);
-}
-
-/**
- * sign-up を allowlist で評価するゲート。allowlist が null なら全許可 (open)、
- * Set なら lowercase 比較で照合し、不在なら APIError(FORBIDDEN) を throw する。
- * `databaseHooks.user.create.before` の中身として呼ばれる pure 関数。
- *
- * @graph-connects better-auth [calls] APIError(FORBIDDEN) で sign-up を拒否
- */
-export function assertSignUpAllowed(allowed: Set<string> | null, email: string): void {
-  if (!allowed) return;
-  if (!allowed.has(email.toLowerCase())) {
-    throw new APIError("FORBIDDEN", {
-      message: "sign-up is restricted (email is not in allowlist)",
-    });
-  }
-}
-
-/**
- * `databaseHooks.user.create.before` 用 hook factory。allowlist で gate して
- * `{ data }` を返す。Better Auth の hook は async 必須なので Promise を返す。
- *
- * @graph-connects none
- */
-export function makeUserCreateBeforeHook(allowed: Set<string> | null) {
-  return async <T extends { email: string }>(data: T): Promise<{ data: T }> => {
-    assertSignUpAllowed(allowed, data.email);
-    return { data };
-  };
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  APPLE_CLIENT_ID: string;
+  APPLE_CLIENT_SECRET: string;
+  FACEBOOK_CLIENT_ID: string;
+  FACEBOOK_CLIENT_SECRET: string;
 }
 
 /**
@@ -107,12 +70,6 @@ export function makeUserCreateBeforeHook(allowed: Set<string> | null) {
  */
 export function buildAuth(env: AuthEnv) {
   const db = createDb(env.DATABASE_URL);
-  const allowedEmails = parseAllowedEmails(env.AUTH_ALLOWED_EMAILS);
-  if (!allowedEmails) {
-    console.warn(
-      "[auth] AUTH_ALLOWED_EMAILS is empty — sign-up is OPEN. Set the env to lock down (Ryan の個人サイト方針).",
-    );
-  }
   return betterAuth({
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
@@ -129,12 +86,17 @@ export function buildAuth(env: AuthEnv) {
         clientId: env.X_OAUTH2_CLIENT_ID,
         clientSecret: env.X_OAUTH2_CLIENT_SECRET,
       },
-    },
-    databaseHooks: {
-      user: {
-        create: {
-          before: makeUserCreateBeforeHook(allowedEmails),
-        },
+      google: {
+        clientId: env.GOOGLE_CLIENT_ID,
+        clientSecret: env.GOOGLE_CLIENT_SECRET,
+      },
+      apple: {
+        clientId: env.APPLE_CLIENT_ID,
+        clientSecret: env.APPLE_CLIENT_SECRET,
+      },
+      facebook: {
+        clientId: env.FACEBOOK_CLIENT_ID,
+        clientSecret: env.FACEBOOK_CLIENT_SECRET,
       },
     },
   });
@@ -142,8 +104,7 @@ export function buildAuth(env: AuthEnv) {
 
 /**
  * cache key を env から決定する。OAuth/DB credential が変われば key が変わるので、
- * stale credential で auth する事故を防ぐ。AUTH_ALLOWED_EMAILS は再現可能性のため
- * 含める (allowlist 変更が即反映される)。
+ * stale credential で auth する事故を防ぐ。
  *
  * @graph-connects none
  */
@@ -156,7 +117,12 @@ export function authCacheKey(env: AuthEnv): string {
     env.GITHUB_CLIENT_SECRET,
     env.X_OAUTH2_CLIENT_ID,
     env.X_OAUTH2_CLIENT_SECRET,
-    env.AUTH_ALLOWED_EMAILS ?? "",
+    env.GOOGLE_CLIENT_ID,
+    env.GOOGLE_CLIENT_SECRET,
+    env.APPLE_CLIENT_ID,
+    env.APPLE_CLIENT_SECRET,
+    env.FACEBOOK_CLIENT_ID,
+    env.FACEBOOK_CLIENT_SECRET,
   ].join("|");
 }
 

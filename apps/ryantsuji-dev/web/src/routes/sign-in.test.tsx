@@ -36,11 +36,14 @@ async function ssrAt(path: string): Promise<string> {
 }
 
 describe("/sign-in SSR", () => {
-  it("GitHub / X 両方の OAuth ボタンが render される", async () => {
+  it("5 つの OAuth provider ボタンが全部 render される", async () => {
     const html = await ssrAt("/sign-in");
+    expect(html).toMatch(/<h1>sign in<\/h1>/);
     expect(html).toMatch(/continue with GitHub/);
     expect(html).toMatch(/continue with X/);
-    expect(html).toMatch(/<h1>sign in<\/h1>/);
+    expect(html).toMatch(/continue with Google/);
+    expect(html).toMatch(/continue with Apple/);
+    expect(html).toMatch(/continue with Facebook/);
   });
 
   it("?redirect=/posts/foo を渡しても sign-in page は render される", async () => {
