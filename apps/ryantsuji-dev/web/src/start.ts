@@ -26,8 +26,8 @@ import { createStart } from "@tanstack/react-start";
  * - `DATABASE_URL`: Neon pooled connection (secret)
  * - `BETTER_AUTH_SECRET`: 32+ 文字ランダム (secret)
  * - `BETTER_AUTH_URL`: 公開 URL (vars でも可、現状 secret 扱い)
- * - `GITHUB_*` / `X_OAUTH2_*`: OAuth credentials (secret)
- * - `AUTH_ALLOWED_EMAILS`: sign-up allowlist CSV (空ならフラグ無効)
+ * - `GITHUB_*` / `X_OAUTH2_*` / `GOOGLE_*` / `APPLE_*` / `FACEBOOK_*`:
+ *   OAuth credentials (secret)
  *
  * @graph-connects none
  */
@@ -40,7 +40,12 @@ export interface Env {
   GITHUB_CLIENT_SECRET: string;
   X_OAUTH2_CLIENT_ID: string;
   X_OAUTH2_CLIENT_SECRET: string;
-  AUTH_ALLOWED_EMAILS?: string;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  APPLE_CLIENT_ID: string;
+  APPLE_CLIENT_SECRET: string;
+  FACEBOOK_CLIENT_ID: string;
+  FACEBOOK_CLIENT_SECRET: string;
 }
 
 /**
