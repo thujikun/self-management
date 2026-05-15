@@ -62,6 +62,8 @@ describe("infra/core stack", () => {
     expect(m.artifactRegistryRepoId).toBeDefined();
     expect(m.graphMigrateJobName).toBeDefined();
     expect(m.cloudflareApiTokenSecretId).toBeDefined();
+    expect(m.pulumiCiServiceAccountEmail).toBeDefined();
+    expect(m.githubWifProviderResource).toBeDefined();
   });
 
   it("datasetId は 'ryan'", async () => {
