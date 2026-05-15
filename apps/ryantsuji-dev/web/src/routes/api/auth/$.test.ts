@@ -25,6 +25,12 @@ const TEST_ENV: Env = {
   GITHUB_CLIENT_SECRET: "g",
   X_OAUTH2_CLIENT_ID: "x",
   X_OAUTH2_CLIENT_SECRET: "x",
+  GOOGLE_CLIENT_ID: "google",
+  GOOGLE_CLIENT_SECRET: "google",
+  APPLE_CLIENT_ID: "apple",
+  APPLE_CLIENT_SECRET: "apple",
+  FACEBOOK_CLIENT_ID: "fb",
+  FACEBOOK_CLIENT_SECRET: "fb",
 };
 
 describe("/api/auth/$ Route", () => {

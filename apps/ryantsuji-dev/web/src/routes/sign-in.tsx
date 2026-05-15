@@ -1,5 +1,5 @@
 /**
- * `/sign-in` — sign-in page (GitHub / X OAuth)。
+ * `/sign-in` — sign-in page (GitHub / X / Google / Apple / Facebook OAuth)。
  *
  * 認証は Better Auth の social provider に丸投げ。`signIn.social({ provider })` を
  * 呼ぶと `/api/auth/sign-in/social/<provider>` に POST → provider の OAuth endpoint
@@ -12,7 +12,7 @@
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business 認証入口 page。GitHub / X の OAuth ボタンだけを置く minimal な UI、callbackURL は ?redirect= 経由で動的に決定 (open redirect を防ぐため同一 origin 相対 path のみ受理)
+ * @graph-business 認証入口 page。GitHub / X / Google / Apple / Facebook OAuth の 5 ボタンを置く minimal UI、callbackURL は ?redirect= 経由で動的に決定 (open redirect を防ぐため同一 origin 相対 path のみ受理)。sign-up は open (provider 経由の身元確認に委ねる)
  * @graph-connects tanstack-router [provides] /sign-in route
  * @graph-connects better-auth [calls] signIn.social でプロバイダ OAuth に飛ばす
  */
@@ -61,7 +61,7 @@ const SearchSchema = z.object({
  *
  * @graph-connects none
  */
-type Provider = "github" | "twitter";
+type Provider = "github" | "twitter" | "google" | "apple" | "facebook";
 
 /**
  * provider + callbackURL を渡して `signIn.social` を呼ぶ純関数。test から直接
@@ -122,7 +122,7 @@ function SignInPage() {
   return (
     <main className="auth">
       <h1>sign in</h1>
-      <p className="auth__lead">soon でコメントや like を有効化する予定。</p>
+      <p className="auth__lead">good で comments / likes を有効化。</p>
       <ul className="auth__providers">
         <li>
           <SignInButton
@@ -138,6 +138,30 @@ function SignInPage() {
             callbackURL={callbackURL}
             label="continue with X"
             className="auth__provider auth__provider--x"
+          />
+        </li>
+        <li>
+          <SignInButton
+            provider="google"
+            callbackURL={callbackURL}
+            label="continue with Google"
+            className="auth__provider auth__provider--google"
+          />
+        </li>
+        <li>
+          <SignInButton
+            provider="apple"
+            callbackURL={callbackURL}
+            label="continue with Apple"
+            className="auth__provider auth__provider--apple"
+          />
+        </li>
+        <li>
+          <SignInButton
+            provider="facebook"
+            callbackURL={callbackURL}
+            label="continue with Facebook"
+            className="auth__provider auth__provider--facebook"
           />
         </li>
       </ul>
