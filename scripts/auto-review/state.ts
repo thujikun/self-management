@@ -49,6 +49,22 @@ export interface PRState {
   lastFailedFixCommentId?: number;
   /** fix 失敗の ISO timestamp。backoff 窓判定に使う。 */
   lastFixFailedAt?: string;
+  /**
+   * ci-fix (APPROVE 後の CI 失敗を bot が修正する mode) の per-SHA 成功記録。
+   * 同 SHA に対する再 ci-fix を抑止 (新 commit が来れば SHA が変わって再 attempt 可能)。
+   */
+  lastCiFixedSha?: string;
+  /** ci-fix push 成功時刻 (ISO timestamp)。 */
+  lastCiFixedAt?: string;
+  /**
+   * ci-fix (FIX_FAILED / timeout / push 検出失敗 / throw) の per-SHA 失敗回数。
+   * SHA が変われば 1 から再カウント。`MAX_CI_FIX_FAILURES_PER_SHA` 到達で skip。
+   */
+  ciFixFailureCount?: number;
+  /** ci-fix 失敗をカウントしている対象 SHA。 */
+  lastFailedCiFixSha?: string;
+  /** ci-fix 失敗の ISO timestamp。backoff 窓判定に使う。 */
+  lastCiFixFailedAt?: string;
 }
 
 export interface State {

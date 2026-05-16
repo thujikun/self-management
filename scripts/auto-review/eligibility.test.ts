@@ -1,5 +1,5 @@
 /**
- * eligibility.ts の reviewEligibility / fixEligibility 判定 test。
+ * eligibility.ts の reviewEligibility / fixEligibility / ciFixEligibility 判定 test。
  *
  * 検証する分岐:
  *   - 成功 bookmark あり → skip
@@ -13,8 +13,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ciFixEligibility,
   fixEligibility,
   reviewEligibility,
+  type CiFixEligibilityConfig,
   type FixEligibilityConfig,
   type ReviewEligibilityConfig,
 } from "./eligibility.js";
@@ -22,6 +24,7 @@ import type { PRState } from "./state.js";
 
 const REVIEW_CFG: ReviewEligibilityConfig = { maxFailuresPerSha: 3, backoffMs: 5 * 60 * 1000 };
 const FIX_CFG: FixEligibilityConfig = { maxFailuresPerComment: 3, backoffMs: 5 * 60 * 1000 };
+const CI_FIX_CFG: CiFixEligibilityConfig = { maxFailuresPerSha: 3, backoffMs: 5 * 60 * 1000 };
 
 const NOW = new Date("2026-05-10T08:00:00.000Z").getTime();
 
@@ -145,5 +148,66 @@ describe("fixEligibility", () => {
       lastFixFailedAt: new Date(NOW - 6 * 60 * 1000).toISOString(),
     };
     expect(fixEligibility(100, cur, NOW, FIX_CFG)).toStrictEqual({ ok: true });
+  });
+});
+
+describe("ciFixEligibility", () => {
+  it("lastCiFixedSha 一致 → skip (既に同 SHA 向けに push 済)", () => {
+    const cur: PRState = { iterations: 0, lastCiFixedSha: "abc123" };
+    expect(ciFixEligibility("abc123", cur, NOW, CI_FIX_CFG)).toStrictEqual({
+      ok: false,
+      reason: "already ci-fixed for this sha",
+    });
+  });
+
+  it("失敗履歴なし → enqueue 可", () => {
+    const cur: PRState = { iterations: 0 };
+    expect(ciFixEligibility("abc123", cur, NOW, CI_FIX_CFG)).toStrictEqual({ ok: true });
+  });
+
+  it("失敗 SHA が異なる (新 commit) → enqueue 可", () => {
+    const cur: PRState = {
+      iterations: 0,
+      ciFixFailureCount: 5,
+      lastFailedCiFixSha: "old_sha",
+      lastCiFixFailedAt: new Date(NOW - 10_000).toISOString(),
+    };
+    expect(ciFixEligibility("new_sha", cur, NOW, CI_FIX_CFG)).toStrictEqual({ ok: true });
+  });
+
+  it("同 SHA で backoff 窓内 → skip", () => {
+    const cur: PRState = {
+      iterations: 0,
+      ciFixFailureCount: 1,
+      lastFailedCiFixSha: "abc123",
+      lastCiFixFailedAt: new Date(NOW - 60_000).toISOString(),
+    };
+    expect(ciFixEligibility("abc123", cur, NOW, CI_FIX_CFG)).toStrictEqual({
+      ok: false,
+      reason: "ci-fix backoff: retry in 240s (failures=1/3)",
+    });
+  });
+
+  it("同 SHA で cap 到達 → skip", () => {
+    const cur: PRState = {
+      iterations: 0,
+      ciFixFailureCount: 3,
+      lastFailedCiFixSha: "abc123",
+      lastCiFixFailedAt: new Date(NOW - 60 * 60 * 1000).toISOString(),
+    };
+    expect(ciFixEligibility("abc123", cur, NOW, CI_FIX_CFG)).toStrictEqual({
+      ok: false,
+      reason: "ci-fix failure cap reached (3/3) for sha=abc123; awaiting new commit",
+    });
+  });
+
+  it("同 SHA で backoff 窓超過 (cap 未満) → enqueue 可", () => {
+    const cur: PRState = {
+      iterations: 0,
+      ciFixFailureCount: 2,
+      lastFailedCiFixSha: "abc123",
+      lastCiFixFailedAt: new Date(NOW - 6 * 60 * 1000).toISOString(),
+    };
+    expect(ciFixEligibility("abc123", cur, NOW, CI_FIX_CFG)).toStrictEqual({ ok: true });
   });
 });
