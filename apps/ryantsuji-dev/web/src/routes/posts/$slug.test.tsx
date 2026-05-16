@@ -112,6 +112,23 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * React SSR は `<`, `>`, `&`, `'`, `"` を HTML entity に escape する。比較対象の
+ * title が apostrophe や `&` を含むと regex 直比較が壊れるので、entity 化した形に
+ * 揃えた上で regex 用に escape する。
+ */
+function escapeRegexForHtmlBody(s: string): string {
+  const entityMap: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#x27;",
+  };
+  const htmlEscaped = s.replace(/[&<>"']/g, (ch) => entityMap[ch] ?? ch);
+  return escapeRegex(htmlEscaped);
+}
+
 describe("/posts/$slug — detail (SSR)", () => {
   // shiki / unified の cold-start を吸収 (--coverage 下で 30s 越え対策)
   beforeAll(async () => {
@@ -132,11 +149,12 @@ describe("/posts/$slug — detail (SSR)", () => {
   });
 
   it("tags / headings 持ち post は title + body + TOC + tag list 込みで SSR される", async () => {
-    const slug = "hello-world";
-    const title = listPosts().find((p) => p.slug === slug)!.title;
+    // dev.to から import した実 post (tags + 多 heading) を fixture 代わりに使う
+    const slug = "db-graph-mcp";
+    const title = listPosts("en").find((p) => p.slug === slug)!.title;
     const html = await ssrAt(`/posts/${slug}`);
 
-    expect(html).toMatch(new RegExp(`<h1>${escapeRegex(title)}</h1>`));
+    expect(html).toMatch(new RegExp(`<h1>${escapeRegexForHtmlBody(title)}</h1>`));
     expect(html).toMatch(/<article class="post-body">/);
     expect(html).toMatch(/← all posts/);
     expect(html).toMatch(/\d+(?:<!--\s*-->)?\s*min read/);
@@ -145,11 +163,13 @@ describe("/posts/$slug — detail (SSR)", () => {
   });
 
   it("tags / headings の無い minimal post は TOC + tag list を出さない (null branch)", async () => {
-    const slug = "minimal";
-    const title = listPosts().find((p) => p.slug === slug)!.title;
+    // `_minimal-fixture` は listPosts から除外される (production 露出を避ける) ので、
+    // 一覧 lookup ではなく title を fixture 直書きで参照する。
+    const slug = "_minimal-fixture";
+    const title = "Minimal post (test fixture)";
     const html = await ssrAt(`/posts/${slug}`);
 
-    expect(html).toMatch(new RegExp(`<h1>${escapeRegex(title)}</h1>`));
+    expect(html).toMatch(new RegExp(`<h1>${escapeRegexForHtmlBody(title)}</h1>`));
     expect(html).toMatch(/<article class="post-body">/);
     expect(html).not.toMatch(/<aside class="post-detail__toc"/);
     expect(html).not.toMatch(/<ul class="post-detail__tags">/);
@@ -187,7 +207,7 @@ describe("/posts/$slug — engagement (SSR、未認証)", () => {
       likes: { count: 7, liked: false },
       comments: [],
     });
-    const html = await ssrAt("/posts/minimal");
+    const html = await ssrAt("/posts/_minimal-fixture");
     expect(html).toMatch(/<span class="post-detail__views">42(?:<!--\s*-->)?\s*views<\/span>/);
   });
 
@@ -197,7 +217,7 @@ describe("/posts/$slug — engagement (SSR、未認証)", () => {
       likes: { count: 7, liked: false },
       comments: [],
     });
-    const html = await ssrAt("/posts/minimal");
+    const html = await ssrAt("/posts/_minimal-fixture");
     expect(html).toMatch(/<button[^>]*class="like-button"[^>]*disabled/);
     expect(html).toMatch(/aria-pressed="false"/);
     expect(html).toMatch(/<span class="like-button__count">7<\/span>/);
@@ -225,7 +245,7 @@ describe("/posts/$slug — engagement (SSR、未認証)", () => {
         },
       ],
     });
-    const html = await ssrAt("/posts/minimal");
+    const html = await ssrAt("/posts/_minimal-fixture");
     expect(html).toMatch(/comments\s*\((?:<!--\s*-->)?\s*2\s*(?:<!--\s*-->)?\)/);
     expect(html).toMatch(/<span class="comments__author">Alice<\/span>/);
     expect(html).toMatch(/<p class="comments__body">great post<\/p>/);
@@ -240,7 +260,7 @@ describe("/posts/$slug — engagement (SSR、未認証)", () => {
       likes: { count: 0, liked: false },
       comments: [],
     });
-    const html = await ssrAt("/posts/minimal");
+    const html = await ssrAt("/posts/_minimal-fixture");
     expect(html).toMatch(/まだコメントはありません/);
     expect(html).not.toMatch(/<form class="comments__form"/);
   });
@@ -276,11 +296,11 @@ describe("/posts/$slug — engagement (SSR、認証済み)", () => {
   // (これは仕様: hydration 後に session が解決されて UI が differ する)。
   // ここでは server side の getSessionFromHeaders mock が呼ばれることだけ確認する。
   it("loadEngagementServer は session 経由で identifier=userId を渡す", async () => {
-    await ssrAt("/posts/minimal");
+    await ssrAt("/posts/_minimal-fixture");
     expect(mockGetSession).toHaveBeenCalled();
     expect(mockLoadEngagement).toHaveBeenCalledWith(
       mockDb,
-      expect.objectContaining({ slug: "minimal", identifier: "u1", bumpView: true }),
+      expect.objectContaining({ slug: "_minimal-fixture", identifier: "u1", bumpView: true }),
     );
   });
 });

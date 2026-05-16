@@ -33,12 +33,17 @@ describe("/posts — index", () => {
     // 一覧 page の構造が固定 class で出ること
     expect(html).toMatch(/<ul class="post-card-list">/);
 
-    // 全 post の title / detail link が render される
-    const posts = listPosts();
+    // 全 post の title / detail link が render される (test では Accept-Language が
+    // 取れないので server fn 内 pickLang は "en" にフォールバックする想定)
+    const posts = listPosts("en");
     expect(posts.length).toBeGreaterThan(0);
     for (const p of posts) {
-      // title は <h2 class="post-card__title"> の中に入る
-      expect(html).toMatch(new RegExp(`<h2 class="post-card__title">${escapeRegex(p.title)}</h2>`));
+      // title は <h2 class="post-card__title"> の中に入る。React の SSR が `'` を
+      // `&#x27;` に escape する等で全文一致が壊れるので、HTML entity escape を考慮した
+      // 比較関数を使う。
+      expect(html).toMatch(
+        new RegExp(`<h2 class="post-card__title">${escapeRegexForHtmlBody(p.title)}</h2>`),
+      );
       // detail への Link は href="/posts/<slug>" で出る
       expect(html).toMatch(new RegExp(`href="/posts/${escapeRegex(p.slug)}"`));
     }
@@ -52,8 +57,43 @@ describe("/posts — index", () => {
     const html = renderToString(<RouterProvider router={router} />);
     expect(html).not.toMatch(/href="\/posts\/_draft-example"/);
   });
+
+  it("?lang=ja で override すると LangSwitcher の JP が active になる", async () => {
+    const router = getRouter({
+      history: createMemoryHistory({ initialEntries: ["/posts?lang=ja"] }),
+    });
+    await router.load();
+    const html = renderToString(<RouterProvider router={router} />);
+    expect(html).toMatch(/lang-switcher__btn lang-switcher__btn--active[^>]*>JP/);
+  });
+
+  it("?lang=en で override すると LangSwitcher の EN が active になる", async () => {
+    const router = getRouter({
+      history: createMemoryHistory({ initialEntries: ["/posts?lang=en"] }),
+    });
+    await router.load();
+    const html = renderToString(<RouterProvider router={router} />);
+    expect(html).toMatch(/lang-switcher__btn lang-switcher__btn--active[^>]*>EN/);
+  });
 });
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * React SSR は `<`, `>`, `&`, `'`, `"` を HTML entity に escape する。比較対象の
+ * title が apostrophe や `&` を含むと regex 直比較が壊れるので、entity 化した形に
+ * 揃えた上で regex 用に escape する。
+ */
+function escapeRegexForHtmlBody(s: string): string {
+  const entityMap: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#x27;",
+  };
+  const htmlEscaped = s.replace(/[&<>"']/g, (ch) => entityMap[ch] ?? ch);
+  return escapeRegex(htmlEscaped);
 }
