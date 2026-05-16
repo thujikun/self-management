@@ -105,6 +105,28 @@ describe("renderMarkdown", () => {
     expect(out.html).toMatch(/--shiki-dark/);
   });
 
+  // langBash import を削除した regression: shiki の shellscript grammar が
+  // bash / sh / shell / zsh の alias を兼ねるため、bash/shell fence でも shiki
+  // token span に分解されることを保証する。
+  it.each([
+    ["bash", "echo hello"],
+    ["shell", "ls -la"],
+  ])("%s fence も shellscript alias 経由で shiki token に分解される", async (lang, code) => {
+    const source = [
+      "---",
+      'title: "x"',
+      'publishedAt: "2026-05-08"',
+      "---",
+      "",
+      `\`\`\`${lang}`,
+      code,
+      "```",
+    ].join("\n");
+    const out = await renderMarkdown(source);
+    expect(out.html).toMatch(/<pre class="shiki/);
+    expect(out.html).toMatch(/<span style="--shiki-/);
+  });
+
   it("frontmatter 不正で throw", async () => {
     const source = `---\ntitle: "x"\npublishedAt: "May 8 2026"\n---\nbody`;
     await expect(renderMarkdown(source)).rejects.toThrow();
