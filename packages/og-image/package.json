@@ -2,7 +2,7 @@
   "name": "@self/og-image",
   "version": "0.1.0",
   "private": true,
-  "description": "ryantsuji.dev の og:image を frontmatter から build-time 生成する (satori + resvg) — JP は Zenn 風、EN は brand 横長",
+  "description": "ryantsuji.dev の og:image を frontmatter から build-time 生成する (satori + resvg) — JP/EN 共通の dark brand 横長 template",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

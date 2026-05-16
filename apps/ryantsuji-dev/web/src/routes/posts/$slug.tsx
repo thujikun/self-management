@@ -132,6 +132,8 @@ const addCommentServer = createServerFn()
  */
 const SITE_URL = "https://ryantsuji.dev";
 
+type HeadMeta = { title: string } | { name?: string; property?: string; content: string };
+
 /**
  * 1 post 分の HTML <head> meta tag 列を組む。Route.head() から呼ばれ、og:title /
  * og:description / og:image / twitter:* を per-post に上書きする (root の default は
@@ -142,15 +144,6 @@ const SITE_URL = "https://ryantsuji.dev";
  *
  * @graph-connects none
  */
-/**
- * Route.head() に渡す meta entry の型。TanStack Router は `{ title }` だけの entry も
- * 受け付けるので、name/property を持つ通常の meta と union で表現する。
- *
- * @graph-connects none
- */
-type HeadMeta = { title: string } | { name?: string; property?: string; content: string };
-
-/** @graph-connects none */
 export function buildPostMeta(input: {
   slug: string;
   title: string;
