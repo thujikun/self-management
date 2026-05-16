@@ -624,6 +624,22 @@ importers:
         specifier: 'catalog:'
         version: 7.0.0-dev.20260510.1
 
+  packages/syndication:
+    dependencies:
+      '@self/content':
+        specifier: workspace:*
+        version: link:../content
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.2
+      '@typescript/native-preview':
+        specifier: 'catalog:'
+        version: 7.0.0-dev.20260510.1
+
 packages:
 
   '@babel/code-frame@7.27.1':
