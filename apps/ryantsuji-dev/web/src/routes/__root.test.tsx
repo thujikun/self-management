@@ -20,7 +20,7 @@ import { getRouter } from "../router.js";
 import { Route } from "./__root.js";
 
 describe("__root route", () => {
-  it("head() に title / charset / viewport / stylesheet を含む", async () => {
+  it("head() に title / charset / viewport / theme-color / og meta を含む", async () => {
     const headFn = Route.options.head;
     if (!headFn) throw new Error("Route.options.head is undefined");
     // head() は Awaitable<T> (= T | Promise<T>) なので await で unwrap する
@@ -34,12 +34,68 @@ describe("__root route", () => {
         expect.objectContaining({ charSet: "utf-8" }),
         expect.objectContaining({ name: "viewport" }),
         expect.objectContaining({ title: "ryantsuji.dev" }),
+        expect.objectContaining({ name: "theme-color", content: "#0abab5" }),
+        expect.objectContaining({
+          property: "og:url",
+          content: "https://ryantsuji.dev",
+        }),
+        expect.objectContaining({
+          property: "og:image",
+          content: "https://ryantsuji.dev/og-image.png",
+        }),
+        expect.objectContaining({ name: "twitter:card", content: "summary_large_image" }),
+        expect.objectContaining({
+          name: "twitter:image",
+          content: "https://ryantsuji.dev/og-image.png",
+        }),
       ]),
     );
 
+    // crawler が相対 path を解決しないため、og / twitter 画像と og:url は
+    // 必ず https:// 始まりの絶対 URL になっていること
+    const ogImage = meta.find(
+      (m): m is { property: string; content: string } =>
+        typeof m === "object" && m !== null && "property" in m && m.property === "og:image",
+    );
+    expect(ogImage?.content.startsWith("https://")).toBe(true);
+    const twitterImage = meta.find(
+      (m): m is { name: string; content: string } =>
+        typeof m === "object" && m !== null && "name" in m && m.name === "twitter:image",
+    );
+    expect(twitterImage?.content.startsWith("https://")).toBe(true);
+    const ogUrl = meta.find(
+      (m): m is { property: string; content: string } =>
+        typeof m === "object" && m !== null && "property" in m && m.property === "og:url",
+    );
+    expect(ogUrl?.content.startsWith("https://")).toBe(true);
+
     const links = head.links ?? [];
     expect(links).toEqual(
-      expect.arrayContaining([expect.objectContaining({ rel: "stylesheet", href: "/styles.css" })]),
+      expect.arrayContaining([
+        expect.objectContaining({ rel: "stylesheet", href: "/styles.css" }),
+        expect.objectContaining({ rel: "icon", type: "image/svg+xml", href: "/logo-mark.svg" }),
+        expect.objectContaining({ rel: "icon", type: "image/x-icon", href: "/favicon.ico" }),
+        expect.objectContaining({
+          rel: "icon",
+          type: "image/png",
+          sizes: "48x48",
+          href: "/favicon-48x48.png",
+        }),
+        expect.objectContaining({
+          rel: "icon",
+          type: "image/png",
+          sizes: "32x32",
+          href: "/favicon-32x32.png",
+        }),
+        expect.objectContaining({
+          rel: "icon",
+          type: "image/png",
+          sizes: "16x16",
+          href: "/favicon-16x16.png",
+        }),
+        expect.objectContaining({ rel: "apple-touch-icon", href: "/apple-touch-icon.png" }),
+        expect.objectContaining({ rel: "manifest", href: "/site.webmanifest" }),
+      ]),
     );
   });
 

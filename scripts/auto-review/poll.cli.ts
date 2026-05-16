@@ -4,12 +4,13 @@
  * polling 型: 60 秒ごとに `gh pr list` で open PR を走査し、
  *   - reviewer mode: head_sha が前回 review と異なる PR を review job に enqueue
  *   - author mode: bot 自身の最新 verdict コメント (REQUEST_CHANGES marker) を未対応なら fix job に enqueue
- *   - merge mode: bot 自身の最新 APPROVE コメント + head_sha 一致 + CI 全 green ならば merge job に enqueue
+ *   - ci-fix mode: bot 自身の最新 APPROVE + CI に failing job あり → ci-fix job に enqueue (bot 自身が CI 失敗を fix)
+ *   - merge mode: bot 自身の最新 APPROVE + CI 全 green ならば merge job に enqueue
  *   - index mode: tick 毎に `origin/main` SHA を見て、前回 index 時から動いていたら detached `pnpm graph:build` を kick
  *
  * - 並行度は MAX_CONCURRENT (default 2)
- * - 同 PR の review/fix/merge は per-PR mutex で直列化
- * - iteration cap (review post と fix push それぞれで +1 = 1 round-trip = +2) 超過で当該 PR を stalled としてスキップ
+ * - 同 PR の review/fix/ci-fix/merge は per-PR mutex で直列化
+ * - iteration cap 超過で当該 PR を stalled としてスキップ (成功 review/fix/ci-fix push で +1 ずつ)
  *
  * 各 tick / job の進捗を `[scope] message` 形式で stdout に逐次ログする (cortex 同型)。
  *
@@ -19,7 +20,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { fixEligibility, reviewEligibility } from "./eligibility.js";
+import { runCiFixJob, type FailingCheck } from "./ci-fix-job.js";
+import { ciFixEligibility, fixEligibility, reviewEligibility } from "./eligibility.js";
 import { runFixJob } from "./fix-job.js";
 import { runIndexJob } from "./index-job.js";
 import { JobQueue } from "./job-queue.js";
@@ -55,6 +57,14 @@ const FIX_FAILURE_BACKOFF_MS = parseInt(
   process.env.AUTO_REVIEW_FIX_BACKOFF_MS ?? `${5 * 60 * 1000}`,
   10,
 );
+const MAX_CI_FIX_FAILURES_PER_SHA = parseInt(
+  process.env.AUTO_REVIEW_MAX_CI_FIX_FAILURES ?? "3",
+  10,
+);
+const CI_FIX_FAILURE_BACKOFF_MS = parseInt(
+  process.env.AUTO_REVIEW_CI_FIX_BACKOFF_MS ?? `${5 * 60 * 1000}`,
+  10,
+);
 
 const REVIEW_ELIG_CFG = {
   maxFailuresPerSha: MAX_REVIEW_FAILURES_PER_SHA,
@@ -63,6 +73,10 @@ const REVIEW_ELIG_CFG = {
 const FIX_ELIG_CFG = {
   maxFailuresPerComment: MAX_FIX_FAILURES_PER_COMMENT,
   backoffMs: FIX_FAILURE_BACKOFF_MS,
+};
+const CI_FIX_ELIG_CFG = {
+  maxFailuresPerSha: MAX_CI_FIX_FAILURES_PER_SHA,
+  backoffMs: CI_FIX_FAILURE_BACKOFF_MS,
 };
 
 interface PR {
@@ -106,6 +120,59 @@ async function getBotVerdictComments(prNumber: number): Promise<BotComment[]> {
   const trimmed = stdout.trim();
   if (trimmed.length === 0) return [];
   return JSON.parse(trimmed) as BotComment[];
+}
+
+interface CheckEntry {
+  bucket: string;
+  name: string;
+  link: string;
+}
+
+/**
+ * `gh pr checks <N>` の生 entries を返す。bucket は "pass" | "fail" | "pending" | "cancel" | "skipping"。
+ * 0 件返り = check 自体無し (poll 側で「未準備」扱い)。
+ */
+async function fetchPrChecks(prNumber: number): Promise<CheckEntry[]> {
+  const { stdout } = await execFileP("gh", [
+    "pr",
+    "checks",
+    String(prNumber),
+    "--repo",
+    REPO,
+    "--json",
+    "bucket,name,link",
+  ]);
+  if (!stdout.trim()) return [];
+  return JSON.parse(stdout) as CheckEntry[];
+}
+
+/**
+ * CI 全体 status の集計。
+ *   - `"pass"`: 1 件以上あって全て pass / skipping
+ *   - `"fail"`: 1 件以上 fail
+ *   - `"pending"`: それ以外 (進行中 / 0 件)
+ */
+function summarizeCiStatus(checks: CheckEntry[]): "pass" | "fail" | "pending" {
+  if (checks.length === 0) return "pending";
+  if (checks.some((c) => c.bucket === "fail")) return "fail";
+  if (checks.every((c) => c.bucket === "pass" || c.bucket === "skipping")) return "pass";
+  return "pending";
+}
+
+/**
+ * CI checks から failing job のみを抽出し、job URL から run_id を parse して FailingCheck[] を返す。
+ * link 例: https://github.com/owner/repo/actions/runs/123/job/456 → runId=123
+ */
+function extractFailingChecks(checks: CheckEntry[]): FailingCheck[] {
+  const out: FailingCheck[] = [];
+  for (const c of checks) {
+    if (c.bucket !== "fail") continue;
+    const m = /\/actions\/runs\/(\d+)\//.exec(c.link);
+    const runId = m?.[1] ?? "";
+    if (!runId) continue;
+    out.push({ name: c.name, runId, jobUrl: c.link });
+  }
+  return out;
 }
 
 function isWipTitle(title: string): boolean {
@@ -177,6 +244,7 @@ async function tick(): Promise<void> {
 
   let reviewEnqueued = 0;
   let fixEnqueued = 0;
+  let ciFixEnqueued = 0;
   let mergeEnqueued = 0;
   let skipped = 0;
 
@@ -284,41 +352,94 @@ async function tick(): Promise<void> {
       log(tag, `  author: no REQUEST_CHANGES comment → skip`);
     }
 
-    // Merge mode
+    // Merge / ci-fix mode (APPROVE 後の分岐): CI 状態で merge or ci-fix or wait に分かれる
     const latestVerdict = sorted[0];
     const isApproveLatest = latestVerdict?.body.includes("VERDICT:APPROVE") ?? false;
-    if (isApproveLatest && cur.lastMergedSha !== pr.headRefOid) {
+    if (!isApproveLatest) {
+      log(tag, `  merge/ci-fix: latest verdict is not APPROVE → skip`);
+      continue;
+    }
+    if (cur.lastMergedSha === pr.headRefOid) {
       log(
         tag,
-        `  merge: latest verdict is APPROVE + sha not yet merged → enqueue merge (CI green check pending)`,
+        `  merge/ci-fix: APPROVE but lastMergedSha matches → skip (already merged or attempted)`,
       );
-      mergeEnqueued++;
+      continue;
+    }
+    const checks = await fetchPrChecks(pr.number).catch((err: unknown) => {
+      warn(tag, `gh pr checks failed:`, err);
+      return [] as CheckEntry[];
+    });
+    const ciStatus = summarizeCiStatus(checks);
+    log(tag, `  merge/ci-fix: ${checks.length} check(s), ci=${ciStatus}`);
+
+    if (ciStatus === "pending") {
+      log(tag, `  merge/ci-fix: CI pending → skip (wait for completion)`);
+      continue;
+    }
+    if (ciStatus === "fail") {
+      const ciFixElig = ciFixEligibility(pr.headRefOid, cur, Date.now(), CI_FIX_ELIG_CFG);
+      if (!ciFixElig.ok) {
+        log(tag, `  ci-fix: skip (${ciFixElig.reason})`);
+        continue;
+      }
+      const failingChecks = extractFailingChecks(checks);
+      if (failingChecks.length === 0) {
+        warn(
+          tag,
+          `  ci-fix: ciStatus=fail but no failing job URL parsable → skip (re-evaluate next tick)`,
+        );
+        continue;
+      }
+      log(
+        tag,
+        `  ci-fix: ${failingChecks.length} failing check(s) → enqueue ci-fix (failures=${cur.ciFixFailureCount ?? 0})`,
+      );
+      ciFixEnqueued++;
       const accepted = queue.enqueue({
-        id: `merge-${pr.number}-${pr.headRefOid}`,
+        id: `ci-fix-${pr.number}-${pr.headRefOid}`,
         prNumber: pr.number,
-        type: "merge",
+        type: "fix",
         run: async () => {
-          await runMergeJob({
+          await runCiFixJob({
             prNumber: pr.number,
             headSha: pr.headRefOid,
             repo: REPO,
+            repoRoot: REPO_ROOT,
+            branch: pr.headRefName,
+            failingChecks,
             state,
             updateState: update,
           });
         },
       });
-      if (!accepted) log(tag, `  merge: dedup (already queued / running), skip`);
-    } else if (isApproveLatest) {
-      log(tag, `  merge: APPROVE but lastMergedSha matches → skip (already merged or attempted)`);
-    } else {
-      log(tag, `  merge: latest verdict is not APPROVE → skip`);
+      if (!accepted) log(tag, `  ci-fix: dedup (already queued / running), skip`);
+      continue;
     }
+    // ciStatus === "pass"
+    log(tag, `  merge: CI green → enqueue merge`);
+    mergeEnqueued++;
+    const accepted = queue.enqueue({
+      id: `merge-${pr.number}-${pr.headRefOid}`,
+      prNumber: pr.number,
+      type: "merge",
+      run: async () => {
+        await runMergeJob({
+          prNumber: pr.number,
+          headSha: pr.headRefOid,
+          repo: REPO,
+          state,
+          updateState: update,
+        });
+      },
+    });
+    if (!accepted) log(tag, `  merge: dedup (already queued / running), skip`);
   }
 
   const status = queue.status();
   log(
     "[poll]",
-    `tick #${tickCount} end: enqueued=${reviewEnqueued + fixEnqueued + mergeEnqueued} (review=${reviewEnqueued}, fix=${fixEnqueued}, merge=${mergeEnqueued}), skipped=${skipped}, queue=${status.queued}, running=${status.running}`,
+    `tick #${tickCount} end: enqueued=${reviewEnqueued + fixEnqueued + ciFixEnqueued + mergeEnqueued} (review=${reviewEnqueued}, fix=${fixEnqueued}, ci-fix=${ciFixEnqueued}, merge=${mergeEnqueued}), skipped=${skipped}, queue=${status.queued}, running=${status.running}`,
   );
 }
 
