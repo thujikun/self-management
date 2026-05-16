@@ -3,16 +3,17 @@
  *
  * Pulumi の `runtime.setMocks` で resource provider と function call を mock 化し、
  * 実 Cloudflare API を叩かずに module を import → `getZoneOutput` が解決される過程と
- * 各 export、および `cloudflare.DnsRecord` (= Google Search Console verification TXT) の
- * 構造的属性 (type / name / content / ttl / zoneId) を検証する。
+ * 各 export、および `cloudflare.DnsRecord` (Google Search Console verification TXT /
+ * Google Workspace MX × 5 + SPF + DKIM + Workspace verification TXT) の構造的属性
+ * (type / name / content / ttl / priority / zoneId) を検証する。
  *
  * 同一プロジェクトの `infra/core/index.test.ts` と同じ Pulumi mock pattern を踏襲しつつ、
- * `newResource` mock で `args.inputs` を closure に capture し、resource declaration の
- * typo (例: `type: "TXT"` を `type: "A"` に書き換え) を test で検出できるようにしている。
+ * `newResource` mock で `args.inputs` を resource name 別に capture し、resource declaration の
+ * typo (例: `type: "TXT"` を `type: "A"` に書き換え) や priority 取り違えを test で検出できる。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain infra
- * @graph-business ryantsuji-dev stack の Pulumi 構築コードを mock-runtime で smoke test。実 CF API なしで「getZone が解決される」「期待 export が出る」「TXT record の構造属性が宣言どおり」を保証し、preview 前の早期 fail を取る
+ * @graph-business ryantsuji-dev stack の Pulumi 構築コードを mock-runtime で smoke test。実 CF API なしで「getZone が解決される」「期待 export が出る」「DNS record の構造属性が宣言どおり」を保証し、preview 前の早期 fail を取る
  * @graph-connects none
  */
 
@@ -29,25 +30,43 @@ function promiseOf<T>(o: pulumi.Output<T>): Promise<T> {
 }
 
 /**
- * `newResource` mock が捕捉した args を resource type 別に貯める buffer。
- * Pulumi の resource type token (例: `cloudflare:index/dnsRecord:DnsRecord`) を key に
- * 最後に作成された resource args を保持する。複数同型 resource を作る test では拡張する。
+ * `newResource` mock が捕捉した args を resource name 別に貯める buffer。
+ * 同一 stack 内に複数の `cloudflare:index/dnsRecord:DnsRecord` がある (Search Console
+ * verification + Workspace MX × 5 + SPF + DKIM + Workspace verification の計 9 本)
+ * ため、type ではなく name を key に取る。
  *
  * @graph-connects none
  */
 const captured: Record<string, pulumi.runtime.MockResourceArgs> = {};
 
+/**
+ * test 用 DKIM 公開鍵 (multi-string 形式の dummy)。本番値は public key とはいえ
+ * test snapshot に焼くと sources of truth が分散するので test 専用 dummy を使う。
+ *
+ * @graph-connects none
+ */
+const TEST_DKIM = '"v=DKIM1;k=rsa;p=AAAA" "BBBB"';
+
+/**
+ * test 用 Workspace domain verification token (任意の dummy)。
+ *
+ * @graph-connects none
+ */
+const TEST_WORKSPACE_VERIFICATION = '"google-site-verification=workspace-test-token"';
+
 beforeAll(() => {
   pulumi.runtime.setAllConfig({
     "ryantsuji-dev:zoneName": "ryantsuji.dev",
     "ryantsuji-dev:googleSiteVerification": '"google-site-verification=test-token"',
+    "ryantsuji-dev:googleWorkspaceVerification": TEST_WORKSPACE_VERIFICATION,
+    "ryantsuji-dev:googleDkim": TEST_DKIM,
   });
   pulumi.runtime.setMocks({
     newResource(args: pulumi.runtime.MockResourceArgs): {
       id: string;
       state: Record<string, unknown>;
     } {
-      captured[args.type] = args;
+      captured[args.name] = args;
       return { id: `${args.name}_id`, state: { ...args.inputs, id: `${args.name}_id` } };
     },
     call(args: pulumi.runtime.MockCallArgs): Record<string, unknown> {
@@ -64,41 +83,125 @@ beforeAll(() => {
   });
 });
 
+/**
+ * `captured[name]` の inputs を Pulumi Output 解決済みの plain object に正規化する
+ * 複数 record の structural assertion を簡潔に書くための helper。
+ *
+ * @graph-connects none
+ */
+async function inputsOf(name: string): Promise<{
+  zoneId: string;
+  name: unknown;
+  type: unknown;
+  content: unknown;
+  ttl: unknown;
+  priority: unknown;
+}> {
+  const r = captured[name];
+  expect(r, `resource ${name} not captured`).toBeDefined();
+  expect(r.type).toBe("cloudflare:index/dnsRecord:DnsRecord");
+  const zoneIdInput = await promiseOf(pulumi.output(r.inputs.zoneId));
+  return {
+    zoneId: zoneIdInput,
+    name: r.inputs.name,
+    type: r.inputs.type,
+    content: r.inputs.content,
+    ttl: r.inputs.ttl,
+    priority: r.inputs.priority,
+  };
+}
+
 describe("infra/ryantsuji-dev stack", () => {
-  it("module import に成功し、zoneId / zoneNameOut / TXT record id を返す", async () => {
+  it("module import に成功し、zoneId / zoneNameOut / 各 record id を返す", async () => {
     const m = await import("./index.js");
     const id = await promiseOf(m.zoneId);
     const name = await promiseOf(m.zoneNameOut);
     const verifyId = await promiseOf(m.googleSiteVerificationRecordId);
-    expect({ id, name, verifyId }).toStrictEqual({
+    const spfId = await promiseOf(m.googleSpfRecordId);
+    const dkimId = await promiseOf(m.googleDkimRecordId);
+    const workspaceVerifyId = await promiseOf(m.googleWorkspaceVerificationRecordId);
+    const mxIds = await Promise.all(m.googleWorkspaceMxRecordIds.map((o) => promiseOf(o)));
+    expect({ id, name, verifyId, spfId, dkimId, workspaceVerifyId, mxIds }).toStrictEqual({
       id: "test-zone-id-1234567890",
       name: "ryantsuji.dev",
       // mock newResource は `${args.name}_id` を返すため、resource name 由来で決まる
       verifyId: "google-site-verification_id",
+      spfId: "google-spf_id",
+      dkimId: "google-dkim_id",
+      workspaceVerifyId: "google-workspace-verification_id",
+      mxIds: [
+        "google-mx-aspmx_id",
+        "google-mx-alt1_id",
+        "google-mx-alt2_id",
+        "google-mx-alt3_id",
+        "google-mx-alt4_id",
+      ],
     });
   });
 
   it("google-site-verification TXT record を期待どおりに宣言する", async () => {
     await import("./index.js");
-    const txt = captured["cloudflare:index/dnsRecord:DnsRecord"];
-    // captured[...] が undefined なら resource type 自体が誤っている (typo / 別 type に差替え)
-    // 早期に気付けるよう先に明示 assertion を入れる。
-    expect(txt.type).toBe("cloudflare:index/dnsRecord:DnsRecord");
-
-    // Output<string> な zoneId は mock 解決後 plain string で inputs に乗る。
-    const zoneIdInput = await promiseOf(pulumi.output(txt.inputs.zoneId));
-    expect({
-      zoneId: zoneIdInput,
-      name: txt.inputs.name,
-      type: txt.inputs.type,
-      content: txt.inputs.content,
-      ttl: txt.inputs.ttl,
-    }).toStrictEqual({
+    expect(await inputsOf("google-site-verification")).toStrictEqual({
       zoneId: "test-zone-id-1234567890",
       name: "ryantsuji.dev",
       type: "TXT",
       content: '"google-site-verification=test-token"',
       ttl: 3600,
+      priority: undefined,
+    });
+  });
+
+  it("google-spf TXT record を期待どおりに宣言する", async () => {
+    await import("./index.js");
+    expect(await inputsOf("google-spf")).toStrictEqual({
+      zoneId: "test-zone-id-1234567890",
+      name: "ryantsuji.dev",
+      type: "TXT",
+      content: '"v=spf1 include:_spf.google.com ~all"',
+      ttl: 3600,
+      priority: undefined,
+    });
+  });
+
+  it("google-dkim TXT record を期待どおりに宣言する (sub-name + 自動 TTL)", async () => {
+    await import("./index.js");
+    expect(await inputsOf("google-dkim")).toStrictEqual({
+      zoneId: "test-zone-id-1234567890",
+      name: "google._domainkey.ryantsuji.dev",
+      type: "TXT",
+      content: TEST_DKIM,
+      ttl: 1,
+      priority: undefined,
+    });
+  });
+
+  it("google-workspace-verification TXT record を期待どおりに宣言する", async () => {
+    await import("./index.js");
+    expect(await inputsOf("google-workspace-verification")).toStrictEqual({
+      zoneId: "test-zone-id-1234567890",
+      name: "ryantsuji.dev",
+      type: "TXT",
+      content: TEST_WORKSPACE_VERIFICATION,
+      ttl: 3600,
+      priority: undefined,
+    });
+  });
+
+  it.each([
+    { name: "google-mx-aspmx", content: "aspmx.l.google.com", priority: 1 },
+    { name: "google-mx-alt1", content: "alt1.aspmx.l.google.com", priority: 5 },
+    { name: "google-mx-alt2", content: "alt2.aspmx.l.google.com", priority: 5 },
+    { name: "google-mx-alt3", content: "alt3.aspmx.l.google.com", priority: 10 },
+    { name: "google-mx-alt4", content: "alt4.aspmx.l.google.com", priority: 10 },
+  ])("$name MX record を期待どおりに宣言する (priority=$priority)", async (mx) => {
+    await import("./index.js");
+    expect(await inputsOf(mx.name)).toStrictEqual({
+      zoneId: "test-zone-id-1234567890",
+      name: "ryantsuji.dev",
+      type: "MX",
+      content: mx.content,
+      ttl: 3600,
+      priority: mx.priority,
     });
   });
 });
