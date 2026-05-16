@@ -93,3 +93,44 @@ export function fixEligibility(
   }
   return { ok: true };
 }
+
+export interface CiFixEligibilityConfig {
+  maxFailuresPerSha: number;
+  backoffMs: number;
+}
+
+/**
+ * ci-fix 再エンキュー判定 (head_sha をキー)。
+ * - 既に当該 SHA を成功 ci-fix 済みなら skip (= 既に push 済、新 SHA を待つ)
+ * - 失敗 cap に達していたら skip (新 commit を待つ。同 SHA に対して無限に retry しない)
+ * - 失敗 backoff 窓内なら skip
+ */
+export function ciFixEligibility(
+  headSha: string,
+  cur: PRState,
+  now: number,
+  cfg: CiFixEligibilityConfig,
+): EligibilityResult {
+  if (cur.lastCiFixedSha === headSha) {
+    return { ok: false, reason: "already ci-fixed for this sha" };
+  }
+  const sameFailedSha = cur.lastFailedCiFixSha === headSha;
+  const failures = sameFailedSha ? (cur.ciFixFailureCount ?? 0) : 0;
+  if (failures >= cfg.maxFailuresPerSha) {
+    return {
+      ok: false,
+      reason: `ci-fix failure cap reached (${failures}/${cfg.maxFailuresPerSha}) for sha=${headSha.slice(0, 7)}; awaiting new commit`,
+    };
+  }
+  if (sameFailedSha && cur.lastCiFixFailedAt) {
+    const since = now - new Date(cur.lastCiFixFailedAt).getTime();
+    if (since < cfg.backoffMs) {
+      const remain = Math.ceil((cfg.backoffMs - since) / 1000);
+      return {
+        ok: false,
+        reason: `ci-fix backoff: retry in ${remain}s (failures=${failures}/${cfg.maxFailuresPerSha})`,
+      };
+    }
+  }
+  return { ok: true };
+}
