@@ -4,11 +4,13 @@
  * 提供するもの (現状):
  * - Cloudflare zone のルックアップ (CF Registrar で取得済 zone を import 参照)
  * - zone ID export (後段スタックや wrangler が参照)
+ * - Google Search Console domain verification 用 apex TXT record
+ *   (`google-site-verification=<token>` を `pulumi import` で取り込み declarative 管理)
  *
  * 後で追加する予定:
- * - apex / www DNS records (Workers custom domain binding 経由なので record 直書きはしない想定)
  * - `cloudflare.WorkerCustomDomain` で `ryantsuji.dev` と Worker `ryantsuji-dev-web` を紐付け
  *   → `apps/ryantsuji-dev/web` を 1 度 wrangler deploy した後に追加
+ * - 必要なら `www` → apex CNAME 等の追加 DNS record
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain infra
