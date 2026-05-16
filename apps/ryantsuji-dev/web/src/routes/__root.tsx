@@ -24,6 +24,16 @@ export interface RouterContext {
   queryClient: QueryClient;
 }
 
+/**
+ * 本番公開 URL。Facebook Sharing Debugger / Twitter Card Validator / Slack 等の
+ * external crawler は HTML の og:image / twitter:image / og:url を raw 文字列として
+ * 読むため、相対 path だと resolve に失敗する。OGP 仕様 (ogp.me) も og:image は
+ * 絶対 URL を要求する。wrangler.jsonc の custom_domain routes と一致させる。
+ *
+ * @graph-connects none
+ */
+const SITE_URL = "https://ryantsuji.dev";
+
 /** @graph-connects tanstack-router [provides] root route definition */
 export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
@@ -35,8 +45,32 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         name: "description",
         content: "Ryan Tsuji's personal blog — engineering, design, product.",
       },
+      { name: "theme-color", content: "#0abab5" },
+      // OG / Twitter Card (sub-label 付き logo を社外 share の preview に)
+      // crawler が解決できるよう絶対 URL で送出する
+      { property: "og:title", content: "ryantsuji.dev" },
+      {
+        property: "og:description",
+        content: "Ryan Tsuji's personal blog — engineering, design, product.",
+      },
+      { property: "og:url", content: SITE_URL },
+      { property: "og:image", content: `${SITE_URL}/og-image.png` },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: `${SITE_URL}/og-image.png` },
     ],
-    links: [{ rel: "stylesheet", href: "/styles.css" }],
+    links: [
+      { rel: "stylesheet", href: "/styles.css" },
+      // favicon: SVG (modern browsers) + ICO fallback + 各 raster size
+      // Mochiy Pop One letterforms を path 化した self-contained SVG (font 依存無し)
+      { rel: "icon", type: "image/svg+xml", href: "/logo-mark.svg" },
+      { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
+      { rel: "icon", type: "image/png", sizes: "48x48", href: "/favicon-48x48.png" },
+      { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png" },
+      { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png" },
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
+      { rel: "manifest", href: "/site.webmanifest" },
+    ],
   }),
   component: RootComponent,
 });
