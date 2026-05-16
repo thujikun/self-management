@@ -58,24 +58,38 @@ describe("/posts — index", () => {
     expect(html).not.toMatch(/href="\/posts\/_draft-example"/);
   });
 
-  it("?lang=ja で override すると post の lang badge (JA) が served になる", async () => {
+  it("?lang=ja で override すると post の title / summary が JA に切替わる", async () => {
     const router = getRouter({
       history: createMemoryHistory({ initialEntries: ["/posts?lang=ja"] }),
     });
     await router.load();
     const html = renderToString(<RouterProvider router={router} />);
-    // 個別 post card の lang badge は override に従って JA served に。
-    // header の LangSwitcher は cookie 主体 (override は per-page) なので参照しない。
-    expect(html).toMatch(/post-card__lang post-card__lang--served[^>]*>JA/);
+    // lang badge は card から削除 (#51) されたので、override の効果は title / summary
+    // が JP 文字列になっていることで確認する (最新 post の `AIのハーネス〜` が JP 版 title)。
+    expect(html).toContain("AIのハーネスを");
+    // 念のため lang badge が残っていないことも確認
+    expect(html).not.toMatch(/post-card__lang/);
   });
 
-  it("?lang=en で override すると post の lang badge (EN) が served になる", async () => {
+  it("?lang=en で override すると post の title / summary が EN に切替わる", async () => {
     const router = getRouter({
       history: createMemoryHistory({ initialEntries: ["/posts?lang=en"] }),
     });
     await router.load();
     const html = renderToString(<RouterProvider router={router} />);
-    expect(html).toMatch(/post-card__lang post-card__lang--served[^>]*>EN/);
+    expect(html).toContain("Building a Real AI Harness");
+    expect(html).not.toMatch(/post-card__lang/);
+  });
+
+  it("?tag=mcp で tag filter pill (#mcp + clear link) が出る", async () => {
+    const router = getRouter({
+      history: createMemoryHistory({ initialEntries: ["/posts?tag=mcp"] }),
+    });
+    await router.load();
+    const html = renderToString(<RouterProvider router={router} />);
+    expect(html).toMatch(/posts-index__filter/);
+    expect(html).toMatch(/<strong>#(?:<!--\s*-->)?mcp<\/strong>/);
+    expect(html).toMatch(/posts-index__filter-clear/);
   });
 });
 

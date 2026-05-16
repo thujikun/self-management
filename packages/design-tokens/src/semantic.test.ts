@@ -46,8 +46,8 @@ describe("semantic tokens — light theme", () => {
           "subtle": "oklch(96% 0 0)",
         },
         "glass": {
-          "bg": "oklch(100% 0 0 / 0.65)",
-          "blur": "16px",
+          "bg": "oklch(100% 0 0 / 0.45)",
+          "blur": "24px",
           "border": "oklch(0% 0 0 / 0.06)",
         },
         "text": {
@@ -81,8 +81,8 @@ describe("semantic tokens — dark theme", () => {
           "subtle": "oklch(22% 0.014 188)",
         },
         "glass": {
-          "bg": "oklch(24% 0.02 188 / 0.55)",
-          "blur": "16px",
+          "bg": "oklch(22% 0.02 188 / 0.4)",
+          "blur": "24px",
           "border": "oklch(100% 0 0 / 0.08)",
         },
         "text": {

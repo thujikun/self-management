@@ -100,10 +100,9 @@ describe("PostCard", () => {
     );
   });
 
-  it("servedLang の lang badge に --served modifier が付き、他 lang badge には付かない", () => {
+  it("lang badge は出さない (card 内ノイズ削減のため styled refresh で廃止)", () => {
     const post = makePost({ availableLangs: ["en", "ja"], servedLang: "ja" });
     const html = renderToString(createElement(PostCard, { post, requestedLang: "ja" }));
-    expect(html).toMatch(/<li class="post-card__lang">EN<\/li>/);
-    expect(html).toMatch(/<li class="post-card__lang post-card__lang--served">JA<\/li>/);
+    expect(html).not.toMatch(/post-card__lang/);
   });
 });

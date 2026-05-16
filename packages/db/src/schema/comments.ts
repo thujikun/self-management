@@ -15,7 +15,7 @@
  */
 
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 import { posts } from "./posts.js";
 
@@ -30,13 +30,20 @@ export const comments = pgTable("comments", {
   authorName: text("author_name").notNull(),
   authorEmail: text("author_email"),
   body: text("body").notNull(),
+  // thread 用の親コメント参照。null = top-level、UUID = その親コメント (1 階層のみ)。
+  // 親が delete されたら cascade で子も消す (soft delete の semantic と整合させるため、
+  // 親 row の deletedAt 立てで UI からは両方消える)。
+  parentCommentId: uuid("parent_comment_id").references((): AnyPgColumn => comments.id, {
+    onDelete: "cascade",
+  }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .default(sql`now()`),
-  // Soft delete: spam / abuse 対応で row は残し UI から消す pattern を取る予定。
+  // Soft delete: spam / abuse 対応で row は残し UI から消す pattern。自分の comment
+  // を削除する UI でもこのカラムに timestamp を書いて hide する。
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 

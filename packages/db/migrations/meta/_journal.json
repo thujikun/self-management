@@ -15,6 +15,13 @@
       "when": 1778371405680,
       "tag": "0001_unique_leo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778950322523,
+      "tag": "0002_mean_marvel_zombies",
+      "breakpoints": true
     }
   ]
 }

@@ -845,9 +845,62 @@ main {
 .comments__meta {
   display: flex;
   gap: var(--space-3);
+  align-items: center;
   font-size: var(--font-size-xs);
   color: var(--text-muted);
   margin: 0 0 var(--space-2);
+}
+
+.comments__actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: var(--space-2);
+}
+
+.comments__action {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: text-decoration-color var(--duration-fast) var(--easing-out);
+}
+
+.comments__action:hover,
+.comments__action:focus-visible {
+  text-decoration-color: currentColor;
+}
+
+.comments__action--danger {
+  color: var(--text-muted);
+}
+
+.comments__action--danger:hover,
+.comments__action--danger:focus-visible {
+  color: oklch(60% 0.18 25);
+}
+
+.comments__replies {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-3) 0 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border-left: 2px solid var(--border-subtle);
+  padding-left: var(--space-3);
+}
+
+.comments__item--reply {
+  background: var(--bg-base);
+  padding: var(--space-3);
+}
+
+.comments__form--reply {
+  margin-top: var(--space-3);
 }
 
 .comments__author {
@@ -1008,33 +1061,108 @@ main {
   color: var(--accent-fg);
 }
 
-/* ─── post card lang badge ─── */
+/* ─── post share pane (left sticky on detail page) ─── */
 
-.post-card__langs {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: inline-flex;
-  gap: var(--space-1);
-  margin-top: var(--space-2);
+.post-share-pane {
+  position: sticky;
+  top: calc(var(--space-12, 4rem) + var(--space-3));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  align-self: start;
+  width: 48px;
 }
 
-.post-card__lang {
+.post-share-pane__btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 36px;
+  min-height: 36px;
+  padding: var(--space-1) 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+  transition:
+    background var(--duration-fast) var(--easing-out),
+    color var(--duration-fast) var(--easing-out);
+}
+
+.post-share-pane__btn:hover,
+.post-share-pane__btn:focus-visible {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.post-share-pane__btn--like[aria-pressed="true"] {
+  color: var(--accent-bg);
+}
+
+.post-share-pane__icon {
+  font-size: var(--font-size-md);
+  line-height: 1;
+}
+
+.post-share-pane__count {
   font-size: 0.625rem;
   font-weight: var(--font-weight-medium);
-  padding: 0 var(--space-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-full);
   color: var(--text-muted);
-  letter-spacing: 0.06em;
-  line-height: 1.6;
 }
 
-.post-card__lang--served {
-  border-color: var(--accent-border);
-  color: var(--accent-bg);
-  background: color-mix(in oklch, var(--accent-bg) 8%, transparent);
+.post-share-pane__btn--rss {
+  color: color-mix(in oklch, var(--accent-bg) 80%, var(--text-secondary));
 }
+
+/* desktop: post-detail を grid 化して left pane を main の左に sticky で並べる */
+@media (min-width: 960px) {
+  .post-detail {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: var(--space-6);
+  }
+  .post-detail__crumbs,
+  .post-detail__header,
+  .post-body,
+  .engagement {
+    grid-column: 2;
+  }
+  .post-share-pane {
+    grid-column: 1;
+    grid-row: 2 / span 99;
+  }
+}
+
+/* mobile: pane を full-width bottom toolbar 風に */
+@media (max-width: 959px) {
+  .post-share-pane {
+    flex-direction: row;
+    justify-content: space-around;
+    width: 100%;
+    position: sticky;
+    bottom: var(--space-2);
+    top: auto;
+    margin-top: var(--space-4);
+    z-index: 5;
+  }
+  .post-share-pane__btn {
+    width: auto;
+    flex: 1;
+  }
+}
+
+/* ─── post card lang fallback note ─── */
 
 .post-card__fallback-note {
   margin: var(--space-1) 0 0;
@@ -1059,8 +1187,11 @@ main {
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-full);
   background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  /* lightningcss が autoprefix で重複削除してしまう問題を回避するため、
+     -webkit- 付きを後に書き、両方を残させる。`saturate` を加えて Safari 風の
+     frosted glass 感を強める (背景色の彩度を 180% に高めてから blur)。 */
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
 }
 
 .site-header__brand {
