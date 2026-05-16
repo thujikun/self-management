@@ -33,6 +33,7 @@ import {
 } from "../../server/engagement.js";
 import { pickLang, type Lang } from "../../server/i18n.js";
 import { getPostSource } from "../../server/posts.js";
+import { safeAcceptLanguage } from "../../server/request.server.js";
 
 /**
  * renderPostServer の handler 本体。`?lang=` override + Accept-Language で lang を
@@ -44,21 +45,6 @@ import { getPostSource } from "../../server/posts.js";
  *
  * @graph-connects content [calls] renderMarkdown(source) で構造化 RenderedDoc に変換
  */
-/**
- * getRequestHeaders は server runtime 外 (vitest 環境等) で throw するので、
- * Accept-Language を取れない場合 null fallback。`pickLang` 側で en に倒す。
- *
- * @graph-connects none
- */
-function safeAcceptLanguage(): string | null {
-  try {
-    const headers = getRequestHeaders() as unknown as Record<string, string | undefined>;
-    return headers["accept-language"] ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /** @graph-connects content [calls] renderMarkdown(source) で構造化 RenderedDoc に変換 */
 export async function runRenderPost(
   slug: string,
