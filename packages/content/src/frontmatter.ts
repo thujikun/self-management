@@ -1,13 +1,14 @@
 /**
  * markdown frontmatter の Zod schema + parse helper。
  *
- * 投稿には title / publishedAt が必須。slug は file 名から導出するか
- * frontmatter で明示。tags / summary は任意。`canonical` は cross-syndication
- * (Zenn / dev.to) で original URL を逆算するため。
+ * 投稿には title / publishedAt が必須。`slug` / `lang` は **ファイル名 (`<slug>.<lang>.md`)
+ * を authoritative** に扱うため schema には載せない (呼び出し側で filename 由来の値を
+ * 付与する)。tags / summary は任意。`canonical` は cross-syndication (Zenn / dev.to)
+ * で original URL を逆算するため。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business markdown frontmatter の SSoT schema。投稿の必須/任意 field を Zod で定義し、parse 時に validation + 既定値付与を行う。各種 syndication target (Zenn/dev.to) で参照する canonical URL も meta として持つ
+ * @graph-business markdown frontmatter の SSoT schema。投稿の必須/任意 field を Zod で定義し、parse 時に validation + 既定値付与を行う。slug / lang はファイル名から導出する authoritative な値のため schema には含めない。各種 syndication target (Zenn/dev.to) で参照する canonical URL も meta として持つ
  * @graph-connects none
  */
 
@@ -17,7 +18,9 @@ import { z } from "zod";
  * frontmatter の Zod schema。
  *
  * - `title` / `publishedAt` 必須
- * - `slug` は frontmatter で override 可能 (なければ呼び出し側でファイル名から付与)
+ * - `slug` / `lang` は **持たない** (filename `<slug>.<lang>.md` が authoritative
+ *   で、frontmatter 側の値は採用しない方針)。既存 markdown に書かれていても
+ *   `z.object` の strip 挙動で silently drop される
  * - `tags` は重複削除 + 小文字化
  *
  * @graph-connects none
@@ -29,7 +32,6 @@ export const FrontmatterSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}/)
     .optional(),
-  slug: z.string().optional(),
   summary: z.string().optional(),
   tags: z
     .array(z.string())
@@ -37,7 +39,6 @@ export const FrontmatterSchema = z.object({
     .transform((arr) => Array.from(new Set(arr.map((t) => t.toLowerCase()))).sort()),
   canonical: z.string().url().optional(),
   draft: z.boolean().default(false),
-  lang: z.enum(["ja", "en"]).default("ja"),
 });
 
 /** @graph-connects none */

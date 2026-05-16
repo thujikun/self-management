@@ -8,5 +8,6 @@ lang: "en"
 Minimal test fixture used by `$slug.test.tsx`. No headings, no tags — covers the
 null branches of TOC rendering and tag-list rendering in `routes/posts/$slug.tsx`.
 
-Not intended for production reading; it's listed in `/posts` because there's no
-mechanism to hide non-draft fixtures yet (acceptable trade-off for test coverage).
+Slugs prefixed with `_` are excluded from `/posts` listing (production publishing
+surface) but remain reachable via direct `getPostSource(slug, lang)` so test
+fixtures can be SSR'd without polluting the index.

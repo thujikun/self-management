@@ -32,12 +32,7 @@ import { PostBody } from "../../server-components/PostBody.js";
 import { type CommentView } from "../../server/engagement.js";
 import type { Lang } from "../../server/i18n.js";
 
-import {
-  runAddComment,
-  runLoadEngagement,
-  runRenderPost,
-  runToggleLike,
-} from "./$slug.server.js";
+import { runAddComment, runLoadEngagement, runRenderPost, runToggleLike } from "./$slug.server.js";
 
 /** @graph-connects none */
 const SlugSchema = z.string().min(1);
@@ -150,8 +145,15 @@ export const Route = createFileRoute("/posts/$slug")({
 
 /** @graph-connects none */
 function PostDetail() {
-  const { html, frontmatter, headings, readingTimeMinutes, engagement, servedLang, availableLangs } =
-    Route.useLoaderData();
+  const {
+    html,
+    frontmatter,
+    headings,
+    readingTimeMinutes,
+    engagement,
+    servedLang,
+    availableLangs,
+  } = Route.useLoaderData();
   const { slug } = Route.useParams();
   return (
     <main className="post-detail" lang={servedLang}>

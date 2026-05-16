@@ -163,6 +163,45 @@ SSoT は GCP Secret Manager なので、値を入れ直したら `gcloud secrets
 - **auth**: Better Auth (GitHub / X / Google OAuth、open sign-up — 第三者検証は OAuth provider に委ねる)
 - **engagement**: `/posts/$slug` に views (+1 per loader call) / likes (toggle、auth 必須) / comments (投稿、auth 必須) を追加
 
+## /posts (多言語)
+
+`/posts` 一覧 + `/posts/$slug` 詳細は **en / ja の bilingual** で配信する。 lang 選択は
+以下の優先順:
+
+1. `?lang=en` / `?lang=ja` の query (LangSwitcher の `EN` / `JP` button で切替)
+2. `Accept-Language` header から優先言語を推定 (server fn `pickLang`)
+3. それ以外は **`en`** に fallback (dev.to import を SoT に揃えたので en は全 post に存在する前提)
+
+### ファイル命名規約
+
+content source は `apps/ryantsuji-dev/web/content/posts/` 配下に置き、
+**filename が authoritative**:
+
+```
+<slug>.<lang>.md     # e.g. db-graph-mcp.en.md / db-graph-mcp.ja.md
+```
+
+- `slug` 部分が同一なら en / ja は同一 post の variant pair として扱われる
+- `lang` は `en` / `ja` のみ。frontmatter 側に `slug:` / `lang:` を書いても schema が
+  strip するので、ファイル名から導出した値が常に優先される
+- `_` prefix slug (e.g. `_minimal-fixture.en.md`) は **`/posts` 一覧から除外** される
+  test fixture 用 convention。直接 URL (`/posts/_minimal-fixture`) では引続き reachable
+- frontmatter で `draft: true` を立てた variant は listing / 詳細の全経路から除外
+
+### lang fallback の挙動
+
+- 要求 lang の variant が存在する → 当該 variant を render、`servedLang` は要求 lang
+- 要求 lang の variant が無い → **`en` variant に fallback** (en も無い場合は他 lang を
+  `SUPPORTED_LANGS` の順で試す)。一覧 card には `(showing EN — JP not available)` の
+  hint、詳細 page では `<PostLangSwitcher>` で利用可能 lang のみが button として出る
+- ja-only / en-only post も `availableLangs` を見て fallback hint を出すので user に
+  「無い言語」を空クリックさせない
+
+### syndication
+
+詳細 page の SoT は本 repo の markdown。後続 PR で **dev.to** (EN) / **Zenn** (JP) に
+syndication 投稿し、`canonical_url` を `https://ryantsuji.dev/posts/<slug>` に揃える。
+
 ## RPC client
 
 Hono RPC の型は `src/routes/api/$.ts` から export している `ApiType`。

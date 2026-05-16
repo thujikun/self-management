@@ -44,12 +44,15 @@ const rawSources = import.meta.glob<RawSource>("../../content/posts/*.{en,ja}.md
 });
 
 /**
- * post 一覧 / 詳細で使う meta 情報。frontmatter に slug (ファイル名由来) を必ず付けたサブセット。
+ * post 一覧 / 詳細で使う meta 情報。frontmatter (= `Frontmatter`) に **ファイル名由来の
+ * authoritative な `slug` / `lang`** を必ず付けたサブセット。`Frontmatter` schema
+ * 側はこの 2 field を持たないので、上書きではなくここで初めて付与される。
  *
  * @graph-connects none
  */
 export interface PostMeta extends Frontmatter {
   slug: string;
+  lang: Lang;
 }
 
 /**
@@ -101,14 +104,16 @@ function parsePath(path: string): { slug: string; lang: Lang } | null {
 }
 
 /**
- * source から frontmatter を抜き出して PostMeta に。slug はファイル名由来を常に上書きで採用する。
+ * source から frontmatter を抜き出して PostMeta に。`slug` / `lang` は **ファイル名
+ * `<slug>.<lang>.md` を authoritative** に扱い、frontmatter 側に書かれた同名 field は
+ * `FrontmatterSchema` の strip で落としてからここで filename 由来の値を注入する。
  *
  * @graph-connects content [calls] parseFrontmatter で Zod validate
  */
-function toMeta(slug: string, source: string): PostMeta {
+function toMeta(slug: string, lang: Lang, source: string): PostMeta {
   const { data } = matter(source);
   const fm = parseFrontmatter(data);
-  return { ...fm, slug };
+  return { ...fm, slug, lang };
 }
 
 /**
@@ -128,7 +133,7 @@ function entries(): Map<string, PostEntry> {
     // parsePath が null を返すことは無い (test 経由の __testing.parsePath では null
     // 経路を網羅)。non-null assertion で defensive 分岐を消す。
     const parsed = parsePath(path) as { slug: string; lang: Lang };
-    const meta = toMeta(parsed.slug, mod.default);
+    const meta = toMeta(parsed.slug, parsed.lang, mod.default);
     if (meta.draft) continue;
     let entry = out.get(parsed.slug);
     if (!entry) {
@@ -151,10 +156,7 @@ function entries(): Map<string, PostEntry> {
  *
  * @graph-connects none
  */
-function variantFor(
-  entry: PostEntry,
-  lang: Lang,
-): { variant: PostVariant; servedLang: Lang } {
+function variantFor(entry: PostEntry, lang: Lang): { variant: PostVariant; servedLang: Lang } {
   const direct = entry.variants[lang];
   if (direct) return { variant: direct, servedLang: lang };
   // `SUPPORTED_LANGS` は en, ja の順なので en preferred fallback になる。entry 内に
@@ -191,10 +193,17 @@ function availableLangs(entry: PostEntry): Lang[] {
  * 利用可能 lang を返す (`publishedAt` 降順)。要求 lang が無い post は en fallback meta
  * を返し、`servedLang` で実際の lang を示す。
  *
+ * **`_` prefix slug は production 一覧から除外** する (e.g. `_minimal-fixture` / test
+ * fixture)。`getPostSource(slug, lang)` 経由の直接アクセスは引続き可能なので、
+ * `$slug.test.tsx` などの test fixture は URL では届く一方で `/posts` 一覧の publishing
+ * surface には現れない (draft: true は `entries()` 段階で全経路から落ちる separate な
+ * mechanism; こちらは listing から隠すだけの「内部 fixture」用 convention)。
+ *
  * @graph-connects content [calls] parseFrontmatter で各 source の Frontmatter を抽出
  */
 export function listPosts(lang: Lang): PostListItem[] {
   return [...entries().values()]
+    .filter((entry) => !entry.slug.startsWith("_"))
     .map((entry) => {
       const picked = variantFor(entry, lang);
       return {

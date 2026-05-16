@@ -57,6 +57,29 @@ describe("listPosts(lang)", () => {
       }
     }
   });
+
+  it("`_` prefix slug (fixture / 内部用) は production 一覧から除外される", () => {
+    // `_minimal-fixture.en.md` / `_draft-example.en.md` のいずれも /posts 一覧には
+    // 露出させない (draft: true は entries() 段階で全経路から落ちる別 mechanism、
+    // 本 filter は draft でない fixture を listing 表面から隠す convention)。
+    const slugs = new Set(listPosts("en").map((p) => p.slug));
+    expect(slugs.has("_minimal-fixture")).toBe(false);
+    expect(slugs.has("_draft-example")).toBe(false);
+    // 直接アクセス (getPostSource) は引続き fixture を返すこと
+    expect(getPostSource("_minimal-fixture", "en")).not.toBeNull();
+  });
+
+  it("meta.lang は filename suffix 由来で servedLang と必ず一致する (frontmatter 側の値は採用しない)", () => {
+    // `toMeta` が filename 由来 lang を inject するので、`PostMeta.lang` は常に
+    // 返した variant の lang (= servedLang) と一致する。frontmatter で誤って
+    // 別 lang を書いても sile に PostMeta に混入しない invariant。
+    for (const p of listPosts("en")) {
+      expect(p.lang).toBe(p.servedLang);
+    }
+    for (const p of listPosts("ja")) {
+      expect(p.lang).toBe(p.servedLang);
+    }
+  });
 });
 
 describe("getPostSource(slug, lang)", () => {
@@ -126,9 +149,9 @@ describe("variantFor (internal、fallback ロジックと invariant 破れの fa
 
   it("variants が空の entry は console.error + throw (silent fallback しない)", () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(() =>
-      __testing.variantFor({ slug: "broken-fixture", variants: {} }, "en"),
-    ).toThrow(/empty variants for broken-fixture/);
+    expect(() => __testing.variantFor({ slug: "broken-fixture", variants: {} }, "en")).toThrow(
+      /empty variants for broken-fixture/,
+    );
     expect(errSpy).toHaveBeenCalledWith(
       expect.stringContaining("empty variants for slug=broken-fixture"),
     );

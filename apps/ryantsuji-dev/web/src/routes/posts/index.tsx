@@ -89,9 +89,7 @@ function LangSwitcher({ current }: { current: Lang }) {
         to="/posts"
         search={(prev) => ({ ...prev, lang: "en" })}
         className={
-          current === "en"
-            ? "lang-switcher__btn lang-switcher__btn--active"
-            : "lang-switcher__btn"
+          current === "en" ? "lang-switcher__btn lang-switcher__btn--active" : "lang-switcher__btn"
         }
       >
         EN
@@ -100,9 +98,7 @@ function LangSwitcher({ current }: { current: Lang }) {
         to="/posts"
         search={(prev) => ({ ...prev, lang: "ja" })}
         className={
-          current === "ja"
-            ? "lang-switcher__btn lang-switcher__btn--active"
-            : "lang-switcher__btn"
+          current === "ja" ? "lang-switcher__btn lang-switcher__btn--active" : "lang-switcher__btn"
         }
       >
         JP
@@ -113,11 +109,13 @@ function LangSwitcher({ current }: { current: Lang }) {
 
 /**
  * 一覧 card 1 枚。要求 lang と実 serve lang が違う (= fallback) 場合は
- * `(showing EN — JP not available)` の hint を出す。
+ * `(showing EN — JP not available)` の hint を出す。`_` prefix slug は listing 段階で
+ * 除外されるため、ja-only / en-only fallback hint の view-level test は本 component を
+ * 直接 render する単体テストで担保する。
  *
  * @graph-connects tanstack-router [calls] Link で /posts/$slug に navigate
  */
-function PostCard({ post, requestedLang }: { post: PostListItem; requestedLang: Lang }) {
+export function PostCard({ post, requestedLang }: { post: PostListItem; requestedLang: Lang }) {
   const isFallback = post.servedLang !== requestedLang;
   return (
     <li className="post-card">

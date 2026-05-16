@@ -21,7 +21,22 @@ describe("parseFrontmatter", () => {
       publishedAt: "2026-05-08",
       tags: [],
       draft: false,
-      lang: "ja",
+    });
+  });
+
+  it("slug / lang を input に渡しても schema が strip して結果に含めない (filename authoritative)", () => {
+    expect(
+      parseFrontmatter({
+        title: "x",
+        publishedAt: "2026-05-08",
+        slug: "ignored-slug",
+        lang: "en",
+      }),
+    ).toStrictEqual({
+      title: "x",
+      publishedAt: "2026-05-08",
+      tags: [],
+      draft: false,
     });
   });
 
@@ -53,10 +68,5 @@ describe("parseFrontmatter", () => {
         canonical: "https://zenn.dev/ryantsuji/articles/abc",
       }).canonical,
     ).toMatch(/^https:\/\//);
-  });
-
-  it("lang は ja / en のみ受け付ける", () => {
-    expect(() => parseFrontmatter({ title: "x", publishedAt: "2026-05-08", lang: "fr" })).toThrow();
-    expect(parseFrontmatter({ title: "x", publishedAt: "2026-05-08", lang: "en" }).lang).toBe("en");
   });
 });

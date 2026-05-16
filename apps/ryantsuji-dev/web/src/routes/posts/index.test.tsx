@@ -75,17 +75,6 @@ describe("/posts — index", () => {
     const html = renderToString(<RouterProvider router={router} />);
     expect(html).toMatch(/lang-switcher__btn lang-switcher__btn--active[^>]*>EN/);
   });
-
-  it("en 専用 post (_minimal-fixture) を ja 要求すると fallback hint が出る", async () => {
-    const router = getRouter({
-      history: createMemoryHistory({ initialEntries: ["/posts?lang=ja"] }),
-    });
-    await router.load();
-    const html = renderToString(<RouterProvider router={router} />);
-    // React SSR は text 間に `<!-- -->` separator を挿入する。class 名で fallback
-    // note の <p> が出ていることを確認する方が brittle 度低い。
-    expect(html).toMatch(/class="post-card__fallback-note"/);
-  });
 });
 
 function escapeRegex(s: string): string {

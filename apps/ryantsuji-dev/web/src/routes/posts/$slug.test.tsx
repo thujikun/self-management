@@ -163,8 +163,10 @@ describe("/posts/$slug — detail (SSR)", () => {
   });
 
   it("tags / headings の無い minimal post は TOC + tag list を出さない (null branch)", async () => {
+    // `_minimal-fixture` は listPosts から除外される (production 露出を避ける) ので、
+    // 一覧 lookup ではなく title を fixture 直書きで参照する。
     const slug = "_minimal-fixture";
-    const title = listPosts("en").find((p) => p.slug === slug)!.title;
+    const title = "Minimal post (test fixture)";
     const html = await ssrAt(`/posts/${slug}`);
 
     expect(html).toMatch(new RegExp(`<h1>${escapeRegexForHtmlBody(title)}</h1>`));
