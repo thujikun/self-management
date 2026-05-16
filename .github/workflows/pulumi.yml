@@ -73,6 +73,11 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID }}
+          # pulumi の 3rd-party plugin downloader (例: @pulumiverse/grafana) は
+          # api.github.com に直接アクセスする。unauthenticated だと 60 req/hr の
+          # rate limit に当たって 403 で fail するため、GITHUB_TOKEN を env に
+          # 渡して authenticated (5000 req/hr) で叩かせる。
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   ryantsuji-dev:
     name: Pulumi ryantsuji-dev (preview on PR / up on main)
@@ -118,3 +123,5 @@ jobs:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ steps.cf-token.outputs.token }}
+          # core 側と同じく 3rd-party plugin download の rate limit 回避用。
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
