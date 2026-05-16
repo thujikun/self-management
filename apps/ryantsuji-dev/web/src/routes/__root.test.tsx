@@ -20,7 +20,7 @@ import { getRouter } from "../router.js";
 import { Route } from "./__root.js";
 
 describe("__root route", () => {
-  it("head() に title / charset / viewport / stylesheet を含む", async () => {
+  it("head() に title / charset / viewport / theme-color / og meta を含む", async () => {
     const headFn = Route.options.head;
     if (!headFn) throw new Error("Route.options.head is undefined");
     // head() は Awaitable<T> (= T | Promise<T>) なので await で unwrap する
@@ -34,12 +34,21 @@ describe("__root route", () => {
         expect.objectContaining({ charSet: "utf-8" }),
         expect.objectContaining({ name: "viewport" }),
         expect.objectContaining({ title: "ryantsuji.dev" }),
+        expect.objectContaining({ name: "theme-color", content: "#0abab5" }),
+        expect.objectContaining({ property: "og:image", content: "/og-image.png" }),
+        expect.objectContaining({ name: "twitter:card", content: "summary_large_image" }),
       ]),
     );
 
     const links = head.links ?? [];
     expect(links).toEqual(
-      expect.arrayContaining([expect.objectContaining({ rel: "stylesheet", href: "/styles.css" })]),
+      expect.arrayContaining([
+        expect.objectContaining({ rel: "stylesheet", href: "/styles.css" }),
+        expect.objectContaining({ rel: "icon", type: "image/svg+xml", href: "/logo-mark.svg" }),
+        expect.objectContaining({ rel: "icon", type: "image/x-icon", href: "/favicon.ico" }),
+        expect.objectContaining({ rel: "apple-touch-icon", href: "/apple-touch-icon.png" }),
+        expect.objectContaining({ rel: "manifest", href: "/site.webmanifest" }),
+      ]),
     );
   });
 
