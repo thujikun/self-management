@@ -84,15 +84,18 @@ describe("__root route", () => {
     expect(ogUrl?.content.startsWith("https://")).toBe(true);
 
     // `?url` import は vitest.config.ts の `cssUrlTestStub` plugin により
-    // `/__test__/styles.css` に解決される。production build では Vite が
+    // `data:text/css;base64,Lyo=` (= 空 CSS) に解決される。data URI を選んでいる
+    // のは happy-dom が `<link rel="stylesheet">` を auto-fetch する挙動への対策
+    // (相対 path だと localhost:3000 への connect が refused になり unhandled
+    // rejection で coverage gate が落ちる)。production build では Vite が
     // `/assets/styles-<hash>.css` を emit する経路で、href が非空文字列になる
     // ことは build 経由で別途担保。ここでは「`?url` import から href に値が
-    // 流れている」ことを sentinel URL の literal 一致で固定し、`href:
+    // 流れている」ことを sentinel data URI の literal 一致で固定し、`href:
     // "/styles.css"` 直書きへの regression や `href: ""` (= build pipeline
     // 非経由) への regression を test 側で必ず捕まえる。
     const links = head.links ?? [];
     expect(links).toStrictEqual([
-      { rel: "stylesheet", href: "/__test__/styles.css" },
+      { rel: "stylesheet", href: "data:text/css;base64,Lyo=" },
       { rel: "icon", type: "image/svg+xml", href: "/logo-mark.svg" },
       { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
       { rel: "icon", type: "image/png", sizes: "48x48", href: "/favicon-48x48.png" },

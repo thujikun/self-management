@@ -155,6 +155,7 @@ describe("buildCss", () => {
         --blur-md: 8px;
         --blur-lg: 16px;
         --blur-xl: 24px;
+        --blur-ambient: 80px;
         --duration-instant: 0ms;
         --duration-fast: 120ms;
         --duration-base: 200ms;

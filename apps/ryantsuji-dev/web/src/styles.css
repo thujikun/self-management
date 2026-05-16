@@ -45,15 +45,21 @@
   --blur-sm: var(--blur-sm);
   --blur-md: var(--blur-md);
   --blur-lg: var(--blur-lg);
+  --blur-ambient: var(--blur-ambient); /* 80px、body 直下 brand blob 専用 */
 
-  /* layout containers: main 本文 / TOC sidebar の固有幅 + floating breakpoint。
-     UI コンポーネントで 44rem / 16rem の magic 値を直書きしないために集約。 */
+  /* layout containers: main 本文 / TOC sidebar / TOC mobile dialog の固有幅 +
+     floating breakpoint。UI コンポーネントで 44rem / 16rem / 24rem の magic 値を
+     直書きしないために集約。 */
   --container-content: 44rem;
   --container-toc: 16rem;
+  --container-toc-dialog: 24rem; /* mobile TOC dialog の最大幅 (sidebar 16rem より広い) */
   --breakpoint-toc-float: 80rem; /* ≥1280px で floating TOC sidebar に切替 */
 
-  /* overlay 用の半透明 BG (lightbox / dialog backdrop)。light/dark 共通の overlay。 */
-  --color-overlay: oklch(0% 0 0 / 0.7);
+  /* overlay 用の半透明 BG (dialog / lightbox backdrop)。light/dark 共通 overlay。
+     standard = mid-strength backdrop (TOC dialog 等)、
+     strong  = image 主役の lightbox 等で背景を強めに沈める用。 */
+  --color-overlay: oklch(0% 0 0 / 0.6);
+  --color-overlay-strong: oklch(0% 0 0 / 0.78);
 }
 
 :root {
@@ -96,7 +102,7 @@ body::after {
   pointer-events: none;
   z-index: 0;
   border-radius: 9999px;
-  filter: blur(80px);
+  filter: blur(var(--blur-ambient));
   opacity: 0.5;
 }
 
@@ -155,7 +161,11 @@ main {
 .landing__logo {
   width: clamp(180px, 36vw, 320px);
   height: auto;
-  filter: drop-shadow(0 6px 32px color-mix(in oklch, var(--accent-bg) 35%, transparent));
+  /* offset-y = --space-2 (8px)、blur-radius = --space-8 (32px)。drop-shadow の
+     構造的 literal を spacing token に寄せて、リブランド時の drift 起点を消す。 */
+  filter: drop-shadow(
+    0 var(--space-2) var(--space-8) color-mix(in oklch, var(--accent-bg) 35%, transparent)
+  );
 }
 
 .landing__tagline {
@@ -457,12 +467,12 @@ main {
 }
 
 .post-toc__dialog::backdrop {
-  background: oklch(0% 0 0 / 0.6);
-  backdrop-filter: blur(6px);
+  background: var(--color-overlay);
+  backdrop-filter: blur(var(--blur-md));
 }
 
 .post-toc__dialog-panel {
-  @apply max-h-[80vh] w-[min(90vw,24rem)] overflow-y-auto rounded-lg border border-glass-border bg-bg-surface p-6 backdrop-blur-md;
+  @apply max-h-[80vh] w-[min(90vw,var(--container-toc-dialog))] overflow-y-auto rounded-lg border border-glass-border bg-bg-surface p-6 backdrop-blur-md;
 }
 
 .post-toc__dialog-head {
@@ -1122,8 +1132,8 @@ main {
 }
 
 .theme-switcher__icon {
-  width: 1rem;
-  height: 1rem;
+  width: var(--space-4);
+  height: var(--space-4);
 }
 
 /* default (light): moon を出して「click で dark へ」と示す */
@@ -1178,9 +1188,9 @@ main {
 }
 
 .lightbox::backdrop {
-  background: oklch(0% 0 0 / 0.78);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--color-overlay-strong);
+  backdrop-filter: blur(var(--blur-md));
+  -webkit-backdrop-filter: blur(var(--blur-md));
 }
 
 .lightbox__img {

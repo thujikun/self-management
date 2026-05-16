@@ -114,6 +114,7 @@ describe("spacing / radius / blur primitives", () => {
   it("blur scale を snapshot で固定", () => {
     expect(blur).toMatchInlineSnapshot(`
       {
+        "ambient": "80px",
         "lg": "16px",
         "md": "8px",
         "none": "0",

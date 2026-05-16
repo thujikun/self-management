@@ -143,6 +143,11 @@ export const fontWeight = {
 /**
  * blur radius scale。glass morphism / overlay の backdrop-filter 用。
  *
+ * `ambient` は body 直下に置く大型 brand-tinted blob 専用の極大半径 (= 80px)。
+ * UI レイヤ (lightbox / dialog backdrop) と桁が違うので scale 上 1 step に
+ * 収まらず、独立 step として持つ。styling.md の「該当 token 不存在は Major」
+ * 規約への対応。
+ *
  * @graph-connects none
  */
 export const blur = {
@@ -151,6 +156,7 @@ export const blur = {
   md: "8px",
   lg: "16px",
   xl: "24px",
+  ambient: "80px",
 } as const;
 
 /**
