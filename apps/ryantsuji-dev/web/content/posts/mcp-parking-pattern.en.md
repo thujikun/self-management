@@ -10,6 +10,12 @@ tags:
   - "mcp"
   - "performance"
 lang: "en"
+syndication:
+  zenn:
+    id: "4c5f49f89db19f"
+  devto:
+    id: 3593900
+    slug: "cutting-self-built-mcp-server-token-usage-by-90-the-parking-pattern-3e7o"
 ---
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.

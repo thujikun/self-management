@@ -10,6 +10,12 @@ tags:
   - "mcp"
   - "cloudflarechallenge"
 lang: "en"
+syndication:
+  zenn:
+    id: "65efe9614f8e73"
+  devto:
+    id: 3559369
+    slug: "bridging-i-want-to-build-and-i-want-to-publish-safely-for-non-engineers-sandbox-mcp-392a"
 ---
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.

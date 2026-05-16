@@ -11,6 +11,10 @@ tags:
   - "mcp"
   - "typescript"
 lang: "ja"
+syndication:
+  devto:
+    id: 3655760
+    slug: "building-a-real-ai-harness-auto-reviewed-prs-self-healing-ops-and-non-engineer-contributors-3lfa"
 ---
 
 みなさまこんにちは！エアークローゼットでCTOをしている[辻](https://x.com/RyanAircloset)です。

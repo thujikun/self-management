@@ -11,6 +11,12 @@ tags:
   - "graphrag"
   - "claudecode"
 lang: "ja"
+syndication:
+  zenn:
+    id: "2731787582881a"
+  devto:
+    id: 3404451
+    slug: "democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5"
 ---
 
 みなさまこんにちは！エアークローゼットでCTOをしている[辻](https://x.com/RyanAircloset)です。

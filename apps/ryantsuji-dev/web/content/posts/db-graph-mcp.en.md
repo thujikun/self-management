@@ -10,6 +10,12 @@ tags:
   - "graphrag"
   - "showdev"
 lang: "en"
+syndication:
+  zenn:
+    id: "2731787582881a"
+  devto:
+    id: 3404451
+    slug: "democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5"
 ---
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at [airCloset](https://www.air-closet.com/) — Japan's leading fashion rental subscription service.

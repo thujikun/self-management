@@ -11,6 +11,12 @@ tags:
   - "cloudflare"
   - "claude"
 lang: "ja"
+syndication:
+  zenn:
+    id: "65efe9614f8e73"
+  devto:
+    id: 3559369
+    slug: "bridging-i-want-to-build-and-i-want-to-publish-safely-for-non-engineers-sandbox-mcp-392a"
 ---
 
 みなさまこんにちは！エアークローゼットでCTOをしている[辻](https://x.com/RyanAircloset)です。

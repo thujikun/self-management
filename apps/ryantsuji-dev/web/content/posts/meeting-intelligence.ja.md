@@ -11,6 +11,12 @@ tags:
   - "googlemeet"
   - "rag"
 lang: "ja"
+syndication:
+  zenn:
+    id: "a820ce302ec5e9"
+  devto:
+    id: 3486118
+    slug: "how-we-built-an-automated-meeting-intelligence-system-with-google-meet-slack-and-rag-42ln"
 ---
 
 みなさまこんにちは！エアークローゼットでCTOをしている[辻](https://x.com/RyanAircloset)です。

@@ -10,6 +10,12 @@ tags:
   - "graphrag"
   - "mcp"
 lang: "en"
+syndication:
+  zenn:
+    id: "341dffee42f454"
+  devto:
+    id: 3622364
+    slug: "graph-rag-isnt-a-one-shot-anymore-the-case-for-agentic-graph-rag-mcps-1dj5"
 ---
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.

@@ -11,6 +11,12 @@ tags:
   - "mcp"
   - "graphrag"
 lang: "ja"
+syndication:
+  zenn:
+    id: "7a0b06cb2a35d8"
+  devto:
+    id: 3527776
+    slug: "we-built-a-custom-graph-rag-to-let-ai-answer-did-that-initiative-actually-work-3oda"
 ---
 
 みなさまこんにちは！エアークローゼットでCTOをしている[辻](https://x.com/RyanAircloset)です。

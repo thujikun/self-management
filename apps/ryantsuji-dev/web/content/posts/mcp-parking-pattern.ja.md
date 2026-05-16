@@ -11,6 +11,12 @@ tags:
   - "oauth"
   - "claude"
 lang: "ja"
+syndication:
+  zenn:
+    id: "4c5f49f89db19f"
+  devto:
+    id: 3593900
+    slug: "cutting-self-built-mcp-server-token-usage-by-90-the-parking-pattern-3e7o"
 ---
 
 みなさまこんにちは！エアークローゼットでCTOをしている[辻](https://x.com/RyanAircloset)です。
