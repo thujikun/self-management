@@ -360,15 +360,16 @@ new gcp.secretmanager.SecretIamMember("graph-neon-database-url-accessor", {
 export const neonDatabaseUrlSecretId = neonDatabaseUrlSecret.id;
 
 /**
- * Better Auth 系 11 secret container。
+ * Better Auth 系 9 secret container。
  *
  * Better Auth runtime が要求する secret 群を GCP Secret Manager に集約する
  * (Grafana / Neon と同パターン)。Pulumi は **container と IAM のみ管理**、値は
  * Ryan が dev portal で OAuth app 作成 → `gcloud secrets versions add` で投入する運用。
  *
- * 認証 provider (5 個): GitHub / X (Twitter) / Google / Apple / Facebook。callback URL は
+ * 認証 provider (4 個): GitHub / X (Twitter) / Google / Facebook。callback URL は
  * 全て `https://ryantsuji.dev/api/auth/callback/<provider>` 形式 (dev は
- * `http://localhost:3000/...` も合わせて登録)。
+ * `http://localhost:3000/...` も合わせて登録)。Apple は Developer Program 有料 +
+ * JWT clientSecret の半年毎手動 rotation 負担に見合わないので未対応。
  *
  * - `better-auth-secret`: 32+ char の暗号化 / 署名鍵 (`openssl rand -base64 32` で生成)
  * - `github-oauth-client-id` / `github-oauth-client-secret`:
@@ -377,17 +378,14 @@ export const neonDatabaseUrlSecretId = neonDatabaseUrlSecret.id;
  *   X (Twitter) OAuth 2.0 client (https://developer.x.com、xmcp が使う OAuth1 とは独立)
  * - `google-oauth-client-id` / `google-oauth-client-secret`:
  *   Google Cloud Console OAuth 2.0 Client (Web application、別 GCP project)
- * - `apple-client-id` / `apple-client-secret`:
- *   Apple Service ID + JWT clientSecret (Apple Developer console、JWT は
- *   private key で生成、`~6 month` ごとに手動 rotation)
  * - `facebook-client-id` / `facebook-client-secret`:
  *   Meta for Developers app (https://developers.facebook.com)
  *
  * 消費経路:
- * - dev (.envrc): `gcloud secrets versions access` で 11 個の env var に展開
+ * - dev (.envrc): `gcloud secrets versions access` で 9 個の env var に展開
  * - production CF Workers: `wrangler secret put <NAME>` で binding に投入
  *
- * @graph-connects secret-manager [writes_to] Better Auth 11 secret container
+ * @graph-connects secret-manager [writes_to] Better Auth 9 secret container
  */
 const authSecretIds = [
   "better-auth-secret",
@@ -397,8 +395,6 @@ const authSecretIds = [
   "x-oauth2-client-secret",
   "google-oauth-client-id",
   "google-oauth-client-secret",
-  "apple-client-id",
-  "apple-client-secret",
   "facebook-client-id",
   "facebook-client-secret",
 ] as const;
@@ -435,10 +431,6 @@ export const xOauth2ClientSecretSecretId = authSecrets["x-oauth2-client-secret"]
 export const googleOauthClientIdSecretId = authSecrets["google-oauth-client-id"].id;
 /** @graph-connects none */
 export const googleOauthClientSecretSecretId = authSecrets["google-oauth-client-secret"].id;
-/** @graph-connects none */
-export const appleClientIdSecretId = authSecrets["apple-client-id"].id;
-/** @graph-connects none */
-export const appleClientSecretSecretId = authSecrets["apple-client-secret"].id;
 /** @graph-connects none */
 export const facebookClientIdSecretId = authSecrets["facebook-client-id"].id;
 /** @graph-connects none */
