@@ -5,3 +5,5 @@ config:
   # `cloudflare-api-token` container、.envrc で auto export)。
   # `pulumi config set --secret cloudflare:apiToken` で個別設定する必要はない。
   # token に必要な scope: Workers Scripts:Edit + Workers Routes:Edit (+ Zone:Read)。
+
+  ryantsuji-dev:googleSiteVerification: '"google-site-verification=QPOu-4XGHA65ss-JjMXlqvGp87SLPA_h-V8_5faSDA4"'

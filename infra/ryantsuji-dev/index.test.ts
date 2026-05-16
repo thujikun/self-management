@@ -28,6 +28,7 @@ function promiseOf<T>(o: pulumi.Output<T>): Promise<T> {
 beforeAll(() => {
   pulumi.runtime.setAllConfig({
     "ryantsuji-dev:zoneName": "ryantsuji.dev",
+    "ryantsuji-dev:googleSiteVerification": '"google-site-verification=test-token"',
   });
   pulumi.runtime.setMocks({
     newResource(args: pulumi.runtime.MockResourceArgs): {
@@ -55,10 +56,14 @@ describe("infra/ryantsuji-dev stack", () => {
     const m = await import("./index.js");
     expect(m.zoneId).toBeDefined();
     expect(m.zoneNameOut).toBeDefined();
+    expect(m.googleSiteVerificationRecordId).toBeDefined();
 
     const id = await promiseOf(m.zoneId);
     const name = await promiseOf(m.zoneNameOut);
+    const verifyId = await promiseOf(m.googleSiteVerificationRecordId);
     expect(id).toBe("test-zone-id-1234567890");
     expect(name).toBe("ryantsuji.dev");
+    // mock newResource は `${args.name}_id` を返すため、resource name 由来で決まる
+    expect(verifyId).toBe("google-site-verification_id");
   });
 });
