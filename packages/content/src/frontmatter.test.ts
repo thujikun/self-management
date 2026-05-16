@@ -65,7 +65,7 @@ describe("parseFrontmatter", () => {
       parseFrontmatter({
         title: "x",
         publishedAt: "2026-05-08",
-        canonical: "https://zenn.dev/ryantsuji/articles/abc",
+        canonical: "https://zenn.dev/thujikun/articles/abc",
       }).canonical,
     ).toMatch(/^https:\/\//);
   });

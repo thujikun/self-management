@@ -32,7 +32,7 @@ describe("/ — landing page", () => {
     expect(html).toContain("ryantsuji.dev");
     expect(html).toContain("engineering / design / product");
     expect(html).toContain('href="/posts"');
-    expect(html).toContain("zenn.dev/ryantsuji");
+    expect(html).toContain("zenn.dev/thujikun");
     expect(html).toContain("dev.to/ryantsuji");
   });
 });
