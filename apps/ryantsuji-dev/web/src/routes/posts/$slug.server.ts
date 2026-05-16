@@ -19,6 +19,8 @@
  */
 
 import { getRequestHeaders } from "@tanstack/react-start/server";
+import { renderMarkdown, type RenderedDoc } from "@self/content";
+import { notFound } from "@tanstack/react-router";
 
 import type { Env } from "../../start.js";
 import { getSessionFromHeaders } from "../../server/auth-session.js";
@@ -29,6 +31,57 @@ import {
   toggleLike,
   type CommentView,
 } from "../../server/engagement.js";
+import { pickLang, type Lang } from "../../server/i18n.js";
+import { getPostSource } from "../../server/posts.js";
+
+/**
+ * renderPostServer の handler 本体。`?lang=` override + Accept-Language で lang を
+ * 確定 → `getPostSource(slug, lang)` で source 取得 (無ければ en fallback) →
+ * `renderMarkdown` で構造化 RenderedDoc に変換。
+ *
+ * shiki / unified の重 dep は本関数経由 (= rsc env のみ bundle) で参照する。client 側は
+ * 結果の html string + headings 配列だけ受け取る。
+ *
+ * @graph-connects content [calls] renderMarkdown(source) で構造化 RenderedDoc に変換
+ */
+/**
+ * getRequestHeaders は server runtime 外 (vitest 環境等) で throw するので、
+ * Accept-Language を取れない場合 null fallback。`pickLang` 側で en に倒す。
+ *
+ * @graph-connects none
+ */
+function safeAcceptLanguage(): string | null {
+  try {
+    const headers = getRequestHeaders() as unknown as Record<string, string | undefined>;
+    return headers["accept-language"] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** @graph-connects content [calls] renderMarkdown(source) で構造化 RenderedDoc に変換 */
+export async function runRenderPost(
+  slug: string,
+  override: Lang | undefined,
+): Promise<
+  Pick<RenderedDoc, "html" | "frontmatter" | "headings" | "readingTimeMinutes"> & {
+    servedLang: Lang;
+    availableLangs: Lang[];
+  }
+> {
+  const lang = pickLang(safeAcceptLanguage(), override);
+  const result = getPostSource(slug, lang);
+  if (!result) throw notFound();
+  const doc = await renderMarkdown(result.source);
+  return {
+    html: doc.html,
+    frontmatter: doc.frontmatter,
+    headings: doc.headings,
+    readingTimeMinutes: doc.readingTimeMinutes,
+    servedLang: result.servedLang,
+    availableLangs: result.availableLangs,
+  };
+}
 
 /**
  * loadEngagementServer の handler 本体。test で直接呼べる pure 化された shape。

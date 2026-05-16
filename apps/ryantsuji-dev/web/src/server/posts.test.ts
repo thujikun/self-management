@@ -1,58 +1,166 @@
 /**
  * `server/posts.ts` の post loader が import.meta.glob 経由で markdown を読み、
- * `listPosts` / `getPostSource` を期待通り提供するかの test。
+ * `listPosts(lang)` / `getPostSource(slug, lang)` を期待通り提供するかの test。
  *
  * 実 markdown source (apps/ryantsuji-dev/web/content/posts/) を vite が test 実行時にも
- * 同じ glob で inline するので、test は「現在 repo にある投稿が新着順で出るか」
- * という構造仕様を確認する形。
+ * 同じ glob で inline する。en/ja variant は filename suffix で判別される。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business post loader の構造保証。listPosts が新着順 + draft 除外で返ること、getPostSource が published post 本文を返し draft / 未知 slug で null を返すこと
+ * @graph-business post loader の構造保証。listPosts(lang) が要求 lang variant + en fallback で新着順を返すこと、getPostSource(slug, lang) が published source を返し未知 slug で null を返すこと、availableLangs / servedLang が正しく報告されること
  * @graph-connects none
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { getPostSource, listPosts } from "./posts.js";
+import { __testing, getPostSource, listPosts } from "./posts.js";
 
-describe("listPosts", () => {
-  it("少なくとも 1 件の post を新着順 (publishedAt 降順) で返す", () => {
-    const posts = listPosts();
+describe("listPosts(lang)", () => {
+  it("en 要求で少なくとも 1 件返り、publishedAt 降順で並ぶ", () => {
+    const posts = listPosts("en");
     expect(posts.length).toBeGreaterThanOrEqual(1);
     const dates = posts.map((p) => p.publishedAt);
     const sorted = [...dates].sort((a, b) => b.localeCompare(a));
     expect(dates).toStrictEqual(sorted);
   });
 
-  it("draft: true の post は一切含まれない", () => {
-    const posts = listPosts();
+  it("ja 要求でも slug 単位で dedupe される (= 件数は en と同じ)", () => {
+    const en = listPosts("en");
+    const ja = listPosts("ja");
+    expect(ja.length).toBe(en.length);
+    // slug の set が一致する
+    expect(new Set(ja.map((p) => p.slug))).toStrictEqual(new Set(en.map((p) => p.slug)));
+  });
+
+  it("draft: true の variant は除外される", () => {
+    const posts = listPosts("en");
     expect(posts.map((p) => p.draft)).toStrictEqual(posts.map(() => false));
   });
 
-  it("各 post の slug / title / publishedAt が schema 準拠", () => {
-    for (const p of listPosts()) {
+  it("各 post の slug / title / publishedAt が schema 準拠 + servedLang / availableLangs が付く", () => {
+    for (const p of listPosts("en")) {
       expect(p.slug).toMatch(/^[\w-]+$/);
       expect(p.title.length).toBeGreaterThan(0);
       expect(p.publishedAt).toMatch(/^\d{4}-\d{2}-\d{2}/);
+      expect(p.availableLangs.length).toBeGreaterThanOrEqual(1);
+      expect(p.availableLangs).toContain(p.servedLang);
+    }
+  });
+
+  it("ja variant が無い post は ja 要求でも en fallback で返り servedLang='en'", () => {
+    // import 直後の状態: 全 post が en のみ (Zenn 持ち込み前)。ja を要求すると
+    // 全 post の servedLang が 'en' になる前提。
+    const ja = listPosts("ja");
+    for (const p of ja) {
+      if (!p.availableLangs.includes("ja")) {
+        expect(p.servedLang).toBe("en");
+      }
     }
   });
 });
 
-describe("getPostSource", () => {
-  it("既存 published slug で markdown 全文 (frontmatter 込み) を返す", () => {
-    const slug = listPosts()[0].slug;
-    const source = getPostSource(slug);
-    expect(source).toMatch(/^---\n/);
-    expect(source).toMatch(/\n---\n/);
+describe("getPostSource(slug, lang)", () => {
+  it("既存 published slug + en で markdown 全文 (frontmatter 込み) を返す", () => {
+    const slug = listPosts("en")[0]?.slug ?? "";
+    const result = getPostSource(slug, "en");
+    expect(result).not.toBeNull();
+    expect(result?.source).toMatch(/^---\n/);
+    expect(result?.source).toMatch(/\n---\n/);
+    expect(result?.servedLang).toBe("en");
+    expect(result?.availableLangs).toContain("en");
   });
 
   it("存在しない slug で null", () => {
-    expect(getPostSource("does-not-exist-anywhere")).toBeNull();
+    expect(getPostSource("does-not-exist-anywhere", "en")).toBeNull();
+  });
+
+  it("ja 要求で ja variant が無ければ en fallback (servedLang='en')", () => {
+    // `_minimal-fixture` は en variant のみ (test fixture)
+    const result = getPostSource("_minimal-fixture", "ja");
+    expect(result).not.toBeNull();
+    expect(result?.servedLang).toBe("en");
+    expect(result?.availableLangs).toEqual(["en"]);
+  });
+
+  it("ja variant がある post を ja 要求すると servedLang='ja'", () => {
+    // dev.to + Zenn pair が揃っている post を抽出
+    const pair = listPosts("ja").find((p) => p.availableLangs.includes("ja"));
+    expect(pair).toBeDefined();
+    const result = getPostSource(pair!.slug, "ja");
+    expect(result?.servedLang).toBe("ja");
+    expect(result?.availableLangs).toContain("ja");
   });
 
   it("draft post の slug でも null (公開経路から漏らさない)", () => {
-    // _draft-example.md は frontmatter で `draft: true` を持つ
-    expect(getPostSource("_draft-example")).toBeNull();
+    // _draft-example.en.md は frontmatter で draft: true
+    expect(getPostSource("_draft-example", "en")).toBeNull();
+  });
+});
+
+describe("variantFor (internal、fallback ロジックと invariant 破れの fail-fast)", () => {
+  // 実 content が常に en を持つため、ja-only branch は in-memory entry で test する
+  const fakeJaVariant = {
+    meta: {
+      title: "Ja-only test",
+      publishedAt: "2026-01-01",
+      slug: "_ja-only-test",
+      tags: [],
+      draft: false,
+      lang: "ja" as const,
+    },
+    source: "---\ntitle: 'ja'\npublishedAt: 2026-01-01\n---\nja body",
+  };
+
+  it("ja-only entry を en 要求すると ja に fallback (servedLang='ja')", () => {
+    const entry = { slug: "_ja-only-test", variants: { ja: fakeJaVariant } };
+    const out = __testing.variantFor(entry, "en");
+    expect(out.servedLang).toBe("ja");
+    expect(out.variant).toBe(fakeJaVariant);
+  });
+
+  it("ja-only entry を ja 要求すると direct hit (servedLang='ja')", () => {
+    const entry = { slug: "_ja-only-test", variants: { ja: fakeJaVariant } };
+    const out = __testing.variantFor(entry, "ja");
+    expect(out.servedLang).toBe("ja");
+  });
+
+  it("variants が空の entry は console.error + throw (silent fallback しない)", () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() =>
+      __testing.variantFor({ slug: "broken-fixture", variants: {} }, "en"),
+    ).toThrow(/empty variants for broken-fixture/);
+    expect(errSpy).toHaveBeenCalledWith(
+      expect.stringContaining("empty variants for slug=broken-fixture"),
+    );
+    errSpy.mockRestore();
+  });
+});
+
+describe("parsePath (internal、filename 規約の防御パース)", () => {
+  it("`<slug>.<lang>.md` 形式を分解して { slug, lang } を返す", () => {
+    expect(__testing.parsePath("../../content/posts/db-graph-mcp.en.md")).toEqual({
+      slug: "db-graph-mcp",
+      lang: "en",
+    });
+    expect(__testing.parsePath("foo/bar/example.ja.md")).toEqual({
+      slug: "example",
+      lang: "ja",
+    });
+  });
+
+  it("`<slug>.md` (lang suffix 無し) は null", () => {
+    expect(__testing.parsePath("./hello.md")).toBeNull();
+  });
+
+  it("未対応 lang suffix (e.g. `.fr.md`) は null", () => {
+    expect(__testing.parsePath("./hello.fr.md")).toBeNull();
+  });
+
+  it("非 md は null", () => {
+    expect(__testing.parsePath("./hello.en.txt")).toBeNull();
+  });
+
+  it("空文字 path も crash せず null", () => {
+    expect(__testing.parsePath("")).toBeNull();
   });
 });
