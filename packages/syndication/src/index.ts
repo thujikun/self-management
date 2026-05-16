@@ -13,3 +13,5 @@
 
 export type { SyndicationTarget } from "./types.js";
 export { rewriteInternalLinks } from "./link-rewriter.js";
+export type { SlugResolver } from "./link-rewriter.js";
+export { appendFooter } from "./footer.js";
