@@ -25,8 +25,6 @@ const TEST_ENV: AuthEnv = {
   X_OAUTH2_CLIENT_SECRET: "test-x-secret",
   GOOGLE_CLIENT_ID: "test-google-id",
   GOOGLE_CLIENT_SECRET: "test-google-secret",
-  APPLE_CLIENT_ID: "test-apple-id",
-  APPLE_CLIENT_SECRET: "test-apple-secret",
   FACEBOOK_CLIENT_ID: "test-fb-id",
   FACEBOOK_CLIENT_SECRET: "test-fb-secret",
 };
