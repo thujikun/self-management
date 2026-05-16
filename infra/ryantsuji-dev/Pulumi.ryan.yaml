@@ -4,4 +4,9 @@ config:
   # 統合 (wrangler deploy と同じ token を使い回し、SSoT は GCP Secret Manager の
   # `cloudflare-api-token` container、.envrc で auto export)。
   # `pulumi config set --secret cloudflare:apiToken` で個別設定する必要はない。
-  # token に必要な scope: Workers Scripts:Edit + Workers Routes:Edit (+ Zone:Read)。
+  # 現状の運用 token に必要な scope: Zone:Read + DNS:Read
+  # (DNS は dashboard で書き、Pulumi 側は `pulumi import` で取り込む方針)。
+  # `cloudflare.WorkerCustomDomain` を追加するタイミングで
+  # `Workers Scripts:Edit + Workers Routes:Edit` を足す。
+
+  ryantsuji-dev:googleSiteVerification: '"google-site-verification=QPOu-4XGHA65ss-JjMXlqvGp87SLPA_h-V8_5faSDA4"'
