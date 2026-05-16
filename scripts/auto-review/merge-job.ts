@@ -2,13 +2,15 @@
  * Auto-merge job: bot の APPROVE comment + CI 全 green 条件下で `gh pr merge --squash --delete-branch`。
  *
  * 流れ:
- *   1. CI 全 check が SUCCESS かを確認 (`gh pr checks <N>` 経由、0 件 PR は対象外)
- *   2. CI 未完了 / 失敗 / ciAllPass 自体が throw → iterations++ で next tick retry。
- *      MAX_ITERATIONS_PER_PR cap で必ず stalled に倒れる (永久 CI pending / external webhook
- *      死に対する anti-loop、全 path で必ず cap に達する不変条件と整合)
+ *   1. CI 全 check が SUCCESS かを確認 (`gh pr checks <N>` 経由、0 件 PR は対象外) — 防御的二重 check
+ *   2. CI 未完了 / 失敗 / ciAllPass 自体が throw → 何もせず return (poll 側で gate されている前提、
+ *      ここに来た時点で CI pass 期待。期待外れなら次 tick で poll が再判定する)
  *   3. CI 全 pass なら `gh pr merge --squash --delete-branch`
  *   4. merge 成功 → state.lastMergedSha + lastMergedAt を bookmark
  *   5. merge 失敗 (branch protection 不足など) → state 不変で warn ログ (人間判断に委ねる)
+ *
+ * 旧 logic では CI not pass で iterations++ していたが、CI 失敗時は ci-fix mode が担当する形に
+ * 切り替えたため (poll 側で APPROVE + CI fail → ci-fix dispatch)、merge job は CI green 前提で動く。
  *
  * 副作用 (gh コマンド) は `MergeJobDeps` 経由で注入し、test 側で fake dep を差し替えてロジックパスを検証可能。
  */
@@ -56,13 +58,12 @@ export async function runMergeJob(
   log(tag, `ciAllPass = ${ok} (${fmtDuration(Date.now() - ciStart)})`);
 
   if (!ok) {
-    log(tag, `CI not all pass yet → iterations++ (anti-loop), retry next tick`);
-    const next = await input.updateState((s) => {
-      const cur = s.prs[String(input.prNumber)] ?? { iterations: 0 };
-      return setPR(s, input.prNumber, { iterations: cur.iterations + 1 });
-    });
+    log(
+      tag,
+      `CI not all pass (defensive re-check failed despite poll-side gate) → no-op, retry next tick via poll`,
+    );
     log(tag, `done — not merged (total ${fmtDuration(Date.now() - jobStart)})`);
-    return { state: next, merged: false };
+    return { state: input.state, merged: false };
   }
   log(tag, `CI green → executing gh pr merge --squash --delete-branch...`);
   const mergeStart = Date.now();

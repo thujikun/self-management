@@ -53,21 +53,14 @@ function makeInput(
 }
 
 describe("runMergeJob", () => {
-  it("CI 未 pass: merge 呼ばれず iterations を進める (anti-loop で必ず cap に達する)", async () => {
+  it("CI 未 pass (防御的 re-check fail): merge 呼ばれず state 不変 (poll 側で gate されるので no-op)", async () => {
     const { deps, harness } = makeDeps({ ciAllPass: false });
     const { input, getState } = makeInput({ prs: { "9": { iterations: 2 } } });
     const result = await runMergeJob(input, deps);
     expect(result.merged).toStrictEqual(false);
     expect(harness.mergeCalls).toStrictEqual([]);
-    // iterations が +1 進む。MAX_ITERATIONS_PER_PR cap で stalled に倒れる
-    expect(getState().prs["9"]?.iterations).toStrictEqual(3);
-  });
-
-  it("CI 未 pass (PR 初出): iterations を 0 → 1 に書き込む", async () => {
-    const { deps } = makeDeps({ ciAllPass: false });
-    const { input, getState } = makeInput({ prs: {} });
-    await runMergeJob(input, deps);
-    expect(getState().prs["9"]?.iterations).toStrictEqual(1);
+    // CI 失敗は ci-fix mode が担当するので merge job では state 不変
+    expect(getState().prs["9"]?.iterations).toStrictEqual(2);
   });
 
   it("CI pass: mergeSquash 成功 → state.lastMergedSha + lastMergedAt bookmark + merged=true", async () => {
@@ -95,17 +88,16 @@ describe("runMergeJob", () => {
     expect(getState().prs["9"]?.lastMergedSha).toStrictEqual(undefined);
   });
 
-  it("ciAllPass が throw しても merged=false、iterations を進めて anti-loop", async () => {
+  it("ciAllPass が throw しても merged=false、state 不変 (poll 側で再判定)", async () => {
     const { deps, harness } = makeDeps({
       ciAllPass: async () => {
         throw new Error("network down");
       },
     });
-    const { input, getState } = makeInput({ prs: {} });
+    const { input, getState } = makeInput({ prs: { "9": { iterations: 1 } } });
     const result = await runMergeJob(input, deps);
     expect(result.merged).toStrictEqual(false);
     expect(harness.mergeCalls).toStrictEqual([]);
-    // 「CI 判定 fail」と同等扱いで iterations++、cap で必ず止まる
     expect(getState().prs["9"]?.iterations).toStrictEqual(1);
   });
 });
