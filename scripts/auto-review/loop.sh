@@ -32,8 +32,29 @@ set -uo pipefail
 
 # 起動 <FAST_EXIT_THRESHOLD_SEC 秒での exit を「fast exit」として counter を +1 し、
 # FAST_EXIT_MAX 回連続到達で supervisor 自身が bail する。env で上書き可。
-FAST_EXIT_THRESHOLD_SEC="${AUTO_REVIEW_FAST_EXIT_THRESHOLD_SEC:-60}"
-FAST_EXIT_MAX="${AUTO_REVIEW_FAST_EXIT_MAX:-3}"
+#
+# `${X-default}` (colon なし) を使うことで Node 側の `?? default` semantics
+# (undefined のみ fallback / 空文字は素通り) と揃える。空文字も regex に流して
+# fail-fast 経路に乗せる目的。
+FAST_EXIT_THRESHOLD_SEC="${AUTO_REVIEW_FAST_EXIT_THRESHOLD_SEC-60}"
+FAST_EXIT_MAX="${AUTO_REVIEW_FAST_EXIT_MAX-3}"
+
+# 非数値 / 空 / 負数を許すと bash の `[ N -lt X ]` / `[ N -ge X ]` が test 失敗 (rc=2)
+# となり、`set -e` 無効 (`set -uo pipefail` のみ) のため supervisor は止まらず if が
+# false 扱いで通過する。結果 fast-exit counter が増えず anti-loop 最外周 (層 6) が
+# silently 死ぬ (例: `THRESHOLD_SEC=abc` で永久再起動)。逆に `MAX=-1` を許すと
+# 初回 fast exit (counter=1) で `1 -ge -1` が true → 即 bail で通常運用が止まる。
+# `MAX=0` は「常時 bail」設定で有効ユースケースが無いので不正扱い (anti-loop を
+# 無効化したいなら supervisor を経由しない `pnpm auto-review:once` を使う)。
+# 「anti-loop 制御に絡む env は fail-fast」を全 control plane に適用する invariant。
+if ! [[ "$FAST_EXIT_THRESHOLD_SEC" =~ ^[0-9]+$ ]]; then
+  echo "[auto-review-loop] AUTO_REVIEW_FAST_EXIT_THRESHOLD_SEC must be a non-negative integer (got: '$FAST_EXIT_THRESHOLD_SEC')" >&2
+  exit 2
+fi
+if ! [[ "$FAST_EXIT_MAX" =~ ^[0-9]+$ ]] || [ "$FAST_EXIT_MAX" -eq 0 ]; then
+  echo "[auto-review-loop] AUTO_REVIEW_FAST_EXIT_MAX must be a positive integer (got: '$FAST_EXIT_MAX')" >&2
+  exit 2
+fi
 FAST_EXIT_COUNT=0
 
 STOP=0

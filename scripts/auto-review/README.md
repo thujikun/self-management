@@ -63,8 +63,8 @@ env:
 | `AUTO_REVIEW_MAX_CI_FIX_FAILURES` | `3` | 同 head_sha に対する ci-fix 失敗回数の cap。新 commit が来るまで skip |
 | `AUTO_REVIEW_CI_FIX_BACKOFF_MS` | `300000` (5 分) | ci-fix 失敗後、次 retry までの最小待機時間 (ms) |
 | `AUTO_REVIEW_EXIT_AFTER_UPTIME_MS` | `1800000` (30 分) | 起動からこの時間経過 + queue idle で self-exit。wrapper script が `git reset --hard origin/main` + 再 spawn することで新コードを反映。0 を指定すると無効化 (`auto-review:once` 相当)。非数値 / 負数を指定すると起動時に fail-fast |
-| `AUTO_REVIEW_FAST_EXIT_THRESHOLD_SEC` | `60` | wrapper の fast-exit 判定閾値 (秒)。tsx 起動からこの時間未満で exit すると fast-exit counter を +1 |
-| `AUTO_REVIEW_FAST_EXIT_MAX` | `3` | fast-exit を連続して許容する回数。到達したら supervisor が `exit 1` で bail (startup failure の無限再起動 loop 遮断) |
+| `AUTO_REVIEW_FAST_EXIT_THRESHOLD_SEC` | `60` | wrapper の fast-exit 判定閾値 (秒)。tsx 起動からこの時間未満で exit すると fast-exit counter を +1。非数値 / 空 / 負数を指定すると起動時に `exit 2` で fail-fast |
+| `AUTO_REVIEW_FAST_EXIT_MAX` | `3` | fast-exit を連続して許容する回数。到達したら supervisor が `exit 1` で bail (startup failure の無限再起動 loop 遮断)。非数値 / 空 / 負数 / 0 を指定すると起動時に `exit 2` で fail-fast |
 | `AUTO_REVIEW_REPO_ROOT` | `process.cwd()` | git worktree base となるメイン repo path |
 | `CLAUDE_TIMEOUT_MS` | `1800000` (30 分) | claude -p 1 回の timeout |
 
