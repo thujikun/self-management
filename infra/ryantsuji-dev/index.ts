@@ -6,16 +6,21 @@
  * - zone ID export (後段スタックや wrangler が参照)
  * - Google Search Console domain verification 用 apex TXT record
  *   (`google-site-verification=<token>` を `pulumi import` で取り込み declarative 管理)
+ * - Google Workspace 受信メール一式の DNS record (MX × 5 + SPF + DKIM + workspace
+ *   domain verification TXT)。Workspace Admin Console の案内に従い dashboard で追加した
+ *   record を `pulumi import` で取り込み declarative 管理に統合
  *
  * 後で追加する予定:
  * - `cloudflare.WorkerCustomDomain` で `ryantsuji.dev` と Worker `ryantsuji-dev-web` を紐付け
  *   → `apps/ryantsuji-dev/web` を 1 度 wrangler deploy した後に追加
  * - 必要なら `www` → apex CNAME 等の追加 DNS record
+ * - DMARC TXT (`_dmarc` に `p=none` で監視開始 → 後で `p=quarantine` 昇格)
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain infra
  * @graph-business 個人ブログ ryantsuji.dev の Cloudflare 基盤を Pulumi で集約管理する。CF Registrar で取得済の zone を起点に、DNS と Workers custom domain を declarative にコード化し、ryan-product-graph と同じ Pulumi-only 運用に乗せる
  * @graph-connects cloudflare-zone [reads_from] CF Registrar 経由で取得済の `ryantsuji.dev` zone を lookup して zone ID を後段に渡す
+ * @graph-connects google-workspace [reads_from] Workspace Admin Console で発行した DKIM 公開鍵 / domain verification token / SPF include / MX target を DNS record として apex に publish し、Workspace の受信メール経路と送信認証 (SPF/DKIM) を成立させる
  */
 
 import * as cloudflare from "@pulumi/cloudflare";
@@ -71,3 +76,106 @@ const googleSiteVerification = new cloudflare.DnsRecord("google-site-verificatio
 
 /** @graph-connects none */
 export const googleSiteVerificationRecordId = googleSiteVerification.id;
+
+/**
+ * Google Workspace 受信メール用 MX record 一式 (apex `ryantsuji.dev`)。
+ *
+ * Workspace の旧来案内 (priority 1 + 5 × 2 + 10 × 2 の 5 本構成) で dashboard に
+ * 追加済。新形式 (`smtp.google.com` 1 本) に switch する選択肢もあるが、現状動いており
+ * 並行運用するメリットも薄いため当面 5 本構成のまま維持。
+ *
+ * `pulumi import` で state に取り込み declarative 管理に統合。CF token は DNS:Read
+ * のみで Edit 不要 (record 自体は dashboard で書き、Pulumi は state 反映のみ)。
+ *
+ * @graph-connects cloudflare [writes_to] apex MX 5 本で Google Workspace の受信メールを `ryantsuji.dev` 宛で受け取る
+ */
+const GOOGLE_WORKSPACE_MX = [
+  { name: "google-mx-aspmx", priority: 1, content: "aspmx.l.google.com" },
+  { name: "google-mx-alt1", priority: 5, content: "alt1.aspmx.l.google.com" },
+  { name: "google-mx-alt2", priority: 5, content: "alt2.aspmx.l.google.com" },
+  { name: "google-mx-alt3", priority: 10, content: "alt3.aspmx.l.google.com" },
+  { name: "google-mx-alt4", priority: 10, content: "alt4.aspmx.l.google.com" },
+] as const;
+
+/** @graph-connects none */
+const googleWorkspaceMxRecords = GOOGLE_WORKSPACE_MX.map(
+  (mx) =>
+    new cloudflare.DnsRecord(mx.name, {
+      zoneId: zone.zoneId,
+      name: zoneName,
+      type: "MX",
+      content: mx.content,
+      priority: mx.priority,
+      ttl: 3600,
+    }),
+);
+
+/** @graph-connects none */
+export const googleWorkspaceMxRecordIds = googleWorkspaceMxRecords.map((r) => r.id);
+
+/**
+ * SPF TXT record (apex)。Google Workspace の SMTP host を sender として許容する。
+ *
+ * `~all` (soft-fail) は Workspace の標準推奨。`-all` (hard-fail) に上げるのは
+ * Workspace 以外から `@ryantsuji.dev` で送る経路がないことを確認してからの方が安全。
+ *
+ * @graph-connects cloudflare [writes_to] apex TXT で SPF authorization を publish し Workspace 送信メールを受信側に SPF pass させる
+ */
+const googleSpf = new cloudflare.DnsRecord("google-spf", {
+  zoneId: zone.zoneId,
+  name: zoneName,
+  type: "TXT",
+  content: '"v=spf1 include:_spf.google.com ~all"',
+  ttl: 3600,
+});
+
+/** @graph-connects none */
+export const googleSpfRecordId = googleSpf.id;
+
+/**
+ * DKIM 公開鍵 TXT record (`google._domainkey.ryantsuji.dev`)。
+ *
+ * Workspace Admin Console > Apps > Gmail > Authenticate email で 2048bit RSA 鍵を
+ * 生成し、表示された TXT 値をそのまま dashboard 登録 → ここに `pulumi import` で取り込む。
+ * Cloudflare API は長い TXT を RFC 1035 multi-string (`"chunk1" "chunk2"`) で保持する
+ * ため、config 値も literal の quote-space-quote をそのまま保持している。
+ *
+ * 鍵をローテートする運用に乗せる場合は Workspace 側で再生成 → dashboard 更新 →
+ * config 値書き換え + `pulumi import` の流れで drift をゼロに戻す。
+ *
+ * @graph-connects cloudflare [writes_to] google._domainkey TXT で DKIM 公開鍵を publish し受信側で DKIM 署名検証可能にする
+ */
+const googleDkim = new cloudflare.DnsRecord("google-dkim", {
+  zoneId: zone.zoneId,
+  name: `google._domainkey.${zoneName}`,
+  type: "TXT",
+  content: config.require("googleDkim"),
+  // dashboard 既定値 "Auto" のまま (= 1)。drift 回避のため明示。
+  ttl: 1,
+});
+
+/** @graph-connects none */
+export const googleDkimRecordId = googleDkim.id;
+
+/**
+ * Google Workspace の domain ownership 確認用 TXT (apex)。
+ *
+ * Workspace Admin Console の初期 setup で「ドメイン所有権の確認」手順として apex に
+ * 追加した token。Search Console の verification token とは別物 (Workspace と Search
+ * Console は別 product として token を発行する)。
+ *
+ * Workspace の verify 完了後は理論上は削除可能だが、削除すると以降の再 verify が
+ * 必要になるため恒久 record として残しておくのが標準運用。
+ *
+ * @graph-connects cloudflare [writes_to] apex TXT で Google Workspace の domain ownership を継続証明
+ */
+const googleWorkspaceVerification = new cloudflare.DnsRecord("google-workspace-verification", {
+  zoneId: zone.zoneId,
+  name: zoneName,
+  type: "TXT",
+  content: config.require("googleWorkspaceVerification"),
+  ttl: 3600,
+});
+
+/** @graph-connects none */
+export const googleWorkspaceVerificationRecordId = googleWorkspaceVerification.id;

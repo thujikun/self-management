@@ -2,17 +2,29 @@
 #
 # - PR: `apps/ryantsuji-dev/web/**` / `packages/**` / `pnpm-lock.yaml` に変更が
 #   入っていれば `wrangler deploy --dry-run` を走らせ、build 失敗を早期検知する
-# - main: 同 path に push があったら `wrangler deploy` で CF Worker を本番反映
+# - main: 同 path に push があったら DB migration を適用してから
+#   `wrangler deploy` で CF Worker を本番反映
 #
-# auth: pulumi.yml と同じ WIF flow。GitHub OIDC → graph-app SA を impersonate
-# (`pulumi-ci@` ではなく Worker 用の deploy SA を将来分けても良いが、現状は
-# pulumi が既に `pulumi-ci@` SA を運用しているので同じ identity で実行)。
-# その上で `gcloud secrets versions access cloudflare-api-token` で CF API token
-# を動的に取り出し `CLOUDFLARE_API_TOKEN` env に流す (workflow yaml に直書きしない)。
+# DB migration は `pnpm --filter @self/db migrate:apply` (`drizzle-orm/neon-http/
+# migrator`) で `__drizzle_migrations` table の hash 比較により未適用分だけ
+# atomic に流す idempotent script。Worker deploy より先に走らせることで、新 schema
+# を参照する Worker code が runtime で table not found に当たるのを防ぐ。PR run
+# は dry-run なので migration step は skip (DB に副作用を出さない)。
 #
-# token に必要な scope: Workers Scripts:Edit + Workers Routes:Edit (+ Zone:Read)。
-# SSoT は GCP Secret Manager の `cloudflare-api-token` container (infra/core で
-# Pulumi 管理、`.envrc` でも同じ container を引いている)。
+# auth: pulumi.yml と同じ WIF flow。GitHub OIDC → `pulumi-ci@` SA を impersonate
+# (pulumi が既に運用している identity を再利用。将来 deploy 専用 SA を分けるなら
+# `vars.PULUMI_CI_SA_EMAIL` の参照先を DEPLOY_SA_EMAIL 等に切替)。
+# その上で `gcloud secrets versions access <name>` で各 secret を動的に取り出し、
+# job env に注入する (workflow yaml に直書きしない)。
+#
+# 必要な secret (GCP Secret Manager、現状は `pulumi-ci@` SA が project レベルの
+# `roles/secretmanager.admin` で読み出している。`infra/core/index.ts` で
+# `graph-app` SA にも secretAccessor を bind 済だが、これは将来 deploy 専用 SA を
+# 分離した時に同パターンで bind し直す用途で、本 workflow の実行 SA ではない):
+# - `cloudflare-api-token` (Workers Scripts:Edit + Workers Routes:Edit)
+# - `neon-database-url` (Neon Postgres の pooled connection string)
+#
+# SSoT は infra/core/index.ts で Pulumi 管理、`.envrc` でも同じ container を引いてる。
 #
 # secrets / vars (pulumi.yml と共有):
 # - var: GCP_PROJECT_ID
@@ -78,6 +90,26 @@ jobs:
             --project=${{ vars.GCP_PROJECT_ID }})
           echo "::add-mask::$token"
           echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      # DB migration は main push の時だけ実行 (PR は build 通すだけで DB 副作用 0)。
+      # SSoT は GCP Secret Manager `neon-database-url`。`drizzle-orm/neon-http/
+      # migrator` の hash 比較で未適用分だけ atomic に流れるため、再 run も safe。
+      - name: Fetch DATABASE_URL from Secret Manager
+        if: github.event_name == 'push'
+        id: db-url
+        run: |
+          url=$(gcloud secrets versions access latest \
+            --secret=neon-database-url \
+            --project=${{ vars.GCP_PROJECT_ID }})
+          echo "::add-mask::$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Apply DB migrations (drizzle migrator)
+        if: github.event_name == 'push'
+        working-directory: .
+        run: pnpm --filter @self/db migrate:apply
+        env:
+          DATABASE_URL: ${{ steps.db-url.outputs.url }}
 
       # web の vite build は workspace dep `@self/design-tokens` の dist/tokens.css を
       # `@import "@self/design-tokens/css"` で読むため、deploy 前に upstream workspace

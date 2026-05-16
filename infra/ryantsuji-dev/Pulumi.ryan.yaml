@@ -10,3 +10,15 @@ config:
   # `Workers Scripts:Edit + Workers Routes:Edit` を足す。
 
   ryantsuji-dev:googleSiteVerification: '"google-site-verification=QPOu-4XGHA65ss-JjMXlqvGp87SLPA_h-V8_5faSDA4"'
+
+  # Google Workspace domain ownership 用 TXT (Search Console とは別 token)。
+  # Workspace Admin Console の domain verification 手順で発行され、ryantsuji.dev の
+  # apex に 1 本登録する形。public な検証用 nonce なので --secret 不要。
+  ryantsuji-dev:googleWorkspaceVerification: '"google-site-verification=aHUAWJIsfceGCZp0cJLy7HAb4V5ageTbr57_cGxQxlI"'
+
+  # Google Workspace DKIM 公開鍵 TXT (`google._domainkey.ryantsuji.dev`)。
+  # Workspace Admin Console > Apps > Gmail > Authenticate email で 2048bit 鍵を
+  # 生成して取得した値。Cloudflare の DNS API は長い TXT を RFC 1035 multi-string
+  # 形式 (`"chunk1" "chunk2"`) で保持するので literal 改行/quote をそのまま保持する。
+  # public key なので --secret 不要、漏れても害なし。
+  ryantsuji-dev:googleDkim: '"v=DKIM1;k=rsa;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApNO2auFwU1gcQ9VAsR9NXNmMT5MEavoq+cmy5+ZXG6P4S0j6PKYNovCpcxmqVexT302ZVxsiTzfFL7PQsvxVXMSGxD0uzXM5jqzQATWXQo2QYnm7W4WhkdmI/tccDdkdymI7swH9FO5D3K2TKef30UxIhGJzobQHCYWDpGKhSBO0szviUT9BoVpyx7gKlAqZF3c" "UCDTNV7xbU01+DabYC7cq7h41h7yPRQ/Ne9deMvieVvmmld9zK+ikE0xQM8DEUusK2dPz0mX3pL/NKqSWu3zdwqjZRoSwqIU+oaPIcSTHU0ExcsXMNIVNR0L2JMI4Hub9xZX1hrjgm2dE1YmskQIDAQAB"'
