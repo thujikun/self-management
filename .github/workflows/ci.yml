@@ -1,14 +1,12 @@
 # self-management CI ワークフロー。
 #
-# guards (cheap guard) が pass した後、typecheck / lint / test / build を並列実行。
-# pre-commit hook と一部重複するが、web UI merge / hook bypass のリスクヘッジとして
-# CI 側でも全 guard を再実行する (CLAUDE.md ルール 1 と整合)。
+# gate 一覧は `scripts/hooks/gates.sh list` が single source of truth。
+# pre-commit hook も同じ list を consume するので、CI と hook で gate が drift しない
+# (構造的に不可能。PR #41 で観測した「format:check が hook 漏れで CI で初めて落ちた」事故の根絶)。
 #
 # runner: ubuntu-latest (public repo は free 無制限)。
-# turbo cache は actions/cache で .turbo/ を全 build 系 job (typecheck/lint/test/build)
-# で commit 跨ぎ復元。`routeTree.gen.ts` は commit する方針 (TanStack Router の
-# auto-generated だが、tsc が router.tsx の `./routeTree.gen` import を解決する
-# 必要があるため、fresh clone / CI でも即動くように実 file を tracked にする)。
+# 各 gate は matrix 並列で実行 (旧 5 jobs → matrix で gate ごとに 1 job、計 10 並列)。
+# turbo cache は build / typecheck で復元、他 gate は不要。
 name: CI
 
 on:
@@ -18,69 +16,38 @@ on:
     branches: [main]
 
 jobs:
-  guards:
+  list-gates:
     runs-on: ubuntu-latest
+    outputs:
+      gates: ${{ steps.list.outputs.gates }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      - uses: ./.github/actions/setup
-      - name: Repo guards (secrets / no-ignore / line-count / graph-tags)
-        run: pnpm check:all
-        shell: bash
-      - name: operations/log.md compaction check
-        run: pnpm log:check
-        shell: bash
+      - name: List gates from gates.sh (single source of truth)
+        id: list
+        run: |
+          GATES=$(bash scripts/hooks/gates.sh list full | jq -R . | jq -s . -c)
+          echo "gates=$GATES" >> "$GITHUB_OUTPUT"
 
-  typecheck:
+  gate:
+    needs: list-gates
     runs-on: ubuntu-latest
-    needs: guards
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: ${{ fromJSON(needs.list-gates.outputs.gates) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
       - uses: ./.github/actions/setup
-      - name: tsc --noEmit (per-workspace)
-        run: pnpm typecheck
-        shell: bash
-
-  lint:
-    runs-on: ubuntu-latest
-    needs: guards
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - uses: ./.github/actions/setup
-      - name: ESLint (max-warnings=0)
-        run: pnpm lint
-        shell: bash
-      - name: Prettier check
-        run: pnpm format:check
-        shell: bash
-
-  test:
-    runs-on: ubuntu-latest
-    needs: guards
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - uses: ./.github/actions/setup
-      - name: Vitest with per-file 90% coverage thresholds
-        run: pnpm test:coverage
-        shell: bash
-
-  build:
-    runs-on: ubuntu-latest
-    needs: guards
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - uses: ./.github/actions/setup
-      - name: Restore turbo cache
+      - name: Restore turbo cache (build / typecheck only)
+        if: matrix.gate == 'build' || matrix.gate == 'typecheck'
         uses: actions/cache@v4
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
             turbo-${{ runner.os }}-
-      - name: Build (turbo run build)
-        run: pnpm build
+      - name: Run gate
+        run: bash scripts/hooks/gates.sh run "${{ matrix.gate }}" full
         shell: bash
