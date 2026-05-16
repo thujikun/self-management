@@ -130,11 +130,21 @@ pnpm deploy:dry
 
 ## 通常運用 (2 回目以降)
 
+main への merge で **GitHub Actions が自動 deploy** する
+(`.github/workflows/deploy-ryantsuji-dev.yml`)。trigger は
+`apps/ryantsuji-dev/web/**` / `packages/**` / `pnpm-lock.yaml` の変更。
+
+手動でやりたいときは:
+
 ```bash
-pnpm deploy       # build + 本番 deploy。secret は keep される
+pnpm run deploy   # build + 本番 deploy。secret は keep される
 ```
 
+(`pnpm deploy` は pnpm built-in と衝突するので必ず `pnpm run deploy`)
+
 secret を 1 個だけ rotate する場合: `pnpm exec wrangler secret put <NAME>`。
+SSoT は GCP Secret Manager なので、値を入れ直したら `gcloud secrets versions access
+<id> | pnpm exec wrangler secret put <ENV>` の形で worker 側にも転送する。
 
 ## 後続 PR
 
