@@ -248,6 +248,12 @@ importers:
       '@eslint/js':
         specifier: 'catalog:'
         version: 10.0.1(eslint@10.3.0(jiti@2.7.0))
+      '@self/content':
+        specifier: workspace:*
+        version: link:packages/content
+      '@self/syndication':
+        specifier: workspace:*
+        version: link:packages/syndication
       '@types/node':
         specifier: 'catalog:'
         version: 24.12.2
@@ -260,6 +266,9 @@ importers:
       eslint:
         specifier: 'catalog:'
         version: 10.3.0(jiti@2.7.0)
+      gray-matter:
+        specifier: 'catalog:'
+        version: 4.0.3
       husky:
         specifier: 'catalog:'
         version: 9.1.7

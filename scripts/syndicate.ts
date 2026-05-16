@@ -1,0 +1,181 @@
+#!/usr/bin/env tsx
+/*
+ * syndicate CLI — ryantsuji.dev の content/posts/*.{ja,en}.md を読み、Zenn 用 / dev.to
+ * 用にそれぞれ変換した markdown / API article body を `dist/syndication/<target>/...`
+ * に書き出す。
+ *
+ * Phase 1 では **dry-run のみ** (file 出力)。Phase 2 で:
+ * - Zenn: `thujikun/ryantsuji-dev-content` repo に commit & push
+ * - dev.to: API PUT /api/articles/{id}
+ * を自動化する。
+ *
+ * 使い方:
+ *   pnpm tsx scripts/syndicate.ts --target zenn               # 全 .ja.md
+ *   pnpm tsx scripts/syndicate.ts --target devto              # 全 .en.md
+ *   pnpm tsx scripts/syndicate.ts --target zenn --slug X      # 単一 slug
+ *   pnpm tsx scripts/syndicate.ts --target all                # zenn + devto 両方
+ *
+ * @graph-stack ryantsuji-dev
+ * @graph-domain publishing
+ * @graph-business syndicate CLI driver。content/posts から全 post を読み、各 post の frontmatter syndication.{zenn,devto} ID を引いて公開 URL resolver を構築、pipeline で transform した結果を dist/syndication/ に出力する。Phase 1 は file 出力のみ、Phase 2 で publish 自動化を上に乗せる
+ * @graph-connects content [reads_from] content/posts の全 .{ja,en}.md を入力
+ * @graph-connects syndication [calls] @self/syndication の syndicateForZenn / syndicateForDevto を呼ぶ
+ */
+
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import matter from "gray-matter";
+import { parseFrontmatter, type Frontmatter } from "@self/content";
+import { syndicateForDevto, syndicateForZenn, type SlugResolver } from "@self/syndication";
+
+const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(SCRIPTS_DIR, "..");
+const POSTS_DIR = resolve(REPO_ROOT, "apps/ryantsuji-dev/web/content/posts");
+const ZENN_FOOTER_PATH = resolve(REPO_ROOT, "packages/syndication/config/footers/zenn.ja.md");
+const OUT_DIR = resolve(REPO_ROOT, "dist/syndication");
+
+/** parse + filename 由来 slug + lang。 */
+interface ParsedPost {
+  slug: string;
+  lang: "ja" | "en";
+  meta: Frontmatter;
+  body: string;
+}
+
+/**
+ * content/posts 配下の `<slug>.<lang>.md` を全て parse する。
+ */
+async function readAllPosts(): Promise<ParsedPost[]> {
+  const files = await readdir(POSTS_DIR);
+  const out: ParsedPost[] = [];
+  for (const f of files) {
+    const m = /^([_a-z0-9][_a-z0-9-]*)\.(en|ja)\.md$/i.exec(f);
+    if (!m) continue;
+    const slug = m[1] as string;
+    const lang = m[2] as "ja" | "en";
+    const raw = await readFile(resolve(POSTS_DIR, f), "utf8");
+    const parsed = matter(raw);
+    const meta = parseFrontmatter(parsed.data);
+    if (meta.draft) continue;
+    out.push({ slug, lang, meta, body: parsed.content });
+  }
+  return out;
+}
+
+/**
+ * slug → Zenn 公開 URL の resolver を構築。`.ja.md` の frontmatter
+ * `syndication.zenn.id` から逆引きする。
+ */
+function buildZennResolver(posts: ParsedPost[]): SlugResolver {
+  const map = new Map<string, string>();
+  for (const p of posts) {
+    if (p.lang !== "ja") continue;
+    const zennId = p.meta.syndication.zenn?.id;
+    if (zennId) {
+      map.set(p.slug, `https://zenn.dev/aircloset/articles/${zennId}`);
+    }
+  }
+  return (slug) => map.get(slug) ?? null;
+}
+
+/**
+ * slug → dev.to 公開 URL の resolver。`.en.md` の `syndication.devto.slug` から。
+ */
+function buildDevtoResolver(posts: ParsedPost[]): SlugResolver {
+  const map = new Map<string, string>();
+  for (const p of posts) {
+    if (p.lang !== "en") continue;
+    const d = p.meta.syndication.devto;
+    if (d) {
+      map.set(p.slug, `https://dev.to/ryantsuji/${d.slug}`);
+    }
+  }
+  return (slug) => map.get(slug) ?? null;
+}
+
+/** Zenn 変換: 全 .ja.md を Zenn 用に書き出す (`syndication.zenn.id` がある post のみ)。 */
+async function emitZenn(posts: ParsedPost[], filter: { slug?: string }): Promise<void> {
+  const resolver = buildZennResolver(posts);
+  const footer = await readFile(ZENN_FOOTER_PATH, "utf8");
+  const outDir = resolve(OUT_DIR, "zenn");
+  await mkdir(outDir, { recursive: true });
+
+  for (const p of posts) {
+    if (p.lang !== "ja") continue;
+    if (filter.slug && p.slug !== filter.slug) continue;
+    const zennId = p.meta.syndication.zenn?.id;
+    if (!zennId) {
+      console.warn(`  [skip] ${p.slug}.ja.md: no syndication.zenn.id`);
+      continue;
+    }
+    const markdown = syndicateForZenn({
+      meta: p.meta,
+      body: p.body,
+      resolver,
+      footerMarkdown: footer,
+    });
+    const outPath = resolve(outDir, `${zennId}.md`);
+    await writeFile(outPath, markdown, "utf8");
+    console.log(`  zenn:  ${p.slug} → ${outPath}`);
+  }
+}
+
+/** dev.to 変換: 全 .en.md を API article attributes として JSON で書き出す。 */
+async function emitDevto(posts: ParsedPost[], filter: { slug?: string }): Promise<void> {
+  const resolver = buildDevtoResolver(posts);
+  const outDir = resolve(OUT_DIR, "devto");
+  await mkdir(outDir, { recursive: true });
+
+  for (const p of posts) {
+    if (p.lang !== "en") continue;
+    if (filter.slug && p.slug !== filter.slug) continue;
+    const devto = p.meta.syndication.devto;
+    if (!devto) {
+      console.warn(`  [skip] ${p.slug}.en.md: no syndication.devto`);
+      continue;
+    }
+    const article = syndicateForDevto({
+      meta: p.meta,
+      body: p.body,
+      slug: p.slug,
+      resolver,
+      canonicalHost: "https://ryantsuji.dev",
+      coverImageUrl: p.meta.cover ? `https://ryantsuji.dev${p.meta.cover}` : undefined,
+    });
+    const outPath = resolve(outDir, `${p.slug}.json`);
+    await writeFile(outPath, JSON.stringify({ id: devto.id, article }, null, 2) + "\n", "utf8");
+    console.log(`  devto: ${p.slug} → ${outPath}`);
+  }
+}
+
+async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  const targetIdx = args.indexOf("--target");
+  const target = targetIdx >= 0 ? args[targetIdx + 1] : "all";
+  const slugIdx = args.indexOf("--slug");
+  const slug = slugIdx >= 0 ? args[slugIdx + 1] : undefined;
+  if (target !== "zenn" && target !== "devto" && target !== "all") {
+    console.error(`unknown --target: ${target} (zenn | devto | all)`);
+    process.exit(1);
+  }
+
+  const posts = await readAllPosts();
+  console.log(
+    `loaded ${posts.length} posts (filter: target=${target}${slug ? `, slug=${slug}` : ""})`,
+  );
+
+  if (target === "zenn" || target === "all") {
+    await emitZenn(posts, { slug });
+  }
+  if (target === "devto" || target === "all") {
+    await emitDevto(posts, { slug });
+  }
+  console.log("done");
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
