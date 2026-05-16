@@ -1,11 +1,12 @@
 /**
  * Better Auth server config。env binding を **`createServerFn` / route handler の
  * `context.env`** から受け取り、Drizzle adapter + social providers (GitHub / X /
- * Google / Facebook) で sign-in を成立させる。`@self/db` の `createDb` で生成した
- * client を adapter に流す。
+ * Google) で sign-in を成立させる。`@self/db` の `createDb` で生成した client を
+ * adapter に流す。
  *
- * Apple は Apple Developer Program (有料) + JWT clientSecret の半年毎手動 rotation
- * 負担に見合わないので未対応 (個人サイト方針)。
+ * Apple は Developer Program (有料) + JWT clientSecret の半年毎手動 rotation 負担に、
+ * Facebook は Meta App Review プロセス + App Domain / Valid OAuth Redirect URI の
+ * 二重設定要件に対して個人サイトの ROI が見合わないため未対応。
  *
  * env binding contract (CF Workers の env binding shape、`start.ts:Env` 参照):
  * - `DATABASE_URL` — Neon pooled connection string
@@ -14,7 +15,6 @@
  * - `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` — GitHub OAuth App
  * - `X_OAUTH2_CLIENT_ID` / `X_OAUTH2_CLIENT_SECRET` — X (Twitter) OAuth 2.0 client
  * - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google Cloud OAuth 2.0 client
- * - `FACEBOOK_CLIENT_ID` / `FACEBOOK_CLIENT_SECRET` — Meta for Developers app
  *
  * `process.env` 経路は廃止 (CF Workers では module scope で undefined になる)。
  * `src/server.ts` (Worker entry) が `(req, env, ctx)` を `requestContext` に詰めて、
@@ -32,7 +32,7 @@
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business Better Auth runtime config。Drizzle adapter で @self/db を SSoT に、social providers (github/twitter/google/facebook) を有効化、sign-up は open (OAuth provider 経由の身元確認に委ねる方針)。env は CF Workers binding 由来 (process.env 不使用)、isolate ごとに globalThis cache で per-request 再構築を回避
+ * @graph-business Better Auth runtime config。Drizzle adapter で @self/db を SSoT に、social providers (github/twitter/google) を有効化、sign-up は open (OAuth provider 経由の身元確認に委ねる方針)。env は CF Workers binding 由来 (process.env 不使用)、isolate ごとに globalThis cache で per-request 再構築を回避
  * @graph-connects better-auth [calls] betterAuth() で auth instance を構築、各 route handler に flow
  * @graph-connects content [embeds] @self/db を drizzleAdapter に渡して Postgres を SSoT に
  */
@@ -56,8 +56,6 @@ export interface AuthEnv {
   X_OAUTH2_CLIENT_SECRET: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
-  FACEBOOK_CLIENT_ID: string;
-  FACEBOOK_CLIENT_SECRET: string;
 }
 
 /**
@@ -89,10 +87,6 @@ export function buildAuth(env: AuthEnv) {
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
       },
-      facebook: {
-        clientId: env.FACEBOOK_CLIENT_ID,
-        clientSecret: env.FACEBOOK_CLIENT_SECRET,
-      },
     },
   });
 }
@@ -114,8 +108,6 @@ export function authCacheKey(env: AuthEnv): string {
     env.X_OAUTH2_CLIENT_SECRET,
     env.GOOGLE_CLIENT_ID,
     env.GOOGLE_CLIENT_SECRET,
-    env.FACEBOOK_CLIENT_ID,
-    env.FACEBOOK_CLIENT_SECRET,
   ].join("|");
 }
 
