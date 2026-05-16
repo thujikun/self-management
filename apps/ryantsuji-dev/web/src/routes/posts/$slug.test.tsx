@@ -95,10 +95,12 @@ const mockLoadEngagement = vi.fn().mockResolvedValue({
 });
 const mockToggleLike = vi.fn();
 const mockAddComment = vi.fn();
+const mockDeleteComment = vi.fn();
 vi.mock("../../server/engagement.js", () => ({
   loadPostEngagement: (...args: unknown[]) => mockLoadEngagement(...args),
   toggleLike: (...args: unknown[]) => mockToggleLike(...args),
   addComment: (...args: unknown[]) => mockAddComment(...args),
+  deleteComment: (...args: unknown[]) => mockDeleteComment(...args),
 }));
 
 async function ssrAt(path: string): Promise<string> {
@@ -205,7 +207,7 @@ describe("/posts/$slug — engagement (SSR、未認証)", () => {
 
   it("view count は loader 経由で取得され DOM に乗らない (header から外した)", async () => {
     // style refresh で view count は post header の表示から外した
-    // (engagement section の like カウントには残っている)。loader が viewCount を
+    // (PostSharePane の like カウントには残っている)。loader が viewCount を
     // 返している事実は engagement の server fn test 側で担保する。
     mockLoadEngagement.mockResolvedValue({
       viewCount: "42",
@@ -214,19 +216,20 @@ describe("/posts/$slug — engagement (SSR、未認証)", () => {
     });
     const html = await ssrAt("/posts/_minimal-fixture");
     expect(html).not.toMatch(/post-detail__views/);
-    expect(html).toMatch(/<span class="like-button__count">7<\/span>/);
+    // SSR は未認証 default なので like button は PostSharePane の sign-in fallback link に
+    // なり like count span は出ない (認証済み branch のみ count を出す設計)
+    expect(html).toMatch(/post-share-pane/);
   });
 
-  it("likes count + 未認証で disabled like button + sign-in CTA", async () => {
+  it("未認証で like button が sign-in CTA fallback + comment 投稿 CTA も出る", async () => {
     mockLoadEngagement.mockResolvedValue({
       viewCount: "0",
       likes: { count: 7, liked: false },
       comments: [],
     });
     const html = await ssrAt("/posts/_minimal-fixture");
-    expect(html).toMatch(/<button[^>]*class="like-button"[^>]*disabled/);
-    expect(html).toMatch(/aria-pressed="false"/);
-    expect(html).toMatch(/<span class="like-button__count">7<\/span>/);
+    // PostSharePane の like button は未認証時 sign-in に置換される (Link)
+    expect(html).toMatch(/post-share-pane__btn--signin/);
     expect(html).toMatch(/sign in to like \/ comment/);
   });
 
@@ -241,6 +244,7 @@ describe("/posts/$slug — engagement (SSR、未認証)", () => {
           authorId: "u1",
           body: "great post",
           createdAt: "2026-05-09T00:00:00.000Z",
+          parentCommentId: null,
         },
         {
           id: "c1",
@@ -248,6 +252,7 @@ describe("/posts/$slug — engagement (SSR、未認証)", () => {
           authorId: "u2",
           body: "thanks!",
           createdAt: "2026-05-08T00:00:00.000Z",
+          parentCommentId: null,
         },
       ],
     });
@@ -398,6 +403,7 @@ describe("server fn handlers (run*)", () => {
         authorId: "u1",
         body: "great",
         createdAt: "2026-05-10T00:00:00Z",
+        parentCommentId: null,
       });
       await runAddComment(TEST_ENV, { slug: "foo", body: "great" });
       expect(mockAddComment).toHaveBeenCalledWith(mockDb, {
@@ -405,6 +411,7 @@ describe("server fn handlers (run*)", () => {
         authorId: "u1",
         authorName: "Ryan",
         authorEmail: "ryan@example.com",
+        parentCommentId: null,
         body: "great",
       });
     });
@@ -439,13 +446,16 @@ describe("executeAddCommentAction", () => {
     authorId: "u1",
     body: "hello",
     createdAt: "2026-05-10T00:00:00Z",
+    parentCommentId: null,
   };
 
   it("成功 → { ok: true, comment }、body は trim される", async () => {
     const fn = vi.fn().mockResolvedValue(created);
     const out = await executeAddCommentAction(fn, { slug: "foo", body: "  hello  " });
     expect(out).toStrictEqual({ ok: true, comment: created });
-    expect(fn).toHaveBeenCalledWith({ data: { slug: "foo", body: "hello" } });
+    expect(fn).toHaveBeenCalledWith({
+      data: { slug: "foo", body: "hello", parentCommentId: null },
+    });
   });
 
   it("空 body → server を叩かず { ok: false, error: 'コメントを...' }", async () => {
@@ -553,6 +563,7 @@ describe("dispatchCommentSubmit", () => {
     authorId: "u1",
     body: "hi",
     createdAt: "2026-05-10T00:00:00Z",
+    parentCommentId: null,
   };
 
   it("未認証 → 即 return", async () => {
@@ -589,7 +600,14 @@ describe("dispatchCommentSubmit", () => {
     const deps = makeDeps();
     const fn = vi.fn().mockResolvedValue(created);
     const prev = [
-      { id: "c0", authorName: "X", authorId: "ux", body: "old", createdAt: "2026-05-09T00:00:00Z" },
+      {
+        id: "c0",
+        authorName: "X",
+        authorId: "ux",
+        body: "old",
+        createdAt: "2026-05-09T00:00:00Z",
+        parentCommentId: null,
+      },
     ];
     await dispatchCommentSubmit({
       isAuthenticated: true,
@@ -655,6 +673,7 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
     } as unknown as ReturnType<typeof authClient.useSession>);
     mockToggleLike.mockReset();
     mockAddComment.mockReset();
+    mockDeleteComment.mockReset();
     mockInvalidate.mockReset();
   });
 
@@ -686,10 +705,12 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
     mockToggleLike.mockResolvedValue({ liked: true, count: 1 });
     const { container, root } = await mount({
       slug: "foo",
+      title: "foo",
+      lang: "en",
       initialLikes: { count: 0, liked: false },
       initialComments: [],
     });
-    const btn = container.querySelector(".like-button") as HTMLButtonElement;
+    const btn = container.querySelector(".post-share-pane__btn--like") as HTMLButtonElement;
     expect(btn).not.toBeNull();
     expect(btn.getAttribute("aria-pressed")).toStrictEqual("false");
 
@@ -699,10 +720,10 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
     });
 
     expect(mockToggleLike).toHaveBeenCalledTimes(1);
-    expect(container.querySelector(".like-button")?.getAttribute("aria-pressed")).toStrictEqual(
-      "true",
-    );
-    expect(container.querySelector(".like-button__count")?.textContent).toStrictEqual("1");
+    expect(
+      container.querySelector(".post-share-pane__btn--like")?.getAttribute("aria-pressed"),
+    ).toStrictEqual("true");
+    expect(container.querySelector(".post-share-pane__count")?.textContent).toStrictEqual("1");
 
     await act(async () => {
       root.unmount();
@@ -716,10 +737,13 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
       authorId: "u1",
       body: "hello",
       createdAt: "2026-05-10T00:00:00Z",
+      parentCommentId: null,
     };
     mockAddComment.mockResolvedValue(created);
     const { container, root } = await mount({
       slug: "foo",
+      title: "foo",
+      lang: "en",
       initialLikes: { count: 0, liked: false },
       initialComments: [],
     });
@@ -753,6 +777,8 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
   it("空 textarea で submit → submit ボタンが disabled、addComment は呼ばれない", async () => {
     const { container, root } = await mount({
       slug: "foo",
+      title: "foo",
+      lang: "en",
       initialLikes: { count: 0, liked: false },
       initialComments: [],
     });
@@ -770,10 +796,12 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
     mockToggleLike.mockRejectedValue(new Error("server boom"));
     const { container, root } = await mount({
       slug: "foo",
+      title: "foo",
+      lang: "en",
       initialLikes: { count: 0, liked: false },
       initialComments: [],
     });
-    const btn = container.querySelector(".like-button") as HTMLButtonElement;
+    const btn = container.querySelector(".post-share-pane__btn--like") as HTMLButtonElement;
 
     const { act } = await import("react");
     await act(async () => {
@@ -786,6 +814,157 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it("reply (CommentList 経由) → addComment が parentCommentId 付きで呼ばれ、list に prepend", async () => {
+    mockAddComment.mockResolvedValue({
+      id: "reply-1",
+      authorName: "X",
+      authorId: "u1",
+      body: "reply!",
+      createdAt: "2026-05-11T00:00:00Z",
+      parentCommentId: "22222222-2222-2222-2222-222222222222",
+    });
+    const { container, root } = await mount({
+      slug: "foo",
+      title: "foo",
+      lang: "en",
+      initialLikes: { count: 0, liked: false },
+      initialComments: [
+        {
+          id: "22222222-2222-2222-2222-222222222222",
+          authorName: "Y",
+          authorId: "u2",
+          body: "top",
+          createdAt: "2026-05-10T00:00:00Z",
+          parentCommentId: null,
+        },
+      ],
+    });
+    // 親 comment の reply button を click (top の comments__action は reply)
+    const replyBtn = container.querySelector(
+      ".comments__list .comments__action",
+    ) as HTMLButtonElement;
+    const { act } = await import("react");
+    await act(async () => replyBtn.click());
+    const replyTextarea = container.querySelector(
+      ".comments__form--reply textarea",
+    ) as HTMLTextAreaElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(replyTextarea, "reply!");
+      replyTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const submit = container.querySelector(
+      ".comments__form--reply .comments__submit",
+    ) as HTMLButtonElement;
+    await act(async () => submit.click());
+    // mock を呼んだ事実を確認
+    expect(mockAddComment).toHaveBeenCalled();
+    // reply が DOM に出る
+    expect(container.querySelector(".comments__item--reply .comments__body")?.textContent).toBe(
+      "reply!",
+    );
+    await act(async () => root.unmount());
+  });
+
+  it("delete (CommentList 経由) → deleteComment が呼ばれ list から消える", async () => {
+    mockDeleteComment.mockResolvedValue({ deletedId: "11111111-1111-1111-1111-111111111111" });
+    const { container, root } = await mount({
+      slug: "foo",
+      title: "foo",
+      lang: "en",
+      initialLikes: { count: 0, liked: false },
+      initialComments: [
+        {
+          id: "11111111-1111-1111-1111-111111111111",
+          authorName: "X",
+          authorId: "u1",
+          body: "mine",
+          createdAt: "2026-05-10T00:00:00Z",
+          parentCommentId: null,
+        },
+      ],
+    });
+    const deleteBtn = container.querySelector(".comments__action--danger") as HTMLButtonElement;
+    expect(deleteBtn).toBeTruthy();
+    const { act } = await import("react");
+    await act(async () => deleteBtn.click());
+    expect(mockDeleteComment).toHaveBeenCalled();
+    expect(container.querySelector(".comments__item")).toBeNull();
+    // soft-delete に伴う orphan-promotion + view count の最新化のため router.invalidate
+    // が走る (post 経路の invalidate と同経路)
+    expect(mockInvalidate).toHaveBeenCalledTimes(1);
+    await act(async () => root.unmount());
+  });
+
+  it("delete が throw した時 error 表示 (catch path)", async () => {
+    mockDeleteComment.mockRejectedValue(new Error("delete boom"));
+    const { container, root } = await mount({
+      slug: "foo",
+      title: "foo",
+      lang: "en",
+      initialLikes: { count: 0, liked: false },
+      initialComments: [
+        {
+          id: "11111111-1111-1111-1111-111111111111",
+          authorName: "X",
+          authorId: "u1",
+          body: "mine",
+          createdAt: "2026-05-10T00:00:00Z",
+          parentCommentId: null,
+        },
+      ],
+    });
+    const deleteBtn = container.querySelector(".comments__action--danger") as HTMLButtonElement;
+    const { act } = await import("react");
+    await act(async () => deleteBtn.click());
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toBe("delete boom");
+    // catch path では invalidate しない (error 表示のみ)
+    expect(mockInvalidate).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
+  it("reply が error を返した時 inline error 表示 (CommentList の form 内)", async () => {
+    mockAddComment.mockRejectedValue(new Error("reply boom"));
+    const { container, root } = await mount({
+      slug: "foo",
+      title: "foo",
+      lang: "en",
+      initialLikes: { count: 0, liked: false },
+      initialComments: [
+        {
+          id: "22222222-2222-2222-2222-222222222222",
+          authorName: "Y",
+          authorId: "u2",
+          body: "top",
+          createdAt: "2026-05-10T00:00:00Z",
+          parentCommentId: null,
+        },
+      ],
+    });
+    const { act } = await import("react");
+    const replyBtn = container.querySelector(
+      ".comments__list .comments__action",
+    ) as HTMLButtonElement;
+    await act(async () => replyBtn.click());
+    const replyTextarea = container.querySelector(
+      ".comments__form--reply textarea",
+    ) as HTMLTextAreaElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(replyTextarea, "hi");
+      replyTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const submit = container.querySelector(
+      ".comments__form--reply .comments__submit",
+    ) as HTMLButtonElement;
+    await act(async () => submit.click());
+    // CommentList 内に role=alert で error が出る
+    const alerts = container.querySelectorAll('[role="alert"]');
+    expect(Array.from(alerts).some((a) => a.textContent === "reply boom")).toBe(true);
+    await act(async () => root.unmount());
   });
 });
 
@@ -817,6 +996,8 @@ describe("EngagementSection — render branches", () => {
     const html = renderEngagement(
       {
         slug: "foo",
+        title: "foo",
+        lang: "en",
         initialLikes: { count: 0, liked: false },
         initialComments: [],
       },
@@ -827,14 +1008,16 @@ describe("EngagementSection — render branches", () => {
     expect(html).toMatch(/<form class="comments__form"/);
     expect(html).toMatch(/まだコメントはありません/);
     expect(html).not.toMatch(/sign in to like/);
-    // 認証済みなので like button は disabled でない
-    expect(html).not.toMatch(/<button[^>]*class="like-button"[^>]*disabled/);
+    // 認証済みなので like button は disabled でない (PostSharePane の like button)
+    expect(html).not.toMatch(/<button[^>]*post-share-pane__btn--like[^>]*disabled/);
   });
 
   it("認証済み + 自分が liked=true → aria-pressed=true + ♥ icon", () => {
     const html = renderEngagement(
       {
         slug: "foo",
+        title: "foo",
+        lang: "en",
         initialLikes: { count: 3, liked: true },
         initialComments: [],
       },
@@ -851,6 +1034,8 @@ describe("EngagementSection — render branches", () => {
     const html = renderEngagement(
       {
         slug: "foo",
+        title: "foo",
+        lang: "en",
         initialLikes: { count: 1, liked: false },
         initialComments: [
           {
@@ -859,6 +1044,7 @@ describe("EngagementSection — render branches", () => {
             authorId: "u1",
             body: "hi",
             createdAt: "2026-05-10T00:00:00Z",
+            parentCommentId: null,
           },
         ],
       },

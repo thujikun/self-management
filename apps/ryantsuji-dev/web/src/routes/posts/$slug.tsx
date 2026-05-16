@@ -29,12 +29,20 @@ import { z } from "zod";
 
 import { useSession } from "../../lib/auth-client.js";
 import { displayTags } from "../../lib/tags.js";
+import { CommentList } from "../../components/CommentList.js";
+import { PostSharePane } from "../../components/PostSharePane.js";
 import { PostToc } from "../../components/PostToc.js";
 import { PostBody } from "../../server-components/PostBody.js";
 import { type CommentView } from "../../server/engagement.js";
 import type { Lang } from "../../server/i18n.js";
 
-import { runAddComment, runLoadEngagement, runRenderPost, runToggleLike } from "./$slug.server.js";
+import {
+  runAddComment,
+  runDeleteComment,
+  runLoadEngagement,
+  runRenderPost,
+  runToggleLike,
+} from "./$slug.server.js";
 
 /** @graph-connects none */
 const SlugSchema = z.string().min(1);
@@ -69,7 +77,17 @@ const RenderInputSchema = z.object({
 const CommentInputSchema = z.object({
   slug: z.string().min(1),
   body: z.string().min(1).max(4000),
+  // UUID format は DB FK check で担保するので、ここでは string presence のみ。
+  // Zod v4 の `.uuid()` regex が test fixture (固定 UUID 文字列) を rejection するため。
+  parentCommentId: z.string().min(1).nullable().optional(),
 });
+
+/**
+ * comment 削除 input。soft delete を server 側で `deletedAt = now()` する。
+ *
+ * @graph-connects none
+ */
+const DeleteCommentInputSchema = z.string().min(1);
 
 /**
  * loadEngagement 用の input schema。slug + post meta (title / publishedAt) を受ける。
@@ -124,6 +142,15 @@ const toggleLikeServer = createServerFn()
 const addCommentServer = createServerFn()
   .inputValidator((data: unknown) => CommentInputSchema.parse(data))
   .handler(async ({ data, context }) => runAddComment(context.env, data));
+
+/**
+ * server function: comment 削除 (soft delete)。auth 必須、自分の comment のみ。
+ *
+ * @graph-connects content [calls] runDeleteComment へ委譲
+ */
+const deleteCommentServer = createServerFn()
+  .inputValidator((data: unknown) => DeleteCommentInputSchema.parse(data))
+  .handler(async ({ data: commentId, context }) => runDeleteComment(context.env, commentId));
 
 /**
  * 本番公開 URL。外部 crawler は og:image / twitter:image / og:url を **絶対 URL** で
@@ -245,6 +272,8 @@ function PostDetail() {
       <PostBody html={html} />
       <EngagementSection
         slug={slug}
+        title={frontmatter.title}
+        lang={servedLang}
         initialLikes={engagement.likes}
         initialComments={engagement.comments}
       />
@@ -253,13 +282,24 @@ function PostDetail() {
 }
 
 /**
+ * 本サイトの公開 URL。share intent URL に絶対 URL を埋めるための local 定数。
+ * `__root.tsx` / 上部の SITE_URL と同値だが、share pane は client-only でも組み立て
+ * られるよう、ここで再定義する (=同 file の方が変更点が閉じる)。
+ *
+ * @graph-connects none
+ */
+const SHARE_SITE_URL = SITE_URL;
+
+/**
  * `useServerFn` で得る型を再利用するため一回だけ抽出。test 用 fake にも同 shape を要求できる。
  *
  * @graph-connects none
  */
 type ToggleLikeFn = (args: { data: string }) => Promise<{ liked: boolean; count: number }>;
 /** @graph-connects none */
-type AddCommentFn = (args: { data: { slug: string; body: string } }) => Promise<CommentView>;
+type AddCommentFn = (args: {
+  data: { slug: string; body: string; parentCommentId?: string | null };
+}) => Promise<CommentView>;
 
 /**
  * like ボタン押下の business logic。React state を持たず、結果を `{ ok, likes }` /
@@ -287,14 +327,16 @@ export async function executeLikeAction(
  */
 export async function executeAddCommentAction(
   addCommentFn: AddCommentFn,
-  args: { slug: string; body: string },
+  args: { slug: string; body: string; parentCommentId?: string | null },
 ): Promise<{ ok: true; comment: CommentView } | { ok: false; error: string }> {
   const trimmed = args.body.trim();
   if (trimmed.length === 0) {
     return { ok: false, error: "コメントを入力してください" };
   }
   try {
-    const created = await addCommentFn({ data: { slug: args.slug, body: trimmed } });
+    const created = await addCommentFn({
+      data: { slug: args.slug, body: trimmed, parentCommentId: args.parentCommentId ?? null },
+    });
     return { ok: true, comment: created };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "post failed" };
@@ -374,10 +416,14 @@ export async function dispatchCommentSubmit(deps: {
  */
 export function EngagementSection({
   slug,
+  title,
+  lang,
   initialLikes,
   initialComments,
 }: {
   slug: string;
+  title: string;
+  lang: Lang;
   initialLikes: { count: number; liked: boolean };
   initialComments: CommentView[];
 }) {
@@ -385,6 +431,7 @@ export function EngagementSection({
   const router = useRouter();
   const toggleLikeFn = useServerFn(toggleLikeServer);
   const addCommentFn = useServerFn(addCommentServer);
+  const deleteCommentFn = useServerFn(deleteCommentServer);
 
   const [likes, setLikes] = useState(initialLikes);
   const [comments, setComments] = useState(initialComments);
@@ -393,6 +440,7 @@ export function EngagementSection({
   const [error, setError] = useState<string | null>(null);
 
   const isAuthenticated = !!session?.user;
+  const currentUserId = session?.user.id ?? null;
 
   const onLike = () =>
     dispatchLikeClick({
@@ -422,32 +470,54 @@ export function EngagementSection({
     });
   };
 
+  const onReply = async ({ parentId, body }: { parentId: string; body: string }) => {
+    const r = await executeAddCommentAction(addCommentFn, {
+      slug,
+      body,
+      parentCommentId: parentId,
+    });
+    if (r.ok) {
+      setComments((prev) => [r.comment, ...prev]);
+      return { ok: true };
+    }
+    return { ok: false, error: r.error };
+  };
+
+  const onDeleteComment = async (commentId: string): Promise<void> => {
+    try {
+      const r = await deleteCommentFn({ data: commentId });
+      if (r.deletedId) {
+        setComments((prev) => prev.filter((c) => c.id !== r.deletedId));
+        // view count + 親 soft-delete に伴う orphan-promotion を最新化するため
+        // route loader を再走させる (post 経路の invalidate と同経路)。
+        router.invalidate();
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "delete failed");
+    }
+  };
+
+  const postUrl = `${SHARE_SITE_URL}/posts/${slug}${lang === "ja" ? "?lang=ja" : ""}`;
+  const signInHref = `/posts/${slug}`;
+
   return (
     <section className="engagement" aria-label="engagement">
-      <div className="engagement__likes">
-        <button
-          type="button"
-          className="like-button"
-          onClick={onLike}
-          disabled={!isAuthenticated || submitting}
-          aria-pressed={likes.liked}
-          aria-label={likes.liked ? "unlike" : "like"}
-        >
-          <span aria-hidden="true">{likes.liked ? "♥" : "♡"}</span>
-          <span className="like-button__count">{likes.count}</span>
-        </button>
-        {!isAuthenticated ? (
-          <Link
-            to="/sign-in"
-            search={{ redirect: `/posts/${slug}` }}
-            className="engagement__signin"
-          >
-            sign in to like / comment
-          </Link>
-        ) : null}
-      </div>
+      <PostSharePane
+        title={title}
+        lang={lang}
+        postUrl={postUrl}
+        likes={isAuthenticated ? likes : null}
+        onLike={onLike}
+        likeSubmitting={submitting}
+        signInHref={isAuthenticated ? undefined : signInHref}
+      />
 
       <h2 className="comments__heading">comments ({comments.length})</h2>
+      {!isAuthenticated ? (
+        <Link to="/sign-in" search={{ redirect: signInHref }} className="engagement__signin">
+          sign in to like / comment
+        </Link>
+      ) : null}
       {isAuthenticated ? (
         <form className="comments__form" onSubmit={onSubmitComment}>
           <label htmlFor="comment-body" className="visually-hidden">
@@ -478,23 +548,12 @@ export function EngagementSection({
         </p>
       ) : null}
 
-      {comments.length > 0 ? (
-        <ol className="comments__list">
-          {comments.map((c) => (
-            <li key={c.id} className="comments__item">
-              <header className="comments__meta">
-                <span className="comments__author">{c.authorName}</span>
-                <time dateTime={c.createdAt} className="comments__date">
-                  {c.createdAt.slice(0, 10)}
-                </time>
-              </header>
-              <p className="comments__body">{c.body}</p>
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p className="comments__empty">まだコメントはありません。</p>
-      )}
+      <CommentList
+        comments={comments}
+        currentUserId={currentUserId}
+        onReply={onReply}
+        onDelete={onDeleteComment}
+      />
     </section>
   );
 }

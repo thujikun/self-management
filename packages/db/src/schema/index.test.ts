@@ -143,6 +143,12 @@ describe("comments schema", () => {
           },
           {
             "hasDefault": false,
+            "name": "parent_comment_id",
+            "notNull": false,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
             "name": "post_slug",
             "notNull": true,
             "primary": false,
@@ -163,6 +169,16 @@ describe("comments schema", () => {
               "slug",
             ],
             "foreignTable": "posts",
+            "onDelete": "cascade",
+          },
+          {
+            "columns": [
+              "parent_comment_id",
+            ],
+            "foreignColumns": [
+              "id",
+            ],
+            "foreignTable": "comments",
             "onDelete": "cascade",
           },
         ],

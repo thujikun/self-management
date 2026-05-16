@@ -108,20 +108,6 @@ export function PostCard({ post, requestedLang }: { post: PostListItem; requeste
         </time>
         <h2 className="post-card__title">{post.title}</h2>
         {post.summary ? <p className="post-card__summary">{post.summary}</p> : null}
-        <ul className="post-card__langs" aria-label="available languages">
-          {post.availableLangs.map((l) => (
-            <li
-              key={l}
-              className={
-                l === post.servedLang
-                  ? "post-card__lang post-card__lang--served"
-                  : "post-card__lang"
-              }
-            >
-              {l.toUpperCase()}
-            </li>
-          ))}
-        </ul>
         {isFallback ? (
           <p className="post-card__fallback-note" lang={post.servedLang}>
             (showing {post.servedLang.toUpperCase()} — {requestedLang.toUpperCase()} not available)

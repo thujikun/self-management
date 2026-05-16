@@ -22,7 +22,11 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import { comments, likes, posts, viewCounts, type Db } from "@self/db";
 
-import { normalizeTimestamp, validateCommentBody } from "./engagement-validate.js";
+import {
+  normalizeTimestamp,
+  validateCommentBody,
+  validateReplyParent,
+} from "./engagement-validate.js";
 
 /**
  * `posts` row が無ければ insert、有れば title / publishedAt を最新化する upsert。
@@ -164,10 +168,13 @@ export interface CommentView {
   authorId: string | null;
   body: string;
   createdAt: string;
+  /** 親 comment id (null = top-level、UUID = その親への reply、1 階層のみ) */
+  parentCommentId: string | null;
 }
 
 /**
  * `deletedAt IS NULL` の comment を新着順で返す。soft delete は list 経路から落とす。
+ * thread 用に親子フラットで返し、UI 側で `parentCommentId` で nest する。
  *
  * @graph-connects content [calls] comments SELECT (deletedAt IS NULL)
  */
@@ -179,6 +186,7 @@ export async function listComments(db: Db, slug: string): Promise<CommentView[]>
       authorId: comments.authorId,
       body: comments.body,
       createdAt: comments.createdAt,
+      parentCommentId: comments.parentCommentId,
     })
     .from(comments)
     .where(and(eq(comments.postSlug, slug), isNull(comments.deletedAt)))
@@ -189,6 +197,7 @@ export async function listComments(db: Db, slug: string): Promise<CommentView[]>
     authorId: r.authorId,
     body: r.body,
     createdAt: normalizeTimestamp(r.createdAt),
+    parentCommentId: r.parentCommentId,
   }));
 }
 
@@ -196,13 +205,40 @@ export async function listComments(db: Db, slug: string): Promise<CommentView[]>
  * 認証 user 限定の comment 投稿。caller が user の identity を保証する想定。
  * 空 / 空白のみ body は reject (UI 側でも check するが server 側でも double-check)。
  *
- * @graph-connects content [calls] comments INSERT
+ * `parentCommentId` を指定すると reply として登録される (1 階層のみ — UI 側で
+ * thread に折り畳む)。schema の FK は `comments(id)` のみで `post_slug` の一致や
+ * 階層深さは強制しないため、本関数で `(postSlug 一致 + 親も top-level)` を 1 SELECT
+ * で assert する: post 跨ぎ reply は `INVALID_PARENT_COMMENT`、reply の reply は
+ * `REPLY_DEPTH_EXCEEDED` を throw して silent な data 不整合を弾く。
+ *
+ * @graph-connects content [calls] comments SELECT (親 row 検証) + INSERT
  */
 export async function addComment(
   db: Db,
-  args: { slug: string; authorId: string; authorName: string; authorEmail: string; body: string },
+  args: {
+    slug: string;
+    authorId: string;
+    authorName: string;
+    authorEmail: string;
+    body: string;
+    parentCommentId?: string | null;
+  },
 ): Promise<CommentView> {
   const body = validateCommentBody(args.body);
+  if (args.parentCommentId) {
+    const parentRows = await db
+      .select({
+        postSlug: comments.postSlug,
+        parentCommentId: comments.parentCommentId,
+      })
+      .from(comments)
+      .where(eq(comments.id, args.parentCommentId))
+      .limit(1);
+    validateReplyParent({
+      parent: parentRows[0] ?? null,
+      expectedSlug: args.slug,
+    });
+  }
   const rows = await db
     .insert(comments)
     .values({
@@ -211,6 +247,7 @@ export async function addComment(
       authorName: args.authorName,
       authorEmail: args.authorEmail,
       body,
+      parentCommentId: args.parentCommentId ?? null,
     })
     .returning({
       id: comments.id,
@@ -218,6 +255,7 @@ export async function addComment(
       authorId: comments.authorId,
       body: comments.body,
       createdAt: comments.createdAt,
+      parentCommentId: comments.parentCommentId,
     });
   if (rows.length === 0) {
     throw new Error("addComment: no row returned");
@@ -229,7 +267,40 @@ export async function addComment(
     authorId: r.authorId,
     body: r.body,
     createdAt: normalizeTimestamp(r.createdAt),
+    parentCommentId: r.parentCommentId,
   };
+}
+
+/**
+ * 認証 user が自分の comment を soft delete する。`deletedAt = now()` で row は残し、
+ * `listComments` で除外される。authorId 不一致なら no-op (上位は 404 boundary に倒す
+ * のではなく、後続 SELECT で消えてない事実から「権限なし」を察する設計)。
+ *
+ * **soft delete の子伝播**: cascade は `ON DELETE` (= hard delete) でのみ発火するため、
+ * 親に `deletedAt` を立てても子 row は残る。`buildCommentTree` 側は親不在 reply を
+ * top-level に昇格させて表示するので、UI 上は「親が消えて子は独立コメントになる」
+ * 挙動になる。意図的にこの形を採用 (子コメントの内容まで連動消去するのは過剰)。
+ *
+ * 戻り値は実際に削除した comment id (見つからず / 権限なしなら null)。
+ *
+ * @graph-connects content [calls] comments UPDATE (deletedAt = now)
+ */
+export async function deleteComment(
+  db: Db,
+  args: { commentId: string; requesterId: string },
+): Promise<{ deletedId: string | null }> {
+  const rows = await db
+    .update(comments)
+    .set({ deletedAt: new Date() })
+    .where(
+      and(
+        eq(comments.id, args.commentId),
+        eq(comments.authorId, args.requesterId),
+        isNull(comments.deletedAt),
+      ),
+    )
+    .returning({ id: comments.id });
+  return { deletedId: rows[0]?.id ?? null };
 }
 
 /**

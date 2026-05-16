@@ -100,11 +100,13 @@ export const light: SemanticTokens = {
     fg: gray[0],
     border: accent[500],
   },
-  // light: 白系 surface に薄っすらフロスト。border は底が透けても自然な薄 gray。
+  // light: 白系 surface にしっかりフロスト。bg は中程度 alpha でガラス感を強める
+  // (alpha 0.65 だと不透明すぎて blur 効果が見えなくなるため 0.45 まで下げた)。
+  // blur は xl (24px) で背後コンテンツが明確にボケる強さに。
   glass: {
-    bg: "oklch(100% 0 0 / 0.65)",
+    bg: "oklch(100% 0 0 / 0.45)",
     border: "oklch(0% 0 0 / 0.06)",
-    blur: blur.lg,
+    blur: blur.xl,
   },
 };
 
@@ -140,10 +142,11 @@ export const dark: SemanticTokens = {
     fg: gray[900],
     border: accent[400],
   },
-  // dark: 半透明な brand tint + 白系低 alpha highlight。
+  // dark: 半透明な brand tint + 白系低 alpha highlight。light と同じ理由で
+  // alpha を 0.55 → 0.4 に下げ、blur radius を xl に。
   glass: {
-    bg: "oklch(24% 0.02 188 / 0.55)",
+    bg: "oklch(22% 0.02 188 / 0.4)",
     border: "oklch(100% 0 0 / 0.08)",
-    blur: blur.lg,
+    blur: blur.xl,
   },
 };
