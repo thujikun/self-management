@@ -20,6 +20,12 @@ import {
 import type { QueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
+// `?url` で Vite に CSS asset として import させ、hashed pathname を取得する。
+// 直書きの `/styles.css` だと Vite が emit せず 404 する (src/styles.css は
+// public/ に置いてないため static serve されない) ので、必ず import 経由で
+// build pipeline に乗せる。
+import appCss from "../styles.css?url";
+
 export interface RouterContext {
   queryClient: QueryClient;
 }
@@ -60,7 +66,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { name: "twitter:image", content: `${SITE_URL}/og-image.png` },
     ],
     links: [
-      { rel: "stylesheet", href: "/styles.css" },
+      { rel: "stylesheet", href: appCss },
       // favicon: SVG (modern browsers) + ICO fallback + 各 raster size
       // Mochiy Pop One letterforms を path 化した self-contained SVG (font 依存無し)
       { rel: "icon", type: "image/svg+xml", href: "/logo-mark.svg" },

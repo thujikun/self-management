@@ -72,7 +72,12 @@ describe("__root route", () => {
     const links = head.links ?? [];
     expect(links).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ rel: "stylesheet", href: "/styles.css" }),
+        // `?url` 経由で Vite が hash 化した pathname (`/assets/styles-<hash>.css`)
+        // を生成する。vitest 環境では Vite css plugin が url を emit せず空文字列
+        // になるため href の値までは assert せず、`<link rel="stylesheet">` が
+        // head に並んでいる事実だけを検証する (実体は build E2E と CF preview で
+        // 担保)。
+        expect.objectContaining({ rel: "stylesheet" }),
         expect.objectContaining({ rel: "icon", type: "image/svg+xml", href: "/logo-mark.svg" }),
         expect.objectContaining({ rel: "icon", type: "image/x-icon", href: "/favicon.ico" }),
         expect.objectContaining({
