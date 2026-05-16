@@ -15,6 +15,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PostsIndexRouteImport } from './routes/posts/index'
+import { Route as RssSplatRouteImport } from './routes/rss/$'
 import { Route as PostsSlugRouteImport } from './routes/posts/$slug'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -49,6 +50,11 @@ const PostsIndexRoute = PostsIndexRouteImport.update({
   path: '/posts/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RssSplatRoute = RssSplatRouteImport.update({
+  id: '/rss/$',
+  path: '/rss/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PostsSlugRoute = PostsSlugRouteImport.update({
   id: '/posts/$slug',
   path: '/posts/$slug',
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/terms': typeof TermsRoute
   '/api/$': typeof ApiSplatRoute
   '/posts/$slug': typeof PostsSlugRoute
+  '/rss/$': typeof RssSplatRoute
   '/posts/': typeof PostsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -84,6 +91,7 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/api/$': typeof ApiSplatRoute
   '/posts/$slug': typeof PostsSlugRoute
+  '/rss/$': typeof RssSplatRoute
   '/posts': typeof PostsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -96,6 +104,7 @@ export interface FileRoutesById {
   '/terms': typeof TermsRoute
   '/api/$': typeof ApiSplatRoute
   '/posts/$slug': typeof PostsSlugRoute
+  '/rss/$': typeof RssSplatRoute
   '/posts/': typeof PostsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/api/$'
     | '/posts/$slug'
+    | '/rss/$'
     | '/posts/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/api/$'
     | '/posts/$slug'
+    | '/rss/$'
     | '/posts'
     | '/api/auth/$'
   id:
@@ -131,6 +142,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/api/$'
     | '/posts/$slug'
+    | '/rss/$'
     | '/posts/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -143,6 +155,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   ApiSplatRoute: typeof ApiSplatRoute
   PostsSlugRoute: typeof PostsSlugRoute
+  RssSplatRoute: typeof RssSplatRoute
   PostsIndexRoute: typeof PostsIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -191,6 +204,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PostsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/rss/$': {
+      id: '/rss/$'
+      path: '/rss/$'
+      fullPath: '/rss/$'
+      preLoaderRoute: typeof RssSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/posts/$slug': {
       id: '/posts/$slug'
       path: '/posts/$slug'
@@ -223,6 +243,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   ApiSplatRoute: ApiSplatRoute,
   PostsSlugRoute: PostsSlugRoute,
+  RssSplatRoute: RssSplatRoute,
   PostsIndexRoute: PostsIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

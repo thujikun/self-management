@@ -76,6 +76,21 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png" },
       { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
       { rel: "manifest", href: "/site.webmanifest" },
+      // RSS feed (Atom 1.0、EN / JP 分離)。reader の自動検出はこの <link
+      // rel="alternate"> を見るので、両 lang を declare する。title は reader UI
+      // にそのまま並ぶので lang label を明示
+      {
+        rel: "alternate",
+        type: "application/atom+xml",
+        href: "/rss/en.xml",
+        title: "ryantsuji.dev (EN)",
+      },
+      {
+        rel: "alternate",
+        type: "application/atom+xml",
+        href: "/rss/ja.xml",
+        title: "ryantsuji.dev (JP)",
+      },
     ],
   }),
   component: RootComponent,
