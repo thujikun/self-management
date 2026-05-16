@@ -33,7 +33,7 @@ describe("/terms", () => {
     expect(html).toMatch(/No warranty/);
     expect(html).toMatch(/Governing law/);
     expect(html).toMatch(/Japan/);
-    expect(html).toMatch(/tsuji\.0107@gmail\.com/);
+    expect(html).toMatch(/hello@ryantsuji\.dev/);
     expect(html).toMatch(/← back to home/);
   });
 });

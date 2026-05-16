@@ -39,7 +39,7 @@ function PrivacyPage() {
         <h2>Who runs this site</h2>
         <p>
           ryantsuji.dev is a personal blog operated by Ryan Tsuji (個人サイト). Contact:{" "}
-          <a href="mailto:tsuji.0107@gmail.com">tsuji.0107@gmail.com</a>.
+          <a href="mailto:hello@ryantsuji.dev">hello@ryantsuji.dev</a>.
         </p>
       </section>
 
@@ -100,7 +100,7 @@ function PrivacyPage() {
         <h2>Retention &amp; deletion</h2>
         <p>
           Data is retained while your account exists. Email{" "}
-          <a href="mailto:tsuji.0107@gmail.com">tsuji.0107@gmail.com</a> to request account and data
+          <a href="mailto:hello@ryantsuji.dev">hello@ryantsuji.dev</a> to request account and data
           deletion; all rows tied to your user ID will be removed within a reasonable window.
         </p>
       </section>

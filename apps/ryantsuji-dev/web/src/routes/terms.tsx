@@ -116,7 +116,7 @@ function TermsPage() {
         <h2>Contact</h2>
         <p>
           For questions about these terms:{" "}
-          <a href="mailto:tsuji.0107@gmail.com">tsuji.0107@gmail.com</a>.
+          <a href="mailto:hello@ryantsuji.dev">hello@ryantsuji.dev</a>.
         </p>
       </section>
 

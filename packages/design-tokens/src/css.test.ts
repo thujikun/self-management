@@ -47,9 +47,9 @@ describe("semanticToVars", () => {
         "  --accent-bg: oklch(60% 0.13 188);",
         "  --accent-fg: oklch(100% 0 0);",
         "  --accent-border: oklch(70% 0.13 188);",
-        "  --glass-bg: oklch(100% 0 0 / 0.65);",
+        "  --glass-bg: oklch(100% 0 0 / 0.45);",
         "  --glass-border: oklch(0% 0 0 / 0.06);",
-        "  --glass-blur: 16px;",
+        "  --glass-blur: 24px;",
       ]
     `);
   });
@@ -70,9 +70,9 @@ describe("semanticToVars", () => {
         "  --accent-bg: oklch(70% 0.13 188);",
         "  --accent-fg: oklch(14% 0 0);",
         "  --accent-border: oklch(75% 0.12 188);",
-        "  --glass-bg: oklch(24% 0.02 188 / 0.55);",
+        "  --glass-bg: oklch(22% 0.02 188 / 0.4);",
         "  --glass-border: oklch(100% 0 0 / 0.08);",
-        "  --glass-blur: 16px;",
+        "  --glass-blur: 24px;",
       ]
     `);
   });
@@ -179,9 +179,9 @@ describe("buildCss", () => {
         --accent-bg: oklch(60% 0.13 188);
         --accent-fg: oklch(100% 0 0);
         --accent-border: oklch(70% 0.13 188);
-        --glass-bg: oklch(100% 0 0 / 0.65);
+        --glass-bg: oklch(100% 0 0 / 0.45);
         --glass-border: oklch(0% 0 0 / 0.06);
-        --glass-blur: 16px;
+        --glass-blur: 24px;
       }
 
       /* system prefers dark — cookie 未設定時の自然な default */
@@ -200,9 +200,9 @@ describe("buildCss", () => {
           --accent-bg: oklch(70% 0.13 188);
           --accent-fg: oklch(14% 0 0);
           --accent-border: oklch(75% 0.12 188);
-          --glass-bg: oklch(24% 0.02 188 / 0.55);
+          --glass-bg: oklch(22% 0.02 188 / 0.4);
           --glass-border: oklch(100% 0 0 / 0.08);
-          --glass-blur: 16px;
+          --glass-blur: 24px;
         }
       }
 
@@ -221,9 +221,9 @@ describe("buildCss", () => {
         --accent-bg: oklch(70% 0.13 188);
         --accent-fg: oklch(14% 0 0);
         --accent-border: oklch(75% 0.12 188);
-        --glass-bg: oklch(24% 0.02 188 / 0.55);
+        --glass-bg: oklch(22% 0.02 188 / 0.4);
         --glass-border: oklch(100% 0 0 / 0.08);
-        --glass-blur: 16px;
+        --glass-blur: 24px;
       }
 
       /* explicit cookie override: light (system が dark でも適用) */
@@ -241,9 +241,9 @@ describe("buildCss", () => {
         --accent-bg: oklch(60% 0.13 188);
         --accent-fg: oklch(100% 0 0);
         --accent-border: oklch(70% 0.13 188);
-        --glass-bg: oklch(100% 0 0 / 0.65);
+        --glass-bg: oklch(100% 0 0 / 0.45);
         --glass-border: oklch(0% 0 0 / 0.06);
-        --glass-blur: 16px;
+        --glass-blur: 24px;
       }
       "
     `);

@@ -29,7 +29,7 @@ describe("/privacy", () => {
     await router.load();
     const html = renderToString(<RouterProvider router={router} />);
     expect(html).toMatch(/<h1>Privacy Policy<\/h1>/);
-    expect(html).toMatch(/tsuji\.0107@gmail\.com/);
+    expect(html).toMatch(/hello@ryantsuji\.dev/);
     expect(html).toMatch(/Neon Postgres/);
     expect(html).toMatch(/Cloudflare Workers/);
     expect(html).toMatch(/GitHub OAuth/);

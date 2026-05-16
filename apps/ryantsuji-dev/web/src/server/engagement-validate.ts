@@ -42,3 +42,33 @@ export function normalizeTimestamp(value: Date | string | null | undefined): str
   if (value instanceof Date) return value.toISOString();
   return String(value);
 }
+
+/**
+ * 親 comment row (DB から SELECT した最小列) と「reply 元 post slug」を受け、
+ * reply として valid かを check する pure 関数。`addComment` は本関数の手前で
+ * 親を 1 行 SELECT し、結果をここに食わせる。
+ *
+ * 弾く条件:
+ * - 親 row が見つからない (`parent === null`)
+ * - 親の `postSlug` が reply 元 slug と一致しない (post 跨ぎ reply)
+ * - 親が既に reply (`parentCommentId !== null`) — UI は 1 階層 thread のみ
+ *
+ * 通れば void。fail 時は `Error("INVALID_PARENT_COMMENT" | "REPLY_DEPTH_EXCEEDED")`
+ * を throw する (server fn 経由で client に messages として返る)。
+ *
+ * @graph-connects none
+ */
+export function validateReplyParent(args: {
+  parent: { postSlug: string; parentCommentId: string | null } | null;
+  expectedSlug: string;
+}): void {
+  if (args.parent === null) {
+    throw new Error("INVALID_PARENT_COMMENT: not found");
+  }
+  if (args.parent.postSlug !== args.expectedSlug) {
+    throw new Error("INVALID_PARENT_COMMENT: post mismatch");
+  }
+  if (args.parent.parentCommentId !== null) {
+    throw new Error("REPLY_DEPTH_EXCEEDED");
+  }
+}
