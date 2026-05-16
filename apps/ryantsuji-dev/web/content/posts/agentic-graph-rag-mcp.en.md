@@ -3,7 +3,7 @@ title: "Graph RAG Isn't a One-Shot Anymore — The Case for Agentic Graph RAG MC
 publishedAt: "2026-05-07"
 updatedAt: "2026-05-16"
 slug: "agentic-graph-rag-mcp"
-summary: ""
+summary: "Vector RAG and one-shot Graph RAG both flatten the search step. Agentic Graph RAG hands the graph to an LLM as an MCP and lets it traverse relationships iteratively."
 tags:
   - "ai"
   - "webdev"

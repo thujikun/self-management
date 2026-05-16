@@ -3,7 +3,7 @@ title: "Democratizing Internal Data — Building an MCP Server That Lets You Sea
 publishedAt: "2026-03-25"
 updatedAt: "2026-05-16"
 slug: "db-graph-mcp"
-summary: ""
+summary: "Internal data lives across 15 schemas, 991 tables, 11 SQL DBs and 6 MongoDBs. DB Graph MCP lets Claude search and query the whole thing in natural language."
 tags:
   - "ai"
   - "mcp"

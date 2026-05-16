@@ -3,7 +3,7 @@ title: "Bridging 'I Want to Build' and 'I Want to Publish Safely' for Non-Engine
 publishedAt: "2026-04-27"
 updatedAt: "2026-05-16"
 slug: "sandbox-mcp"
-summary: ""
+summary: "Non-engineers can build AI apps, but publishing safely is still gated by engineers. Sandbox MCP gives them a one-command path to deploy Web/API/DB/Cron with guardrails."
 tags:
   - "ai"
   - "webdev"

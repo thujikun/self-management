@@ -3,7 +3,7 @@ title: "自作MCPサーバーのトークン消費を9割削減するTips ──
 publishedAt: "2026-05-01"
 updatedAt: "2026-05-16"
 slug: "mcp-parking-pattern"
-summary: "これまで社内MCP群の全体像、DB Graph MCP、Biz Graph、Sandbox MCPと、社内向けに作っているMCPサーバーを順に紹介してきました。今回はその運用の中で見えてきた、自作MCPサーバーのトークン消費を減らすTipsの話を書きます。"
+summary: "MCP の return が context を食い潰す問題に、重い payload を git や blob に退避して key だけ返す pattern で実測 9 割削減。"
 tags:
   - "architecture"
   - "ai"

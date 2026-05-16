@@ -3,7 +3,7 @@ title: "How We Built an Automated Meeting Intelligence System with Google Meet, 
 publishedAt: "2026-04-11"
 updatedAt: "2026-05-16"
 slug: "meeting-intelligence"
-summary: ""
+summary: "AI summaries aren't enough — context dies when a meeting ends. We pipe Google Meet recordings to Slack, transcribe everything, and make history queryable in natural language."
 tags:
   - "ai"
   - "showdev"

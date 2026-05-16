@@ -3,7 +3,7 @@ title: "非エンジニアの「作りたい」と「安全に公開したい」
 publishedAt: "2026-04-27"
 updatedAt: "2026-05-16"
 slug: "sandbox-mcp"
-summary: "これまでにDB Graph MCP、社内MCP群の全体像、Biz Graph MCPと、社内向けに作っているMCPサーバーを順に紹介してきました。今回はその中でもちょっと毛色が違うものを取り上げます。Sandbox MCP ── 非エンジニアの社員が AIと一緒に作ったアプリを、ワンコマンドで社内に安全に公開できるプラットフォームです。"
+summary: "AI で作れるようになった非エンジニアのアプリを、Web/API/DB/Cron 込みで 1 コマンドで社内公開できる Sandbox MCP の設計。"
 tags:
   - "ai"
   - "typescript"

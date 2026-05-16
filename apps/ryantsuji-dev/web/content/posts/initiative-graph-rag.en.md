@@ -3,7 +3,7 @@ title: "Still Measuring Initiative Impact Manually? How We Used Graph RAG + MCP 
 publishedAt: "2026-04-20"
 updatedAt: "2026-05-16"
 slug: "initiative-graph-rag"
-summary: ""
+summary: "Measuring 'did that initiative actually work?' usually means manual SQL spelunking. We modeled initiatives × KPIs as a graph and let an LLM traverse it via MCP."
 tags:
   - "ai"
   - "mcp"

@@ -3,7 +3,7 @@ title: "Cutting Self-Built MCP Server Token Usage by 90% — The Parking Pattern
 publishedAt: "2026-05-01"
 updatedAt: "2026-05-16"
 slug: "mcp-parking-pattern"
-summary: ""
+summary: "MCP responses fill the context window fast. The parking pattern stores heavy payloads externally and returns only a key — about 90% token savings in production."
 tags:
   - "architecture"
   - "llm"

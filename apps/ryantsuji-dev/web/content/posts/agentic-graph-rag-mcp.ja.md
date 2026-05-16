@@ -3,7 +3,7 @@ title: "Graph RAG Isn't a One-Shot Anymore — The Case for Agentic Graph RAG MC
 publishedAt: "2026-05-07"
 updatedAt: "2026-05-16"
 slug: "agentic-graph-rag-mcp"
-summary: ""
+summary: "Vector RAG と単発 Graph RAG の限界、そして LLM が MCP 経由でグラフを能動的に探索する Agentic Graph RAG パターンの設計。"
 tags:
   - "ai"
   - "webdev"

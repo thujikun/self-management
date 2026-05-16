@@ -3,7 +3,7 @@ title: "We Built 17 MCP Servers to Let AI Run Our Internal Operations"
 publishedAt: "2026-04-07"
 updatedAt: "2026-05-16"
 slug: "17-mcp-servers"
-summary: ""
+summary: "Overview of 17 MCP servers we built in three months at airCloset, covering DBs, infra, docs, project management, observability, CI/CD, and even non-engineer code edits."
 tags:
   - "ai"
   - "automation"

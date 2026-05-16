@@ -3,7 +3,7 @@ title: "社内業務をAIに開放 — 自社MCPサーバー群一挙公開！"
 publishedAt: "2026-04-07"
 updatedAt: "2026-04-28"
 slug: "17-mcp-servers"
-summary: "今回は **DB Graph 以外に社内で運用しているMCPサーバー群をまとめて紹介します。これらは2026年1月から約3ヶ月で構築したもので、現在社内で稼働しているMCPサーバーはDB Graphを含めて17個。DB、インフラ、ドキュメント、プロジェクト管理、Observability、CI/CD、さらには非エンジニアによるコード修正・デプロイまで、社内業務と、かなり幅広い全領域をAIから操作できる状態になっています。"
+summary: "airCloset で 3 ヶ月で構築した 17 個の社内 MCP サーバー一挙公開。DB / インフラ / Docs / PM / Observability / CI まで AI に開放。"
 tags:
   - "ai"
   - "gcp"

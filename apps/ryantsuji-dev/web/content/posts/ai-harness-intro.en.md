@@ -3,7 +3,7 @@ title: "Building a Real AI Harness: Auto-Reviewed PRs, Self-Healing Ops, and Non
 publishedAt: "2026-05-12"
 updatedAt: "2026-05-16"
 slug: "ai-harness-intro"
-summary: ""
+summary: "Series intro to cortex, airCloset's internal AI platform that auto-reviews PRs, self-heals ops, and lets non-engineers ship apps. Why harness engineering matters now."
 tags:
   - "ai"
   - "webdev"
