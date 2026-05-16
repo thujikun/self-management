@@ -46,6 +46,7 @@ describe("renderMarkdown", () => {
       publishedAt: "2026-05-08",
       tags: ["rsc", "typescript"],
       draft: false,
+      syndication: {},
     });
     expect(out.headings).toStrictEqual([{ level: 2, text: "Section A", id: "section-a" }]);
     expect(out.readingTimeMinutes).toBeGreaterThanOrEqual(1);
