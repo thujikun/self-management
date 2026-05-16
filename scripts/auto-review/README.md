@@ -27,8 +27,21 @@ claude setup-token
 echo 'export CLAUDE_CODE_OAUTH_TOKEN="sk-ant-oat-..."' >> .envrc.local
 direnv allow
 
-pnpm auto-review
+pnpm auto-review          # ← wrapper script (loop.sh) 経由、merge された新コードを自動反映
+pnpm auto-review:once     # ← wrapper 無しの 1 回限り (開発時用)
 ```
+
+`pnpm auto-review` は `scripts/auto-review/loop.sh` を経由する supervisor 構成:
+
+1. 各起動前に `git fetch origin main` + `git reset --hard origin/main` で self-management(-review) clone を最新化
+2. `pnpm install --frozen-lockfile` で node_modules を lockfile と同期 (新 dep を含む merge を反映)
+3. `tsx scripts/auto-review/poll.cli.ts` を spawn
+4. poll.cli.ts が **起動から 30 分経過 + queue idle** を満たすと self-exit (`process.exit(0)`)
+5. wrapper が `sleep 2` してから 1 へ戻る → 新 main + 新 script + 新 deps で再起動
+
+Node の import は同 process 内で再読込されないので、`pnpm auto-review` で merge した新機能 / fix は **次の自動再起動 (= 最長 30 分 + 進行中 job 完了待ち) で反映**。CTRL+C / SIGTERM は wrapper の trap で再起動せず exit する。
+
+wrapper には **fast-exit cap** が組み込まれている: tsx が起動 <60s で exit する状態 (env 検証 throw / dep import 失敗 / token 不正 / install 失敗 等の startup failure mode) が 3 回連続したら supervisor 自身が `exit 1` で bail。anti-loop 5 層の最外周として「同 env で 2 秒待って再 spawn → 同じ throw を無限ループ」を有限回で止める。閾値は `AUTO_REVIEW_FAST_EXIT_THRESHOLD_SEC` / `AUTO_REVIEW_FAST_EXIT_MAX` で上書き可。
 
 **`CLAUDE_CODE_OAUTH_TOKEN` を設定しないと interactive Claude Code が logout される**:
 bot が spawn する `claude -p` は env に当該 token が無いと macOS Keychain の OAuth credential を読み、refresh token を rotation してしまう。interactive で使ってる Claude Code は旧 refresh token しか持っていないので、次の refresh で失敗 → logout。`setup-token` で発行した long-lived token を env で渡せば Keychain には触れず interactive と完全 isolate される。
@@ -49,12 +62,15 @@ env:
 | `AUTO_REVIEW_FIX_BACKOFF_MS` | `300000` (5 分) | fix 失敗後、次 retry までの最小待機時間 (ms) |
 | `AUTO_REVIEW_MAX_CI_FIX_FAILURES` | `3` | 同 head_sha に対する ci-fix 失敗回数の cap。新 commit が来るまで skip |
 | `AUTO_REVIEW_CI_FIX_BACKOFF_MS` | `300000` (5 分) | ci-fix 失敗後、次 retry までの最小待機時間 (ms) |
+| `AUTO_REVIEW_EXIT_AFTER_UPTIME_MS` | `1800000` (30 分) | 起動からこの時間経過 + queue idle で self-exit。wrapper script が `git reset --hard origin/main` + 再 spawn することで新コードを反映。0 を指定すると無効化 (`auto-review:once` 相当)。非数値 / 負数を指定すると起動時に fail-fast |
+| `AUTO_REVIEW_FAST_EXIT_THRESHOLD_SEC` | `60` | wrapper の fast-exit 判定閾値 (秒)。tsx 起動からこの時間未満で exit すると fast-exit counter を +1。非数値 / 空 / 負数を指定すると起動時に `exit 2` で fail-fast |
+| `AUTO_REVIEW_FAST_EXIT_MAX` | `3` | fast-exit を連続して許容する回数。到達したら supervisor が `exit 1` で bail (startup failure の無限再起動 loop 遮断)。非数値 / 空 / 負数 / 0 を指定すると起動時に `exit 2` で fail-fast |
 | `AUTO_REVIEW_REPO_ROOT` | `process.cwd()` | git worktree base となるメイン repo path |
 | `CLAUDE_TIMEOUT_MS` | `1800000` (30 分) | claude -p 1 回の timeout |
 
 state は `~/.cache/self-management-auto-review/state.json` に atomic write (tmp → rename)。worktree は `~/.cache/self-management-auto-review/worktrees/` 以下 (macOS の `/private/var/folders/` auto-clean 回避)。
 
-## anti-loop 5 層
+## anti-loop 6 層
 
 | 層 | 対象 | 動作 |
 |---|---|---|
@@ -64,6 +80,7 @@ state は `~/.cache/self-management-auto-review/state.json` に atomic write (tm
 | 3. NO_OP marker | reviewer prompt 内 Step 4 | 投稿前に直近の自分の review body と正規化比較 → 同一なら `<!-- VERDICT:NO_OP -->` を stdout に → script は `lastReviewedSha` だけ更新して post skip |
 | 4. iteration cap (round-trip 用) | per-PR counter | **成功 review post / 成功 fix push / 成功 ci-fix push それぞれで +1** (APPROVE で 0 reset)。`MAX_ITERATIONS_PER_PR=10` (default) を超えたら `stalled: true` で当該 PR の全モード停止 (manual unblock は state.json 編集) |
 | 5. failure cap + backoff | per-SHA / per-commentId counter | **失敗 (timeout / parse failure / FIX_FAILED / push 検出失敗 / throw)** 時に SHA / commentId は bookmark せず、`reviewFailureCount` / `fixFailureCount` / `ciFixFailureCount` を per-key で +1 し `last*FailedAt` を記録。次 tick で (a) `*_FAILURE_BACKOFF_MS` (default 5 min) 未経過なら skip (b) `MAX_*_FAILURES` (default 3) 到達なら skip。新 key が来れば counter 自動 reset |
+| 6. supervisor fast-exit cap | wrapper (`loop.sh`) | tsx の起動 <`FAST_EXIT_THRESHOLD_SEC` (default 60s) での exit (env 検証 throw / dep import 失敗 / token 不正 / `pnpm install` 失敗 等) が `FAST_EXIT_MAX` (default 3) 回連続したら supervisor が `exit 1` で bail。「同 env で 2 秒待って再 spawn → 同じ throw を無限ループ」の最外周遮断 |
 
 正規化規則 (`dedup.ts`):
 - VERDICT / BODY START/END marker 除去
@@ -138,6 +155,7 @@ scripts/auto-review/
 ├── dedup.ts           # body 正規化 + SHA-256 hash
 ├── log.ts             # `[HH:MM:SS] [+Xs] [scope] msg` 形式の logger + fmtDuration helper
 ├── state.ts           # ~/.cache/self-management-auto-review/state.json + StateMutex
+├── loop.sh            # supervisor wrapper (git reset --hard origin/main → tsx → restart on self-exit)
 ├── *.test.ts          # 各 module の test
 └── README.md
 ```
