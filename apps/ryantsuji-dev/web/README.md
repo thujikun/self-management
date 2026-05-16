@@ -67,8 +67,6 @@ X_OAUTH2_CLIENT_ID=...
 X_OAUTH2_CLIENT_SECRET=...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
-FACEBOOK_CLIENT_ID=...
-FACEBOOK_CLIENT_SECRET=...
 EOF
 
 # 3. dev server
@@ -99,8 +97,6 @@ pnpm deploy:dry
    pnpm exec wrangler secret put X_OAUTH2_CLIENT_SECRET
    pnpm exec wrangler secret put GOOGLE_CLIENT_ID
    pnpm exec wrangler secret put GOOGLE_CLIENT_SECRET
-   pnpm exec wrangler secret put FACEBOOK_CLIENT_ID
-   pnpm exec wrangler secret put FACEBOOK_CLIENT_SECRET
    ```
 
    secret 値は **`gcloud secrets versions access`** で個人 GCP project の secret container
@@ -154,7 +150,7 @@ secret を 1 個だけ rotate する場合: `pnpm exec wrangler secret put <NAME
 - /posts: 投稿一覧 + 詳細 route + content/posts/*.md 統合
 - **RSC isolation: shiki / unified を rsc env に閉じ込め client bundle 540KB 化**
 - **db schema**: `packages/db` (Drizzle + Neon) — posts / comments / likes / view_counts schema
-- **auth**: Better Auth (GitHub / X / Google / Facebook OAuth、open sign-up — 第三者検証は OAuth provider に委ねる)
+- **auth**: Better Auth (GitHub / X / Google OAuth、open sign-up — 第三者検証は OAuth provider に委ねる)
 - **engagement**: `/posts/$slug` に views (+1 per loader call) / likes (toggle、auth 必須) / comments (投稿、auth 必須) を追加
 
 ## RPC client
