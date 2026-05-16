@@ -22,21 +22,41 @@
  * @graph-connects better-auth [calls] getSessionFromHeaders で current user を解決して like/comment を gate
  */
 
-import { Link, createFileRoute, notFound, useRouter } from "@tanstack/react-router";
+import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn, useServerFn } from "@tanstack/react-start";
-import { renderMarkdown } from "@self/content";
 import { useState } from "react";
 import { z } from "zod";
 
 import { useSession } from "../../lib/auth-client.js";
 import { PostBody } from "../../server-components/PostBody.js";
 import { type CommentView } from "../../server/engagement.js";
-import { getPostSource } from "../../server/posts.js";
+import type { Lang } from "../../server/i18n.js";
 
-import { runAddComment, runLoadEngagement, runToggleLike } from "./$slug.server.js";
+import { runAddComment, runLoadEngagement, runRenderPost, runToggleLike } from "./$slug.server.js";
 
 /** @graph-connects none */
 const SlugSchema = z.string().min(1);
+
+/**
+ * `?lang=en|ja` で override (一覧側と同じ仕様)。invalid 値は捨てて
+ * Accept-Language fallback に任せる。
+ *
+ * @graph-connects none
+ */
+const SearchSchema = z.object({
+  lang: z.enum(["en", "ja"]).optional(),
+});
+
+/**
+ * renderPost server fn の input schema。slug + override lang。lang は
+ * server 側で `Accept-Language` と組合せて `pickLang` で確定する。
+ *
+ * @graph-connects none
+ */
+const RenderInputSchema = z.object({
+  slug: z.string().min(1),
+  override: z.enum(["en", "ja"]).optional(),
+});
 
 /**
  * comment 投稿 input。slug + body を受け、body は server 側でも `validateCommentBody` で
@@ -64,24 +84,15 @@ const EngagementInputSchema = z.object({
 });
 
 /**
- * server function: slug → markdown source 取得 → renderMarkdown で render。
- * shiki / unified は本 handler 内 import 経由で rsc env だけに bundle される。
+ * server function: slug + override lang → markdown source 取得 (en/ja variant 解決) →
+ * renderMarkdown で render。lang は server で Accept-Language と組合せて確定する。
+ * shiki / unified の重 dep は `runRenderPost` 経由 = rsc env のみに bundle される。
  *
- * @graph-connects content [calls] renderMarkdown(source) で構造化 RenderedDoc に変換
+ * @graph-connects content [calls] runRenderPost → getPostSource + renderMarkdown
  */
 const renderPostServer = createServerFn()
-  .inputValidator((data: unknown) => SlugSchema.parse(data))
-  .handler(async ({ data: slug }) => {
-    const source = getPostSource(slug);
-    if (!source) throw notFound();
-    const doc = await renderMarkdown(source);
-    return {
-      html: doc.html,
-      frontmatter: doc.frontmatter,
-      headings: doc.headings,
-      readingTimeMinutes: doc.readingTimeMinutes,
-    };
-  });
+  .inputValidator((data: unknown) => RenderInputSchema.parse(data))
+  .handler(async ({ data }) => runRenderPost(data.slug, data.override as Lang | undefined));
 
 /**
  * server function: slug → view +1 + like summary + comments list。
@@ -114,11 +125,13 @@ const addCommentServer = createServerFn()
 
 /** @graph-connects tanstack-router [provides] /posts/$slug route */
 export const Route = createFileRoute("/posts/$slug")({
-  loader: async ({ params }) => {
+  validateSearch: SearchSchema,
+  loaderDeps: ({ search }) => ({ override: search.lang }),
+  loader: async ({ params, deps }) => {
     // renderPost を先に解決して frontmatter (title / publishedAt) を取り出し、
     // posts 行の upsert に使う。Promise.all で並列化できない (engagement が
-    // frontmatter に依存) ので serial。
-    const doc = await renderPostServer({ data: params.slug });
+    // frontmatter に依存) ので serial。lang は server 側で確定。
+    const doc = await renderPostServer({ data: { slug: params.slug, override: deps.override } });
     const engagement = await loadEngagementServer({
       data: {
         slug: params.slug,
@@ -132,15 +145,24 @@ export const Route = createFileRoute("/posts/$slug")({
 
 /** @graph-connects none */
 function PostDetail() {
-  const { html, frontmatter, headings, readingTimeMinutes, engagement } = Route.useLoaderData();
+  const {
+    html,
+    frontmatter,
+    headings,
+    readingTimeMinutes,
+    engagement,
+    servedLang,
+    availableLangs,
+  } = Route.useLoaderData();
   const { slug } = Route.useParams();
   return (
-    <main className="post-detail">
+    <main className="post-detail" lang={servedLang}>
       <nav className="post-detail__crumbs">
         <Link to="/posts">← all posts</Link>
       </nav>
       <header className="post-detail__header">
         <h1>{frontmatter.title}</h1>
+        <PostLangSwitcher slug={slug} servedLang={servedLang} availableLangs={availableLangs} />
         <p className="post-detail__meta">
           <time dateTime={frontmatter.publishedAt}>{frontmatter.publishedAt}</time>
           <span className="post-detail__divider" aria-hidden="true">
@@ -184,6 +206,44 @@ function PostDetail() {
         initialComments={engagement.comments}
       />
     </main>
+  );
+}
+
+/**
+ * 詳細 page の language toggle。`?lang=` query を切替える。利用可能な lang のみ
+ * 表示し、不在 lang はそもそも button を出さない (= EN-only post には JP button
+ * を出さない方針、user に空クリックさせない)。
+ *
+ * @graph-connects tanstack-router [calls] Link で /posts/$slug?lang= に navigate
+ */
+function PostLangSwitcher({
+  slug,
+  servedLang,
+  availableLangs,
+}: {
+  slug: string;
+  servedLang: Lang;
+  availableLangs: Lang[];
+}) {
+  if (availableLangs.length <= 1) return null;
+  return (
+    <nav className="lang-switcher" aria-label="language">
+      {availableLangs.map((l) => (
+        <Link
+          key={l}
+          to="/posts/$slug"
+          params={{ slug }}
+          search={(prev) => ({ ...prev, lang: l })}
+          className={
+            l === servedLang
+              ? "lang-switcher__btn lang-switcher__btn--active"
+              : "lang-switcher__btn"
+          }
+        >
+          {l.toUpperCase()}
+        </Link>
+      ))}
+    </nav>
   );
 }
 
