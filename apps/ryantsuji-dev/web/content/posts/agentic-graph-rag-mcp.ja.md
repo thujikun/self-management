@@ -1,387 +1,392 @@
 ---
-title: "Graph RAG Isn't a One-Shot Anymore — The Case for Agentic Graph RAG MCPs"
+title: "Agentic Graph RAG MCPのススメ — Graph RAGは「単発」ではなく「対話」になった"
 publishedAt: "2026-05-07"
 updatedAt: "2026-05-16"
 slug: "agentic-graph-rag-mcp"
-summary: "Vector RAG と単発 Graph RAG の限界、そして LLM が MCP 経由でグラフを能動的に探索する Agentic Graph RAG パターンの設計。"
+summary: "Vector RAGと単発Graph RAGの限界、そしてLLMがMCP経由でグラフを能動的に探索するAgentic Graph RAGパターンの設計。"
 tags:
   - "ai"
   - "webdev"
   - "graphrag"
   - "mcp"
-lang: "en"
+lang: "ja"
 syndication:
   zenn:
     id: "341dffee42f454"
   devto:
     id: 3622364
     slug: "graph-rag-isnt-a-one-shot-anymore-the-case-for-agentic-graph-rag-mcps-1dj5"
+cover: /posts/agentic-graph-rag-mcp.ja.cover.png
 ---
 
-Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.
+みなさまこんにちは！エアークローゼットでCTOをしている[辻](https://x.com/RyanAircloset)です。
 
-Over my last few posts, I've introduced internal MCP servers we've been building: [DB Graph MCP](https://dev.to/ryantsuji/democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5), [the full picture of our 17 internal MCP servers](https://dev.to/ryantsuji/we-built-17-mcp-servers-to-let-ai-run-our-internal-operations-3lk2), [Biz Graph](https://dev.to/ryantsuji/we-built-a-custom-graph-rag-to-let-ai-answer-did-that-initiative-actually-work-3oda), and [Sandbox MCP](https://dev.to/ryantsuji/bridging-i-want-to-build-and-i-want-to-publish-safely-for-non-engineers-sandbox-mcp-392a).
+これまでに [DB Graph MCP](https://zenn.dev/aircloset/articles/2731787582881a)、[社内MCP群の全体像](https://zenn.dev/aircloset/articles/d9fc317c1336c2)、[Biz Graph](https://zenn.dev/aircloset/articles/a820ce302ec5e9)、[Sandbox MCP](https://zenn.dev/aircloset/articles/4c5f49f89db19f) と、社内向けに作っているMCPサーバーを順に紹介してきました。
 
-DB Graph is built from ORM parsing. Biz Graph extracts initiatives from meeting slides and uses a hand-designed Week node structure. Sandbox MCP is an app deployment platform. The purposes and implementations are completely different — but as I was writing each piece, I noticed that **the design ideas at the root are the same**.
+DB GraphはORM解析からのスキーマグラフ、Biz Graphは会議スライドからの施策抽出とWeekノード設計、Sandbox MCPはそもそもアプリ公開基盤 ── 目的も実装も全部違うのですが、自分でも書きながら気づいたのは、**設計の根っこにある考え方は同じ**だということです。
 
-This post is about that root. **Agentic Graph RAG** — a design frame we keep coming back to whenever we build graphs across different domains.
+今回はその根っこの話をします。**Agentic Graph RAG** ── 私たちが社内のいろんな領域でグラフを作るときに、繰り返し採用している設計フレームの話です。
 
-If you've heard "Graph RAG" before — maybe Microsoft's open-source project — wait a moment. The same words mean different things in **the era when retrieval was assumed to be a single shot** versus **the era when AI agents are everywhere**. The optimal design changes completely. This post is about the latter — a new way to think about Graph RAG in a world where Claude Code, Codex, and friends are doing the orchestration.
+「Graph RAGなら聞いたことある」「MicrosoftのOSSでしょ？」と思った方、ちょっと待ってください。同じ「Graph RAG」という言葉でも、**単発検索前提の時代**と**AIエージェント前提の時代**では、最適解がまったく違います。この記事は、後者 ── Claude CodeやCodexのようなエージェントが当たり前になった時代の、新しいGraph RAG設計論です。
 
-## What Is RAG, Really?
+## そもそもRAGとは
 
-Quick refresher. Skip if this is familiar.
+最初に、用語を整理します。すでにご存じの方は読み飛ばしてください。
 
-**RAG (Retrieval Augmented Generation)** is the umbrella term for any technique that **retrieves** related information from external data and mixes it into the prompt before the LLM generates an answer.
+**RAG (Retrieval Augmented Generation)**とは、LLMに回答させる前に外部データから関連情報を**検索 (Retrieval)**してプロンプトに混ぜ込む手法の総称です。
 
-Why was this needed? In the early days of generative AI — late 2022 and through 2023 — we ran into three problems:
+なぜこれが必要だったか。生成AIの草創期 ── 2022年末〜2023年頃 ── に、私たちが直面した課題は3つありました。
 
-1. **Tiny context windows**: GPT-3.5 had 4K tokens, early GPT-4 had 8K. You couldn't fit your internal docs in there.
-2. **Stale model knowledge**: The model didn't know anything past its training cutoff. It certainly didn't know your internal data.
-3. **Hallucination**: It would confidently fabricate answers when it didn't know.
+1. **コンテキスト窓が狭い**: GPT-3.5は4Kトークン、初期のGPT-4でも8Kトークン。社内ドキュメントを丸ごと入れることは不可能だった
+2. **モデルの知識が古い**: 学習データのカットオフ以降の情報は知らない。社内データは当然知らない
+3. **ハルシネーション**: 知らないことも自信満々に答える。「それっぽい嘘」が混入する
 
-The RAG idea was: **every time** the user asks something, fetch the relevant chunks from external data and feed them in before generation.
+これらに対して、「**毎回**外部データから関連箇所だけ取り出してプロンプトに足してから推論させればいいじゃん」というのがRAGの発想です。
 
-## Vector RAG — The First Practical Answer
+## ベクトルRAG ── 「とりあえず検索」の最適解
 
-The earliest RAG implementation that actually caught on was **Vector RAG**.
+最初に普及したRAGの実装が**ベクトルRAG**です。
 
-The recipe is simple:
+仕組みはシンプル。
 
-1. Split documents into small chunks (say, 500 tokens each)
-2. Embed each chunk with a model (e.g., 1536-dim vectors)
-3. Store them in a vector DB (Pinecone, Weaviate, pgvector...)
-4. Embed the user's question with the same model, retrieve the top-k closest by cosine similarity
-5. Stuff those chunks into the prompt and call the LLM
+1. ドキュメントを小さなチャンク（例: 500トークンごと）に分割
+2. 各チャンクをEmbeddingモデルでベクトル化（例: 1536次元）
+3. ベクトルDB（Pinecone、Weaviate、pgvector等）に格納
+4. ユーザーの質問もベクトル化し、cosine類似度でtop-k件を取り出す
+5. 取り出したチャンクをプロンプトに混ぜてLLMに投げる
 
-For its time, this was a great invention. Because:
+これが当時の文脈ではよくできた発明でした。なぜなら、
 
-- **Search is fast**: tens to hundreds of milliseconds
-- **No training needed**: feed it docs, it's instantly searchable
-- **Domain-agnostic**: works for legal documents, medical charts, internal wikis — the same machinery
-- **Rides model improvements**: better embedding models, better recall
+- **検索が速い**: ベクトル検索は数十〜数百msで終わる
+- **教師データ不要**: ドキュメントを与えれば即座に検索可能（インデックス構築のみ）
+- **ドメイン非依存**: 法律文書でも医療カルテでも社内Wikiでも、同じ仕組みが動く
+- **モデル進化に乗れる**: Embeddingモデルが良くなれば検索精度も上がる
 
-And critically, agent technology was still immature. OpenAI's Function Calling shipped in June 2023, was unstable for a while, and running a meaningful **agentic loop** of multiple tool calls was both slow and expensive. So RAG was designed around the assumption: **one retrieval has to fetch everything you need**. Vector RAG was perfectly tuned for this constraint.
+そして当時のAIエージェント技術はまだ未熟でした。OpenAIのFunction Callingは2023年6月にようやく登場、しかも初期は不安定で、エージェントが何度もツールを呼び出す「**agentic loop**」を回すのは時間もコストもかかる。だから「**1回のretrievalで答えに必要な情報を全部取ってくる**」という前提でRAGは設計されていました。ベクトルRAGはこの前提に最適化されている。
 
-### The Limits of Vector RAG
+### ベクトルRAGの限界
 
-But anyone who runs Vector RAG in production discovers the same thing fast: **it can't follow relationships**.
+ただ、運用しているとすぐに気付きます。**ベクトルRAGは「関係性」を辿れない**。
 
-Take a question like:
+例えば、こんな質問を考えてみてください。
 
-> "How did last month's SNS ad campaign affect new member signups?"
+> 「先月のSNS広告キャンペーンが、新規会員数にどう影響したか？」
 
-Vector search returns chunks that are **textually similar** to the question. The campaign description might come up. But:
+ベクトル検索は、この質問文に**テキストとして似ている**チャンクを返します。たぶん「SNS広告キャンペーン」の説明資料は引っかかる。でも、
 
-- **When** was the campaign actually running?
-- What were the new-member numbers during **that same period**?
-- What happened with **previous similar campaigns**?
+- そのキャンペーンが**いつ**実施されたか
+- その**同じ期間**の新規会員数はいくつだったか
+- **過去に類似のキャンペーン**でどんな結果だったか
 
-These aren't textual similarity — they're structural traversals across data. Embedding maps "spring SNS ads" and "spring promotion initiative" close together, but it cannot **start from "ran from March 1 to March 31" and reach "new member counts in that same period"**. That's not a similarity problem; that's a join problem.
+これらは、テキストの類似度ではなく**データの構造的な繋がり**を辿らないと取れません。Embeddingは「春のSNS広告」と「春のキャンペーン施策」を近い位置にマッピングしますが、**「3月1日〜3月31日に実施された」という事実から「同じ期間のKPI値」を引っ張ってくる**ことはできない。これは類似度の問題ではなく、結合の問題だからです。
 
-On top of that:
+加えて、
 
-- **Chunk boundaries kill context**: related info gets split across chunks
-- **Top-k cliff**: critical info at rank 11 is invisible
-- **Granularity mismatch**: questions like "summarize the whole thing" can't be answered by collecting chunks
+- **チャンク分割で文脈が途切れる**: ページ境界で関係情報が分断される
+- **top-kのcliff**: 11位に重要な情報があっても見えない
+- **粒度のミスマッチ**: 「全体像を要約して」のような質問はチャンクを集めても答えられない
 
-Vector RAG nailed "fetch text similar to the question in one step." It's weak at "follow data through structural relationships." That's the gap that Graph RAG was born to address.
+ベクトルRAGは「**質問にテキストとして近い情報**を1ステップで持ってくる」ことには最適でしたが、「**情報と情報の関係を辿る**」ことには弱い。これが次世代のRAG ── Graph RAG ── が生まれた背景です。
 
-## Graph RAG — Search That Follows Relationships
+## Graph RAG ── 関係性を辿る検索
 
-The basic idea of Graph RAG: extract **entities** (people, organizations, concepts) and **relationships** (belongs-to, affects, references) from your documents, store them as a graph, and at query time traverse the graph to gather information across multiple hops.
+Graph RAGの基本アイデアは、ドキュメントから**エンティティ**（人、組織、概念）と**関係**（所属する、影響する、参照する）を抽出し、グラフとして保存することです。検索時には、関連エンティティをグラフ上で辿りながら情報を集める。
 
-This handles questions like our SNS-ads-and-new-members example — anything that requires **multi-hop reasoning**.
+これにより、「先月のSNS広告キャンペーンと新規会員数の関係」のような**複数ホップが必要な質問**に答えられるようになります。
 
-### Classical Graph RAG — Built for the One-Shot Era
+### 古典的Graph RAG ── 単発検索時代の制約
 
-The most well-known implementation right now is Microsoft's [GraphRAG](https://github.com/microsoft/graphrag), released in 2024. The papers are well-written and I have a lot of respect for it. But the design philosophy is squarely **from the one-shot retrieval era**.
+現在もっとも有名な実装は、Microsoftが2024年に出した [GraphRAG](https://github.com/microsoft/graphrag) です。論文も含めてよく書かれていて、私もリスペクトしています。ただ、**設計思想は完全に「単発検索前提の時代」のもの**です。
 
-Roughly, Microsoft GraphRAG does this:
+Microsoft GraphRAGが何をするか、ざっくり言うと:
 
-1. **Entity extraction**: feed the entire corpus through an LLM to extract entities and relationships
-2. **Community detection**: find graph clusters (communities) using the [Leiden algorithm](https://en.wikipedia.org/wiki/Leiden_algorithm) (a community detection method)
-3. **Hierarchical summarization**: have the LLM summarize each community. Then summarize groups of communities into higher-level summaries
-4. **Query time**: pick the relevant community for the user's question, dump its summary into the prompt, answer in a single shot
+1. **エンティティ抽出**: コーパスの全テキストをLLMに食わせ、エンティティと関係を抽出
+2. **コミュニティ検出**: グラフ上のクラスタ（コミュニティ）を [Leiden法](https://en.wikipedia.org/wiki/Leiden_algorithm)（コミュニティ検出のアルゴリズム）で検出
+3. **階層的要約**: 各コミュニティについてLLMで要約を生成。さらにコミュニティ同士をまとめて上位の要約も作る
+4. **クエリ時**: ユーザーの質問に該当するコミュニティを選び、その要約をプロンプトに突っ込んで一発で答える
 
-Why is the preprocessing this heavy? Because of the assumption underneath: **"calling tools many times at query time isn't realistic"**. Function calling loops were slow, expensive, and unstable. So you preprocess the entire corpus with an LLM, build community summaries, and **front-load the work to make query-time retrieval a single hop or two**.
+これがなぜこんなに重い前処理になっているか。**「クエリ時に何度もツールを呼び出すのは現実的じゃない」という当時の前提**があるからです。Function Callingのループは遅くて高くて不安定。だから事前にコーパス全体をLLMで舐めて、コミュニティ単位の要約を作り込んでおく。**クエリ時に1〜2回の検索で完結させる**ためにここまでやる。
 
-This wasn't a design failure — it was the **rational answer for that era**. LangChain's RetrievalQA, LlamaIndex's query engines — all of them were built on the same premise: "retrieval is single-shot, generation is one-turn."
+これは技術的な怠慢ではなく、**当時の合理的な設計判断**です。LangChainのRetrievalQAも、LlamaIndexのクエリエンジンも、根っこは同じ思想 ── 「retrievalは単発、生成は1ターン」を前提に組まれていました。
 
-### What Classical Graph RAG Solved, and Didn't
+### 古典的Graph RAGが解いたこと、解けなかったこと
 
-What it solved:
-- Relationship-aware search (community summaries even cover "the big picture")
-- Multi-hop questions like "the relationship between Sam Altman, OpenAI, and Microsoft"
+解いたこと:
+- 関係性を辿る検索（コミュニティ要約のおかげで「全体像」も取れる）
+- 「Sam AltmanとOpenAIとMicrosoftの関係」のような多ホップ質問
 
-What it didn't solve cleanly:
-- **Construction is expensive**: extracting entities from a large corpus via LLM costs real money
-- **Schema is at the LLM's mercy**: the entities and relationships extracted are whatever the LLM thinks. This works fine for public-knowledge corpora (papers, news, etc.), but for domains that lean on internal tacit knowledge, the extracted units don't always match what's meaningful for the business
-- **Updates are heavy**: every new document means recomputing communities
-- **Sometimes off-target**: community summaries get over-abstracted, and the specific information you actually need falls out
+解けなかったこと:
+- **構築コストが高い**: 大規模コーパスの全エンティティ抽出はLLM料金がガッツリかかる
+- **スキーマがLLM任せ**: 抽出されるエンティティ・関係はLLMの判断次第。公知の知識（論文・ニュース等）には適合しやすい一方、自社固有の暗黙知に依存するドメインではビジネスにとって意味のある単位と一致しないことがある
+- **更新が重い**: 新規ドキュメントが入るたびにコミュニティ再計算
+- **的外れも起こる**: コミュニティ要約が抽象化されすぎて、本当に必要な具体情報が落ちてしまう
 
-Honest disclaimer: I haven't seriously run classical Graph RAG in production myself. By the time I started building graph-based MCPs in our company, Claude Code was already running on my laptop, and I started from a world where **agents calling tools many times was the default**. As a result, I never actually needed the heavy "compress the answer ahead of time" preprocessing of community summaries. If AI can re-fetch as many times as needed, the graph just has to hold the facts accurately.
+正直に書くと、私自身は古典的Graph RAGをプロダクションで真剣に試したことはありません。社内でグラフ系のMCPを作り始めた時点ですでにClaude Codeが手元で動いていて、エージェントが**多段でツールを呼ぶことが当たり前の世界**から出発したからです。結果として「単発検索で全部終わらせる」前提に基づくコミュニティ要約のような重い前処理を組む必要がそもそも無かった。事前に圧縮した答えを準備しなくても、AIが必要に応じて何度でも引きに行けるなら、グラフは事実だけを正確に保持していればいい。
 
-The flip side: if I had been doing this in 2023, I likely would have ended up on the same path as community summaries. The problems classical Graph RAG was solving are real — **the underlying assumptions just changed faster than the design**.
+裏を返すと、もし2023年頃に同じことをやろうとしていたら、私たちもおそらくコミュニティ要約のような道に進んでいたと思います。古典的Graph RAGの設計者たちが解こうとしていた問題は本物で、ただ**前提条件のほうが先に変わった**というだけのことです。
 
-## Things Changed — The Agentic Era
+## 時代が変わった ── Agentic前提の世界
 
-From late 2024 through 2025, the landscape shifted:
+2024年後半から2025年にかけて、状況が変わりました。
 
-- **Production-grade agents arrived**: Claude Code, OpenAI Codex — agents that can run long tasks while orchestrating their own tool calls
-- **MCP (Model Context Protocol) landed**: tool descriptions became a standardized contract the model can read
-- **Tool-use accuracy from Sonnet/Opus-class models**: "pick the right tool from 20" became reliable
-- **Long context windows + prompt caching**: stacking many tool calls in a session is now economically reasonable
-- **`stop_reason: tool_use` as a natural loop**: the model itself decides "I have enough info" or "I need to look more"
+- **Claude Code、OpenAI Codexなどのエージェントが実用レベルに**: 長いタスクを自分でツールを呼びながら進められる
+- **MCP (Model Context Protocol) の登場**: ツールの記述がモデルから読みやすい形で標準化された
+- **Sonnet / Opusクラスのツール選択精度**: 「20個のツールから最適なものを選ぶ」が安定して回る
+- **長コンテキスト + プロンプトキャッシュ**: 1セッションで何回もツール呼び出しを重ねても、コストとレイテンシが現実的
+- **`stop_reason: tool_use` の自然なループ**: モデル自身が「もう情報足りた」「もう一回検索したい」を判断する
 
-When all of these line up, **the assumption "we can't afford retrieval as a loop" no longer holds**. Five tool calls per session, ten, twenty — that's now the norm.
+これらが揃った結果、**「retrievalは単発で全部取らないと割が合わない」という前提が崩れた**。1回のセッションで5回でも10回でもツールを呼び出すのが当たり前になった。
 
-The constraint Microsoft GraphRAG was designed against — "loops are expensive at query time" — has dissolved.
+つまり、Microsoft GraphRAGが前提にしていた制約 ── 「クエリ時のループは高い」── が消えたわけです。
 
-This isn't to say Microsoft GraphRAG is "outdated." It was the right answer for its constraints. The constraints just changed, and **so does the optimal answer**.
+これはMicrosoft GraphRAGが「古い」という話ではありません。当時の制約に対する正しい答えだった。今は制約が変わったので、**最適解も変わる**というだけのことです。
 
-## Agentic Graph RAG — Deterministic Retrieval, AI-Driven Orchestration
+## Agentic Graph RAG ── 検索は決定的、判断はAI
 
-Here's the thesis. In one line:
+![RAGの3つの時代](https://static.zenn.studio/user-upload/6df79e52319d-20260507.png)
 
-> **Each retrieval step is deterministic. Only the orchestration is AI.**
+なお、Agentic Graph RAGという呼び方は私が独自に作った言葉ではありません。Neo4jの [NODES AI 2026](https://neo4j.com/videos/nodes-ai-2026-agentic-graphrag-autonomous-knowledge-graph-construction-and-adaptive-retrieval-2/) では「Agentic GraphRAG」のセッションが組まれていますし、O'ReillyからはAnthony Alcaraz / Sam Julien共著の書籍 [Agentic GraphRAG](https://www.oreilly.com/library/view/agentic-graph-rag/9798341623163/) が2026年11月に刊行予定です。業界全体が「単発のGraph RAG」から「エージェント前提のGraph RAG」へ舵を切っている流れの中で、私たちが社内で独自に積み上げてきた設計を改めて言語化したのがこの記事です。
 
-![The three eras of RAG](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/sztt41rykfdvi231od0u.png)
+ただし、公の文脈で「Agentic GraphRAG」と呼ばれるとき、その主流は**エージェントがグラフ構築自体を自動化する方向**で語られます（Neo4jのtalkもその系譜です）。本記事が取り込んでいるのは、その中でも**「クエリ側をエージェント化する」概念のほう**に限った話です。グラフ構築の側は、私たちが対象にしているドメイン（社内DBスキーマ、施策 × KPI、コードベース等）が**社内の暗黙知に強く依存**するため、現時点では人間が設計したほうが結果が良い ── という実利的な理由で自分たちでやっているだけで、構築の自動化を原理的に否定しているわけではありません。
 
-For context: "Agentic Graph RAG" isn't a term I coined. Neo4j's [NODES AI 2026](https://neo4j.com/videos/nodes-ai-2026-agentic-graphrag-autonomous-knowledge-graph-construction-and-adaptive-retrieval-2/) featured a session titled "Agentic GraphRAG," and O'Reilly is publishing [Agentic GraphRAG](https://www.oreilly.com/library/view/agentic-graph-rag/9798341623163/) by Anthony Alcaraz and Sam Julien in November 2026. The industry as a whole is pivoting from "one-shot Graph RAG" toward "agent-driven Graph RAG." This article is my attempt to put words around the design we'd been arriving at independently inside our company.
+ここから本題です。Agentic Graph RAGの核心は、ひとことで言うとこうです。
 
-That said, when "Agentic GraphRAG" is used in public contexts, the dominant framing centers on **agents automating the graph construction itself** (Neo4j's talk above is in that lineage). What this article takes from that broader idea is specifically **the query-side agentic pattern**. We still hand-design the graphs because the domains we target (internal DB schemas, initiatives × KPIs, codebases) lean heavily on internal tacit knowledge — for now, hand-designing produces better results in practice. We aren't rejecting auto-construction in principle; we're applying the query-side concept to graphs we still build by hand.
+> **検索の各ステップは決定的、オーケストレーションだけがAI**
 
-Vector RAG had **probabilistic retrieval**. Embedding cosine is an approximation, and it sometimes misses. Hallucination starts at the retrieval layer.
+ベクトルRAGは「検索そのもの」が確率的でした。Embeddingのcosine類似度はあくまで近似で、たまたま外す。だからretrieval層がハルシネーションの種を含んでいた。
 
-Classical Graph RAG **runs retrieval once at query time**. Heavy preprocessing prepares "the answer itself" in advance, and at query time you just look it up.
+古典的Graph RAGは、検索を一回きりで全部終わらせる前提だった。事前に重い処理をして「答えそのもの」を準備しておいて、クエリ時はそれを引くだけ。
 
-**Agentic Graph RAG sits between these two.**
+**Agentic Graph RAGの発想は、その間にある**。
 
-- The graph is **designed by humans**. Our domains lean on internal tacit knowledge, so humans deciding "this is the granularity I want to slice the data with" produces better results.
-- Each tool call is **deterministic**. Pass an ID and you get the connected nodes and edges. There's no embedding wiggle.
-- The AI only judges **which tool to call next, what ID to pass in, and when to stop**.
+- グラフは**人間が設計**する。私たちが扱うのは社内の暗黙知に依存するドメインなので、スキーマも、ノードも、エッジも、人間が「この粒度でデータを切り取りたい」と決めるほうが結果が良い
+- 各ツール呼び出しは**決定的**に動く。IDを渡せば、それに紐づくノードやエッジを必ず取得する。ベクトル類似度のような揺らぎはない
+- ただし「**次にどのツールを呼ぶか**」「**どのIDをパラメータに入れるか**」「**いつ止めるか**」はAIが判断する
 
-The result: **errors get localized**. Retrieval itself is deterministic, so the only places to be wrong are "AI picked the wrong starting point" or "AI stopped too early." The data in the response is the truth.
+これにより、**間違いの場所が局所化される**。retrieval自体は決定的なので、間違うとしたら「AIが入口を間違えた」「AIが早く打ち切った」のどちらかだけ。出力されたデータは事実そのもの。
 
-## Tool Return Values Become a Runbook
+## ツール返却値がrunbookになる
 
-The most important design move in Agentic Graph RAG: **the tool's return value tells the AI what to do next**.
+![ツール返却値が次の指示になる](https://static.zenn.studio/user-upload/744076b1776e-20260507.png)
 
-![Tool return values become the next instruction](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/37kg7dta2liqsvc8guf9.png)
+Agentic Graph RAGの設計でいちばん大事なのは、**ツールの返却値が「次に何をすべきか」をAIに伝える**ことです。
 
-This is different from a regular API. Regular APIs answer the question they were asked. MCP tools are **in conversation with an AI**. The other side of the conversation needs not just an "answer" but **candidates for the next move**.
+これは普通のAPIの感覚とは違います。普通のAPIは「呼ばれた質問に答えればいい」。でもMCPのツールは、**AIと会話している**わけです。会話相手から欲しいのは「答え」だけじゃなく、「**次の手の候補**」でもある。
 
-Concrete example.
+具体例で説明します。
 
-When the AI calls DB Graph MCP's `search_tables` tool, it gets:
+DB Graph MCPの `search_tables` ツールを呼ぶと、こう返ってきます。
 
-```plaintext
-5 tables matched (vector similarity ranked):
+```
+5件のテーブルが見つかりました（ベクトル類似度順）:
 
-warehouse.return_package_table (postgresql) (distance: 0.2557)
-warehouse.receipt_record_table (postgresql) (distance: 0.2720)
-inventory.receipt_confirmation_table (mysql) (distance: 0.2921)
-warehouse.receipt_record_detail_table (postgresql) (distance: 0.2951)
-app.return_status_change_history_table (mysql) (distance: 0.3170)
+warehouse.返送パッケージテーブル (postgresql) (距離: 0.2557)
+warehouse.荷受記録テーブル (postgresql) (距離: 0.2720)
+inventory.荷受確認結果テーブル (mysql) (距離: 0.2921)
+warehouse.荷受記録明細テーブル (postgresql) (距離: 0.2951)
+app.返送ステータス変更履歴テーブル (mysql) (距離: 0.3170)
 ```
 
-> ※ Schema and table names are anonymized — they map to internal system names.
+> ※ 説明用にスキーマ名・テーブル名は一般化しています。実際は社内のシステム由来の名前です。
 
-Notice that **the response itself contains the next tool's argument**. The qualified name `warehouse.receipt_record_table` is exactly what `get_table_detail(table_name: "warehouse.receipt_record_table")` expects. If the AI decides "let me look at the details," it just copy-pastes.
+注目してほしいのは、**返却の中に「次に呼ぶべきツールの引数」が既に入っている**ことです。`warehouse.荷受記録テーブル` というqualified nameは、そのまま `get_table_detail(table_name: "warehouse.荷受記録テーブル")` の引数として使える。AIは「次は詳細を見るか」と判断したら、そのままコピペすればいい。
 
-The `get_table_detail` response is even more direct:
+`get_table_detail` の返却はもっと露骨です。
 
-```markdown
-# warehouse.receipt_record_table
-DB: POSTGRESQL / ORM: typeorm / Repo: warehouse-api
+```
+# warehouse.荷受記録テーブル
+DB: POSTGRESQL / ORM: typeorm / リポジトリ: warehouse-api
 
-## Columns (9)
+## カラム (9)
 - id: int [PK, AI, NOT NULL]
-- shipping_order_id: varchar [NOT NULL]
+- 出荷オーダーID: varchar [NOT NULL]
 - status: enum [NOT NULL, default=IN_PROGRESS]
 - ...
 
-## References (2)
-- shipping_order_id → warehouse.shipping_order_table.id (explicit)
-- operator_id → warehouse.user_table.id (explicit)
+## 参照先 (2)
+- 出荷オーダーID → warehouse.出荷オーダーテーブル.id (explicit)
+- 操作者ID → warehouse.ユーザーテーブル.id (explicit)
 
-## Enum / Status Definitions (2)
-- Status: COMPLETE = received, IN_PROGRESS = in progress
-- Type: RENTAL_RETURN = rental return, ...
+## Enum/ステータス定義 (2)
+- Status: COMPLETE=荷受済, IN_PROGRESS=実行中
+- Type: RENTAL_RETURN=レンタル戻り, ...
 ```
 
-This response implicitly tells the AI:
+この返却はAIに対して、暗黙的に次のことを伝えています。
 
-- **"The meaning of `status` is in the Enum definition"** → don't guess, read it
-- **"There are FK references"** → if needed, you can follow them with `trace_relationships`
-- **"There's no direct FK to the `app` schema"** → you'll need a different path
+- 「**statusカラムの意味はEnum定義に書いてある**」 → AIは意味を勝手に推測しない
+- 「**参照先がある**」 → 必要なら `trace_relationships` で辿れる
+- 「**app側との直接FKはない**」 → 別経路を探す必要がある
 
-In other words, **the tool's response is a runbook for the AI**. The AI reads it and assembles the next move on its own.
+つまり、**ツール返却値が「AI向けのrunbook」になっている**。AIはこれを読んで自律的に次の手を組み立てられる。
 
-Now look at the response from `sql_query_database`:
+さらに、`sql_query_database` で実データを取ってきたときの返却を見てください。
 
-```markdown
-**app** (staging) — 1 row
+```
+**app** (staging) — 1行
 
 | id     | status   | warehouse_order_code |
 |--------|----------|----------------------|
 | 98765  | RETURNED | SO-2026-00012345     |
 
-> **Table**: Manages the full lifecycle of delivery orders...
+> **テーブル**: 配送オーダーの全ライフサイクルを管理...
 
-### Column descriptions
-- **status**: Delivery status (1=awaiting shipment, 2=ready, 3=delivered, 4=returned, ...)
-- **warehouse_order_code**: Link code to the warehouse-side shipping order
+### カラム説明
+- **status**: 配送ステータス (1=発送待ち, 2=発送可能, 3=配達済み, 4=返却済み, ...)
+- **warehouse_order_code**: warehouse 側の出荷オーダーとの連携コード
 
-### Related tables
-- → **app.member_table** (user_id → id)
-- → **app.plan_master** (plan_id → id)
-- ← **app.order_history_table** (delivery_id → id)
+### 関連テーブル
+- → **app.会員テーブル** (user_id → id)
+- → **app.プランマスタ** (plan_id → id)
+- ← **app.注文履歴テーブル** (delivery_id → id)
 ```
 
-**Column descriptions and related tables are auto-attached below the query result.** This is composed dynamically from the graph data we cached in BQ. Reading that "warehouse_order_code links to the warehouse side," the AI immediately decides "next, look up the warehouse table by this code."
+クエリ結果の下に**カラム説明と関連テーブルが自動付与される**。これは事前にBQに格納したグラフから動的に組み立てています。AIは「`warehouse_order_code` はwarehouseとの連携用」と書いてあるのを読んで、次に「**warehouse側のテーブルをこのコードで引く**」と即座に判断できます。
 
-Nobody had to tell the AI "now look at warehouse." **The response itself is the instruction.**
+人間がいちいち「次はwarehouseを見て」と教える必要がない。**返却値そのものが指示書**。
 
-## DB Graph in Action — A Production Investigation in 4 Steps
+## DB Graphでの実演 ── 4ステップで本番調査が完結する
 
-Here's the full flow (also shown in the [DB Graph MCP article](https://dev.to/ryantsuji/democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5)).
+実際の流れをもう一度通しで見ます（[DB Graph MCPの記事](https://zenn.dev/aircloset/articles/2731787582881a)から再掲）。
 
-The scenario: a CS agent asks, "This member shows 'returned' in the app, but did the warehouse actually confirm receipt?"
+CSから「この会員さん、アプリでは返却済みになってるけど、倉庫側で本当に確認できてますか？」と聞かれた、というシナリオです。
 
-**Step 1**: Find tables in natural language (vector-similarity entry-point search)
+**Step 1**: 自然言語でテーブルを探す（ベクトル類似度の入口検索）
 
-```plaintext
-search_tables(query: "return processing confirmation", search_type: "semantic")
-→ warehouse.receipt_record_table, warehouse.return_package_table, ...
+```
+search_tables(query: "返却処理の確認", search_type: "semantic")
+→ warehouse.荷受記録テーブル, warehouse.返送パッケージテーブル, ...
 ```
 
-**Step 2**: Look at the details (deterministic detail retrieval)
+**Step 2**: 中身を見る（決定的な詳細取得）
 
-```plaintext
-get_table_detail(table_name: "warehouse.receipt_record_table")
-→ status=COMPLETE means "warehouse received it"
-→ shipping_order_id connects to warehouse.shipping_order_table
+```
+get_table_detail(table_name: "warehouse.荷受記録テーブル")
+→ status=COMPLETE が「倉庫で荷受完了」
+→ 出荷オーダーIDで warehouse.出荷オーダーテーブル と繋がる
 ```
 
-**Step 3**: Find the path to the other schema (deterministic graph traversal)
+**Step 3**: 別スキーマとの結合経路を探す（決定的なグラフ走査）
 
-```plaintext
-trace_relationships(table_name: "warehouse.shipping_order_table", direction: "both")
-→ from the app side, connection goes through an intermediate table
-search_tables(query: "warehouse linkage")
-→ app.warehouse_linkage_table (warehouse_order_code maps to warehouse.shipping_order.code)
+```
+trace_relationships(table_name: "warehouse.出荷オーダーテーブル", direction: "both")
+→ app 側からは中間テーブル経由で繋がる
+search_tables(query: "倉庫連携")
+→ app.倉庫連携テーブル (warehouse_order_code が warehouse.出荷オーダー.code に対応)
 ```
 
-**Step 4**: Verify against real data (deterministic query execution)
+**Step 4**: 実データで確認（決定的なクエリ実行）
 
-```sql
+```
 sql_query_database(database: "app", sql: "SELECT ... WHERE user_id=12345 AND status='RETURNED'")
-→ warehouse_order_code = "SO-2026-00012345"
+→ warehouse_order_code = "SO-2026-00012345" を取得
 
 sql_query_database(database: "warehouse", sql: "SELECT ... WHERE code='SO-2026-00012345'")
-→ receive_status = COMPLETE → confirmed by warehouse
+→ receive_status = COMPLETE → 倉庫で荷受確認済み
 ```
 
-The crucial part: **the AI built this 4-step flow autonomously**. The human only asked the original question. Each step's response carried "look here next" inside it, so the AI could keep composing the next call correctly.
+ここで重要なのは、**この4ステップをAIが自律的に組み立てている**ことです。人間が指示したのは最初の質問だけ。各ステップの返却に「次はこっちを見ろ」という情報が入っているから、AIが次のツール呼び出しを正しく組める。
 
-And **each step's retrieval is deterministic**. The enum definitions for `status` in `warehouse.receipt_record_table` are facts pulled from the graph — not values the AI invented. `warehouse_order_code = SO-2026-00012345` is real data — not an ID the AI fabricated.
+そして**各ステップのretrievalは決定的**です。`warehouse.荷受記録テーブル` のstatusカラムのenum定義は、グラフから引いた事実そのもの。AIが想像で書いた値ではない。`warehouse_order_code = SO-2026-00012345` は実データそのもの。AIが捏造したIDではない。
 
-This is a different experience from both Vector RAG and classical Graph RAG. Vector RAG is "return all the text in one shot," but hallucinations slip in. Classical Graph RAG is "return the community summary in one shot," but specifics get lost in summarization. Agentic Graph RAG is "**fetch as many times as you need, but every fetch returns nothing but facts**."
+これがベクトルRAGとも古典的Graph RAGとも違う体験になります。ベクトルRAGは「全部1回でテキストを返す」が、ハルシネーションが混じる。古典的Graph RAGは「全部1回でコミュニティ要約を返す」が、要約のせいで具体情報が落ちる。Agentic Graph RAGは「**5回でも10回でも引きに行く、ただし1回1回は事実だけ**」。
 
-## The Same Pattern, Across Many Graphs
+## 同じパターンを社内のあちこちに
 
-This pattern — what we adopt: **human-designed graph + deterministic retrieval tools + responses that double as AI runbooks** — isn't limited to DB Graph and Biz Graph. We use it across many MCP servers internally.
+このパターン ── **私たちが採用している「人間設計のグラフ + 決定的なretrievalツール + AI向けrunbookな返却値」** ── は、DB GraphとBiz Graphだけのものじゃありません。社内のMCPサーバー群で何度も繰り返し使っています。
 
-Including the ones I mentioned by name in [the 17 internal MCP servers post](https://dev.to/ryantsuji/we-built-17-mcp-servers-to-let-ai-run-our-internal-operations-3lk2), the lineup looks like this:
+[社内MCP群の全体像](https://zenn.dev/aircloset/articles/d9fc317c1336c2) で名前だけ紹介していたものも含めて並べると、こんなラインナップになります。
 
-| Graph | What it covers |
-|-------|----------------|
-| **DB Graph** | 991 tables × 15 schemas across the company |
-| **Biz Graph** | 5,000+ initiatives × 4,000+ KPIs |
-| **Code Graph** | Functions, APIs, events across all repos |
-| **Cortex Product Graph** | Code + DB + docs + infra unified for the cortex repo |
-| **Service Product Graph** | API → DB dependencies per service |
+| グラフ | 対象 |
+|--------|------|
+| **DB Graph** | 社内 991 テーブル × 15 スキーマ |
+| **Biz Graph** | 5,000+ 施策 × 4,000+ KPI |
+| **Code Graph** | 全社リポジトリのコード関数・API・イベント |
+| **Cortex Product Graph** | cortex リポジトリ内のコード + DB + docs + infra 統合 |
+| **Service Product Graph** | 各サービスの API → DB の依存 |
 
-The structures are all different. DB Graph from ORM parsing. Biz Graph from meeting-slide extraction plus hand-designed MetricDomain. Code Graph from static analysis. Product Graph from JSDoc annotations on top of everything else. Different sources, different assembly.
+どれも構造が違います。DB GraphはORM解析、Biz Graphは会議スライドからの抽出 + 人間設計のMetricDomain、Code Graphは静的解析、Product Graph系はJSDocアノテーションを起点にした統合グラフ。データソースも作り方もバラバラです。
 
-But **the shape from the MCP-tool side is identical**:
+ですが、**MCPツールから見た形は揃っています**。
 
-1. **Entry-point search**: vector or substring to find "around here" (the only place fuzziness is allowed)
-2. **Detail retrieval**: pass an ID, get facts (deterministic)
-3. **Relationship traversal**: jump from ID to ID along edges (deterministic)
-4. **Embed next-step hints in responses**: related IDs, enum definitions, annotations, links
+1. **入口検索**: ベクトルあるいは部分一致で「だいたいこの辺」を見つける（揺らぎが許される唯一の場所）
+2. **詳細取得**: IDを指定すれば事実が返る（決定的）
+3. **関係走査**: IDからIDへエッジを辿る（決定的）
+4. **返却値に次の手の候補を含める**: 関連ID、enum定義、注釈、リンク
 
-This **3+1** template is the universal Agentic Graph RAG shape. Different graph internally, identical surface. From the AI side, **they all feel the same** — Claude Code uses DB Graph and Code Graph and Product Graph with the same "search → drill down → traverse" rhythm.
+この**3 + 1**の形が、Agentic Graph RAGの汎用テンプレートになっています。グラフが違っても、ツールの形が同じだから、AI側からは同じ感覚で使える。Claude CodeはDB Graphを使うときも、Code GraphやProduct Graphを使うときも、**同じ「探索→深堀り→走査」のリズム**で動きます。
 
-Of the graphs above, only DB Graph and Biz Graph have dedicated deep-dive posts so far. Code Graph and the Product Graph family will get their own writeups; for this post, they're listed as fellow examples of the pattern.
+ここで挙げたグラフのうち、深掘りした記事を書けているのはまだDB GraphとBiz Graphだけです。Code Graph、Product Graph系については、それぞれの設計や運用の話を別の記事で書く予定なので、今回は「同じパターンの応用例」として名前だけ並べておくに留めます。
 
-## A Designer's Checklist
+## 設計のチェックリスト
 
-> **For implementers.** Below are the six things I always keep top of mind when adapting Agentic Graph RAG to a new domain.
+:::message
+ここから先は実装者向けのチェックリストです。Agentic Graph RAGを自分のドメインに当てはめて構築するときに、いつも気にしている6項目をまとめます。
+:::
 
-Things I keep top of mind when building an Agentic Graph RAG:
+Agentic Graph RAGを作るときに気にしているポイントを書き出しておきます。
 
-### 1. Choose the graph-construction method based on the domain
+### 1. ドメインの性質でグラフ構築方法を選ぶ
 
-If the domain leans on internal tacit knowledge, **humans deciding the nodes and edges** produces better results. Sometimes you intentionally design a structure that doesn't exist naturally — Biz Graph's "Week node" and "MetricDomain" are examples. **The design is what determines quality.**
+対象ドメインが社内の暗黙知に強く依存するなら、**ノード/エッジの単位は人間が設計**するほうが結果が良い。Biz Graphの「Weekノード」「MetricDomain」のように、自然には存在しない構造を意図的に設計することもある。**設計が品質を決める**。
 
-Conversely, when the domain is mostly public knowledge (papers, news, public docs), having agents automate construction is a strong option (the Neo4j talk lineage). This article assumes the former.
+逆に対象が公知の知識（論文・ニュース・公開ドキュメント等）であれば、構築側もエージェントに自動化させる選択肢が有力です（Neo4jのtalkの系譜）。本記事は前者を前提にした話です。
 
-### 2. Make retrieval deterministic
+### 2. retrievalを決定的にする
 
-The entry-point search may use vector similarity (to accept natural-language queries). After that, "get details by ID" and "follow relationships from this ID" must always return **definite values via graph traversal**. Using similarity here lets hallucination back into the retrieval layer.
+入口の探索だけはベクトル類似度で揺らがせていい（自然言語クエリを受けるため）。それ以降の「IDで詳細を取る」「IDから関係を辿る」は、必ずgraph traversalで**確定値を返す**。ここで類似度を使うとハルシネーションがretrieval層に混入する。
 
-### 3. Tool granularity: search → detail → traverse
+### 3. ツール粒度は「探索→詳細→走査」で分ける
 
-Don't pile everything into one giant tool. Split into search-style entry points, detail lookups, and traversal/data tools. The AI understands the difference and uses them appropriately.
+1つの巨大なツールに全部詰めず、AIが状況に応じて使い分けられるよう分解する。`search_*` は入口、`get_*_detail` は深堀り、`trace_*` / `query_*` は走査と実データ。AIはこの段階の差を理解して呼び分ける。
 
-### 4. Tool descriptions are AI runbooks
+### 4. ツールdescriptionはAI向けのrunbook
 
-Write tool descriptions as **execution guides for the AI**, not human documentation. "If you see this kind of response, call this tool next." "In this situation, format the argument like this." As I mentioned in [the Sandbox MCP post](https://dev.to/ryantsuji/bridging-i-want-to-build-and-i-want-to-publish-safely-for-non-engineers-sandbox-mcp-392a), this directly determines how smart the agent appears.
+ツールのdescriptionは人間ドキュメントではなく**AI向けの実行手順書**として書く。「この返却を見たら次はこのツールを呼べ」「この場合はこのフォーマットで引数を作れ」まで書き込む。冒頭で紹介した [Sandbox MCPの記事](https://zenn.dev/aircloset/articles/4c5f49f89db19f)でも触れた通り、これがエージェントの賢さを左右します。
 
-### 5. Embed "next move candidates" in responses
+### 5. 返却値に「次の手の候補」を埋め込む
 
-Don't just return data. Return:
+データだけ返すのではなく、
 
-- **Related IDs**: where to traverse next (FK targets, similar initiatives, parent commits)
-- **Enums and definitions**: so the AI can interpret values without guessing
-- **Annotations and warnings**: DEAD flags, deprecation marks, PII (personally identifiable information) redaction notes
+- **関連ID**: 次に走査できる先（参照先テーブル、関連施策、上位コミット）
+- **enum / 列挙**: 値の意味をAIが自力で解釈できる定義
+- **注釈・警告**: DEADフラグ、非推奨マーク、PII（個人情報）マスク
 
-At a granularity where the AI can read "this is what I should do next" out of the response.
+を一緒に返す。AIが「ここからどう進めばいいか」を読み取れる粒度で。
 
-### 6. Let the AI do the summarization
+### 6. 集計・要約はAIに委ねる
 
-Don't pre-bake "community summaries" or similar on the server. The AI assembles facts case by case at the right granularity. **Return facts. Let the AI interpret.**
+サーバ側で「コミュニティ要約」みたいな前処理を頑張りすぎない。AIが複数の事実を組み立てる方が、ケースごとに適切な粒度で要約できる。**事実だけ返して、解釈はAIに**。
 
-## Limits and Caveats
+## 限界と注意点
 
-> **Heads up.** This approach has clear weak spots. If you're considering adopting it, read this section before you start designing.
+:::message alert
+このアプローチには明確な弱点があります。導入を検討する場合は、まずここを把握してから設計に入るのが安全です。
+:::
 
-Agentic Graph RAG is not a silver bullet. To be honest:
+Agentic Graph RAGが万能というわけではありません。正直に書きます。
 
-- **Quality depends entirely on graph design**. If the schema doesn't carve up the domain correctly, no number of tool calls will reach what you want. And in tacit-knowledge-heavy domains, the call about which nodes/edges to include is one only someone deeply familiar with the domain can make.
-- **If the agent picks the wrong entry, it falls into a deep hole**. Miss at the first `search_*` and the rest of the graph traversal goes sideways. Entry-point quality matters.
-- **Cost is tool-call-count × context length**. 10–20 tool calls per session add up tokens straightforwardly. Prompt caching and progress reporting via MCP help, but you have to keep an eye on it.
-- **Hallucination doesn't disappear — it relocates**. From the retrieval layer to "entry point selection" and "stop judgment." But it's much narrower territory, so debugging and evals get easier.
+- **グラフ設計の品質に全てが依存する**: スキーマが対象ドメインを正しく切り取れていないと、何回ツールを呼んでも欲しいものに辿り着けない。そして暗黙知に依存するドメインでは、どのノード・エッジを置くかという判断は、結局そのドメインを深く理解している人間にしかできない
+- **エージェントが入口で迷うと深い穴に落ちる**: 最初の `search_*` で外すと、その先のグラフ走査も的外れになる。入口検索の質は重要
+- **コストはツール呼び出し回数 × コンテキスト長**: 1セッションで10〜20回ツールを呼ぶと、トークン消費は素直に積み上がる。プロンプトキャッシュとMCPの `progress` で可視化していく必要がある
+- **ハルシネーションは消えるわけではなく場所が変わる**: retrieval層から「入口の選択」「ストップ判定」に移る。ただし以前より遥かに局所化されているので、デバッグや評価がしやすい
 
-The first item is the one designers should worry about most. **In tacit-knowledge domains specifically, graphs aren't found — they're designed.** I wrote this in the Biz Graph post too, and for these domains I don't think it can be overstated.
+設計者が最も注意すべきは1番目です。**特に暗黙知ドメインにおいては、グラフは作るものではなく設計するもの**。これはBiz Graphの記事で書いた通りで、こういうドメインに限れば、まったく強調しすぎることはないと思います。
 
-## Summary
+## まとめ
 
-The three eras of RAG, in one table:
+時代ごとのRAGをひとことでまとめると、こうなります。
 
-| Era | Representative | Retrieval | Orchestration |
-|-----|----------------|-----------|---------------|
-| Early days | Vector RAG | Probabilistic (cosine) | None (one-shot) |
-| Function-calling era | Classical Graph RAG | Pre-summarized | Light, mostly one-shot |
-| **Agent era** | **Agentic Graph RAG** | **Deterministic (graph traversal)** | **AI assembles in many steps** |
+| 時代 | 代表 | 検索 | オーケストレーション |
+|------|------|------|---------------------|
+| 草創期 | ベクトルRAG | 確率的（cosine類似度） | なし（単発1ターン） |
+| Function Calling期 | 古典的Graph RAG | 事前に要約済み | 軽量、ほぼ単発 |
+| **エージェント期** | **Agentic Graph RAG** | **決定的（graph traversal）** | **AIが多段で組み立てる** |
 
-Vector RAG made "search and dump some context" work. Classical Graph RAG packaged "follow relationships" into a single-shot lookup. Agentic Graph RAG **separates "tools that return only facts, accurately" from "AI agents that orchestrate them in multiple steps."**
+ベクトルRAGは「適当に検索して文脈に混ぜる」を実現した。古典的Graph RAGは「関係を辿る検索」を単発で完結できる形にまとめ上げた。Agentic Graph RAGは、**「事実だけを正確に返すツール群」と「AIエージェントによる多段オーケストレーション」を分業した**。
 
-The graphs we've built internally — DB Graph, Biz Graph, Code Graph, Product Graph family — they're all from the same lineage. The contents and construction differ, but in our domains they all share the same shape: **"give Claude Code a human-designed graph through deterministic tools."** Which is why, from the AI side, they all feel the same.
+私たちが社内で作っているDB Graph、Biz Graph、Code Graph、Product Graph系 ── これらはどれも同じ系譜の産物です。グラフの中身も作り方も違うけど、私たちのドメインでは「**人間が設計したグラフを、決定的なツールでClaude Codeに渡す**」という形に揃っている。だからAIから見ると、どれも同じリズムで使える。
 
-If you're building AI-native internal infrastructure, give this perspective a try. **Don't hand the AI an answer. Hand it a map.** It walks much further than you think.
+これからAIエージェントを前提にした社内基盤を作る方には、ぜひこの視点を試してみてほしいです。**AIに答えを渡す**のではなく、**AIに地図を渡す**。すると、AIはあなたが思っているよりずっと先まで一人で歩いていきます。
 
-And the quality of that map comes down to how deeply you understand the domain — at least for the domains where the relevant knowledge sits as tacit understanding inside people's heads. **In those domains, the best AI systems are still built by the people who know the problem space best.** Domain expertise hasn't lost value in the AI era — it's gained it. That's been my strongest takeaway from two years of building graphs across our company.
+そしてその地図の品質は、あなたがそのドメインをどれだけ深く理解しているかで決まる ── 少なくとも、ドメイン知識が暗黙知として人の頭の中にある領域では。**こういう領域に関しては、優れたAIシステムは、その領域を最も深く理解している人間が作る**んです。AIの時代だからこそ、ドメイン知識の価値はむしろ上がっている。これは私が過去2年、社内のあちこちにグラフを作りながら強く感じていることです。
