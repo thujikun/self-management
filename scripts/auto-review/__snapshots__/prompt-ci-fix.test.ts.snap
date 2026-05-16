@@ -46,7 +46,7 @@ pnpm format:check
 pnpm build
 pnpm test:coverage
 \`\`\`
-なお \`infra/*\` 配下の Pulumi preview は repo 内のローカル 6 gate に含まれない。Pulumi 失敗は GH Actions log を読んで diagnostic、\`pulumi/\` ディレクトリでローカル \`pulumi preview\` を実行できるなら回す。secret 不足など bot ローカルで再現不可能な失敗は FIX_FAILED 妥当。
+なお \`infra/*\` 配下の Pulumi preview は repo 内のローカル 6 gate に含まれない。Pulumi 失敗は GH Actions log を読んで diagnostic、\`infra/core\` / \`infra/ryantsuji-dev\` の各ディレクトリでローカル \`pulumi preview\` を実行できるなら回す。secret 不足など bot ローカルで再現不可能な失敗は FIX_FAILED 妥当。
 
 5. **commit**: Conventional Commits 形式 (\`fix:\` / \`chore:\` / \`refactor:\` 等、type 小文字 / subject 末尾ピリオドなし)。
    ヘッダーは 100 字以内。本文に「pr #28 ci fix」と書き、修正内容を箇条書きで残す。
@@ -66,7 +66,7 @@ pnpm test:coverage
 
 # 失敗時の挙動
 
-- 診断はしたが AI 判断では fix できない / 失敗が一過性で repo の変更で直らない / 6 gate を green にできない場合、push せず終了。stdout に \`<!-- FIX_FAILED:<理由> -->\` を 1 行残す。呼び出し側 (ci-fix-job.ts) が当該 SHA を bookmark + iteration counter を +1 進めて、同 SHA の永久 retry を遮断する (MAX_ITERATIONS_PER_PR cap で必ず止まる)。安易に early-give-up しないこと、限界まで try してから FIX_FAILED を出すこと。"
+- 診断はしたが AI 判断では fix できない / 失敗が一過性で repo の変更で直らない / 6 gate を green にできない場合、push せず終了。stdout に \`<!-- FIX_FAILED:<理由> -->\` を 1 行残す。呼び出し側 (ci-fix-job.ts) は当該 SHA の \`ciFixFailureCount\` を +1 し、同 SHA は最大 3 回まで backoff 付き retry。3 回到達後は新 commit が来るまで skip される。安易に early-give-up しないこと、限界まで try してから FIX_FAILED を出すこと。"
 `;
 
 exports[`buildCiFixPrompt > 生成 prompt の全文 (snapshot) — failing checks が箇条書きで展開される 1`] = `
@@ -117,7 +117,7 @@ pnpm format:check
 pnpm build
 pnpm test:coverage
 \`\`\`
-なお \`infra/*\` 配下の Pulumi preview は repo 内のローカル 6 gate に含まれない。Pulumi 失敗は GH Actions log を読んで diagnostic、\`pulumi/\` ディレクトリでローカル \`pulumi preview\` を実行できるなら回す。secret 不足など bot ローカルで再現不可能な失敗は FIX_FAILED 妥当。
+なお \`infra/*\` 配下の Pulumi preview は repo 内のローカル 6 gate に含まれない。Pulumi 失敗は GH Actions log を読んで diagnostic、\`infra/core\` / \`infra/ryantsuji-dev\` の各ディレクトリでローカル \`pulumi preview\` を実行できるなら回す。secret 不足など bot ローカルで再現不可能な失敗は FIX_FAILED 妥当。
 
 5. **commit**: Conventional Commits 形式 (\`fix:\` / \`chore:\` / \`refactor:\` 等、type 小文字 / subject 末尾ピリオドなし)。
    ヘッダーは 100 字以内。本文に「pr #28 ci fix」と書き、修正内容を箇条書きで残す。
@@ -137,5 +137,5 @@ pnpm test:coverage
 
 # 失敗時の挙動
 
-- 診断はしたが AI 判断では fix できない / 失敗が一過性で repo の変更で直らない / 6 gate を green にできない場合、push せず終了。stdout に \`<!-- FIX_FAILED:<理由> -->\` を 1 行残す。呼び出し側 (ci-fix-job.ts) が当該 SHA を bookmark + iteration counter を +1 進めて、同 SHA の永久 retry を遮断する (MAX_ITERATIONS_PER_PR cap で必ず止まる)。安易に early-give-up しないこと、限界まで try してから FIX_FAILED を出すこと。"
+- 診断はしたが AI 判断では fix できない / 失敗が一過性で repo の変更で直らない / 6 gate を green にできない場合、push せず終了。stdout に \`<!-- FIX_FAILED:<理由> -->\` を 1 行残す。呼び出し側 (ci-fix-job.ts) は当該 SHA の \`ciFixFailureCount\` を +1 し、同 SHA は最大 3 回まで backoff 付き retry。3 回到達後は新 commit が来るまで skip される。安易に early-give-up しないこと、限界まで try してから FIX_FAILED を出すこと。"
 `;
