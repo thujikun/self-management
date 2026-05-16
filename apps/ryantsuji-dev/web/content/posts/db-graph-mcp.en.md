@@ -618,7 +618,3 @@ The biggest lesson from building this: **the real value of MCP is giving AI cont
 Making that happen required building the graph, securing cross-cloud access, automating permission management, and protecting PII — unglamorous but essential infrastructure, built with care.
 
 I hope this helps anyone wrestling with internal database management at scale.
-
----
-
-I'm CTO at [airCloset](https://www.air-closet.com/), a fashion rental subscription service in Japan. We're building the future of AI-powered development. If you're interested, check out our [engineering careers page](https://corp.air-closet.com/recruiting/developers/).

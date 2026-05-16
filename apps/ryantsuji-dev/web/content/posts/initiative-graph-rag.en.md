@@ -535,7 +535,3 @@ There's no FK between "initiatives" and "KPIs." No join key. But by deliberately
 As a result, questions like "Did that initiative work?", "Find initiatives that drove acquisition", "Show metrics YoY with initiative overlay" — AI can now autonomously explore the graph to answer these.
 
 Graphs aren't something you "find" — they're something you **design**. Especially for business data.
-
----
-
-At airCloset, we're looking for people who want to redefine how we work alongside AI. If interested, check out [airCloset Quest (careers)](https://corp.air-closet.com/recruiting/developers/).

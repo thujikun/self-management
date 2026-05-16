@@ -304,7 +304,3 @@ Building cortex, what's struck me is that **in an AI-era dev environment, "absor
 And it expands two things — **how much one engineer can ship**, and **how much non-engineers can participate** — well beyond what was possible before. That's the texture of the "harness" we've built on top of cortex.
 
 In subsequent parts, I'll walk through the individual mechanisms that make this work.
-
----
-
-At airCloset, we're looking for engineers who want to build a new development experience together with AI. If you're interested, please check out our careers page at [airCloset Quest](https://corp.air-closet.com/recruiting/developers/).

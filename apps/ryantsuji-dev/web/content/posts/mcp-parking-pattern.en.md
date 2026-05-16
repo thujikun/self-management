@@ -206,7 +206,3 @@ A few small tricks for keeping self-built MCP server token consumption under con
 It's an unflashy design move, but **the difference in MCP usability before and after is dramatic**.
 
 If you're running self-built MCP servers internally and feeling the token squeeze, give it a try.
-
----
-
-At airCloset, we're looking for engineers who want to build a new development experience together with AI. If you're interested, please check out our careers page at [airCloset Quest](https://corp.air-closet.com/recruiting/developers/).
