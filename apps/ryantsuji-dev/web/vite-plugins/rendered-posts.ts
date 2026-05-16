@@ -41,7 +41,10 @@ const RESOLVED_VIRTUAL_ID = "\0" + VIRTUAL_ID;
  * @graph-connects content [calls] renderMarkdown
  */
 export async function renderAllPosts(postsDir: string): Promise<Record<string, RenderedDoc>> {
-  const files = await readdir(postsDir);
+  // readdir は OS / FS 依存の順序で返るため、insertion order がそのまま JSON.stringify
+  // の文字列順に乗らないように事前 sort。reproducible build (同 commit を mac / linux で
+  // build した時の worker-entry hash 一致) を保つための決定性確保。
+  const files = (await readdir(postsDir)).sort();
   const out: Record<string, RenderedDoc> = {};
   for (const f of files) {
     if (!f.endsWith(".md")) continue;

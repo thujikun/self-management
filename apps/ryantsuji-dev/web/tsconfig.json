@@ -17,6 +17,6 @@
     "declaration": false,
     "declarationMap": false
   },
-  "include": ["src/**/*", "vite.config.ts"],
+  "include": ["src/**/*", "vite.config.ts", "vitest.config.ts", "vite-plugins/**/*.ts"],
   "exclude": ["node_modules", ".output", "dist", ".tsc-out"]
 }

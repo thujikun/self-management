@@ -79,7 +79,7 @@ export default defineConfig({
   ],
   test: {
     name: "ryantsuji-dev-web",
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    include: ["src/**/*.{test,spec}.{ts,tsx}", "vite-plugins/**/*.{test,spec}.ts"],
     setupFiles: ["./src/test-setup.ts"],
     // React component の click / submit dispatch を test するため happy-dom を採用。
     // SSR test (renderToString) も happy-dom 上で問題なく動く (DOM API を使わないため)。
