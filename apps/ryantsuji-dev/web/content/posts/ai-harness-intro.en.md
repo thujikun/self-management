@@ -14,6 +14,7 @@ syndication:
   devto:
     id: 3655760
     slug: "building-a-real-ai-harness-auto-reviewed-prs-self-healing-ops-and-non-engineer-contributors-3lfa"
+cover: /posts/ai-harness-intro.en.cover.png
 ---
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.

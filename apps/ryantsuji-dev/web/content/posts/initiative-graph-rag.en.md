@@ -16,6 +16,7 @@ syndication:
   devto:
     id: 3527776
     slug: "we-built-a-custom-graph-rag-to-let-ai-answer-did-that-initiative-actually-work-3oda"
+cover: /posts/initiative-graph-rag.en.cover.png
 ---
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.

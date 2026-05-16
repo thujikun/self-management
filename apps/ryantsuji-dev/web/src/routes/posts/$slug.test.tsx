@@ -29,6 +29,7 @@ import * as authClient from "../../lib/auth-client.js";
 
 import {
   EngagementSection,
+  buildPostMeta,
   dispatchCommentSubmit,
   dispatchLikeClick,
   executeAddCommentAction,
@@ -863,5 +864,83 @@ describe("EngagementSection — render branches", () => {
     expect(html).toMatch(/<form class="comments__form"/);
     expect(html).toMatch(/<span class="comments__author">Alice<\/span>/);
     expect(html).not.toMatch(/まだコメントはありません/);
+  });
+});
+
+describe("buildPostMeta", () => {
+  it("cover 有り EN post: og:image + twitter:image + summary を組む", () => {
+    const meta = buildPostMeta({
+      slug: "hello",
+      title: "Hello World",
+      summary: "A test post",
+      cover: "/posts/hello.en.cover.png",
+      lang: "en",
+    });
+    const find = (key: string, val: "name" | "property") =>
+      meta.find((m) => val in m && (m as Record<string, string>)[val] === key);
+    expect(find("og:title", "property")).toStrictEqual({
+      property: "og:title",
+      content: "Hello World",
+    });
+    expect(find("og:description", "property")).toStrictEqual({
+      property: "og:description",
+      content: "A test post",
+    });
+    expect(find("og:url", "property")).toStrictEqual({
+      property: "og:url",
+      content: "https://ryantsuji.dev/posts/hello",
+    });
+    expect(find("og:image", "property")).toStrictEqual({
+      property: "og:image",
+      content: "https://ryantsuji.dev/posts/hello.en.cover.png",
+    });
+    expect(find("twitter:card", "name")).toStrictEqual({
+      name: "twitter:card",
+      content: "summary_large_image",
+    });
+    expect(find("og:type", "property")).toStrictEqual({
+      property: "og:type",
+      content: "article",
+    });
+    // title entry も含む (TanStack head spec 上 `{ title }` で document title 用)
+    expect(meta[0]).toStrictEqual({ title: "Hello World — ryantsuji.dev" });
+  });
+
+  it("JP post は url に ?lang=ja を付ける", () => {
+    const meta = buildPostMeta({
+      slug: "hello",
+      title: "こんにちは",
+      cover: "/posts/hello.ja.cover.png",
+      lang: "ja",
+    });
+    const url = meta.find((m) => "property" in m && m.property === "og:url");
+    expect(url).toStrictEqual({
+      property: "og:url",
+      content: "https://ryantsuji.dev/posts/hello?lang=ja",
+    });
+  });
+
+  it("cover 無し post: og:image / twitter:image を出さない (root の default に fallback)", () => {
+    const meta = buildPostMeta({
+      slug: "no-cover",
+      title: "No Cover",
+      lang: "en",
+    });
+    expect(meta.find((m) => "property" in m && m.property === "og:image")).toBeUndefined();
+    expect(meta.find((m) => "name" in m && m.name === "twitter:image")).toBeUndefined();
+    expect(meta.find((m) => "name" in m && m.name === "twitter:card")).toBeUndefined();
+  });
+
+  it("summary 無し post は title から description を組み立てる", () => {
+    const meta = buildPostMeta({
+      slug: "x",
+      title: "Plain Title",
+      lang: "en",
+    });
+    const desc = meta.find((m) => "name" in m && m.name === "description");
+    expect(desc).toStrictEqual({
+      name: "description",
+      content: "Plain Title — ryantsuji.dev",
+    });
   });
 });

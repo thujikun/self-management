@@ -16,6 +16,7 @@ syndication:
   devto:
     id: 3622364
     slug: "graph-rag-isnt-a-one-shot-anymore-the-case-for-agentic-graph-rag-mcps-1dj5"
+cover: /posts/agentic-graph-rag-mcp.en.cover.png
 ---
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.
