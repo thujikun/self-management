@@ -69,39 +69,24 @@ describe("__root route", () => {
     );
     expect(ogUrl?.content.startsWith("https://")).toBe(true);
 
+    // `?url` import は vitest.config.ts の `cssUrlTestStub` plugin により
+    // `/__test__/styles.css` に解決される。production build では Vite が
+    // `/assets/styles-<hash>.css` を emit する経路で、href が非空文字列になる
+    // ことは build 経由で別途担保。ここでは「`?url` import から href に値が
+    // 流れている」ことを sentinel URL の literal 一致で固定し、`href:
+    // "/styles.css"` 直書きへの regression や `href: ""` (= build pipeline
+    // 非経由) への regression を test 側で必ず捕まえる。
     const links = head.links ?? [];
-    expect(links).toEqual(
-      expect.arrayContaining([
-        // `?url` 経由で Vite が hash 化した pathname (`/assets/styles-<hash>.css`)
-        // を生成する。vitest 環境では Vite css plugin が url を emit せず空文字列
-        // になるため href の値までは assert せず、`<link rel="stylesheet">` が
-        // head に並んでいる事実だけを検証する (実体は build E2E と CF preview で
-        // 担保)。
-        expect.objectContaining({ rel: "stylesheet" }),
-        expect.objectContaining({ rel: "icon", type: "image/svg+xml", href: "/logo-mark.svg" }),
-        expect.objectContaining({ rel: "icon", type: "image/x-icon", href: "/favicon.ico" }),
-        expect.objectContaining({
-          rel: "icon",
-          type: "image/png",
-          sizes: "48x48",
-          href: "/favicon-48x48.png",
-        }),
-        expect.objectContaining({
-          rel: "icon",
-          type: "image/png",
-          sizes: "32x32",
-          href: "/favicon-32x32.png",
-        }),
-        expect.objectContaining({
-          rel: "icon",
-          type: "image/png",
-          sizes: "16x16",
-          href: "/favicon-16x16.png",
-        }),
-        expect.objectContaining({ rel: "apple-touch-icon", href: "/apple-touch-icon.png" }),
-        expect.objectContaining({ rel: "manifest", href: "/site.webmanifest" }),
-      ]),
-    );
+    expect(links).toStrictEqual([
+      { rel: "stylesheet", href: "/__test__/styles.css" },
+      { rel: "icon", type: "image/svg+xml", href: "/logo-mark.svg" },
+      { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
+      { rel: "icon", type: "image/png", sizes: "48x48", href: "/favicon-48x48.png" },
+      { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png" },
+      { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png" },
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
+      { rel: "manifest", href: "/site.webmanifest" },
+    ]);
   });
 
   it("RouterProvider 経由で root document + landing が SSR される", async () => {
