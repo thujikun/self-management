@@ -1,0 +1,22 @@
+{
+  "name": "@self/og-image",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ryantsuji.dev の og:image を frontmatter から build-time 生成する (satori + resvg) — JP は Zenn 風、EN は brand 横長",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsgo",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "satori": "^0.12.2"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@typescript/native-preview": "catalog:"
+  }
+}

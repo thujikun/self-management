@@ -123,6 +123,61 @@ const addCommentServer = createServerFn()
   .inputValidator((data: unknown) => CommentInputSchema.parse(data))
   .handler(async ({ data, context }) => runAddComment(context.env, data));
 
+/**
+ * 本番公開 URL。外部 crawler は og:image / twitter:image / og:url を **絶対 URL** で
+ * 要求する (`__root.tsx` の SITE_URL と同値)。1 箇所にしか出てこないので二重定義の
+ * cost より変更点を 1 ファイルに閉じる方を取った (= ここで再定義)。
+ *
+ * @graph-connects none
+ */
+const SITE_URL = "https://ryantsuji.dev";
+
+/**
+ * 1 post 分の HTML <head> meta tag 列を組む。Route.head() から呼ばれ、og:title /
+ * og:description / og:image / twitter:* を per-post に上書きする (root の default は
+ * blog 全体向け meta なので、詳細 page は自前 meta で塗り直す)。
+ *
+ * cover が無い post (例: 旧 post で generator 未実行) は root の default
+ * og-image.png に fallback させるため `image` を null にして omit する。
+ *
+ * @graph-connects none
+ */
+/**
+ * Route.head() に渡す meta entry の型。TanStack Router は `{ title }` だけの entry も
+ * 受け付けるので、name/property を持つ通常の meta と union で表現する。
+ *
+ * @graph-connects none
+ */
+type HeadMeta = { title: string } | { name?: string; property?: string; content: string };
+
+/** @graph-connects none */
+export function buildPostMeta(input: {
+  slug: string;
+  title: string;
+  summary?: string;
+  cover?: string;
+  lang: Lang;
+}): HeadMeta[] {
+  const url = `${SITE_URL}/posts/${input.slug}${input.lang === "ja" ? "?lang=ja" : ""}`;
+  const description = input.summary ?? `${input.title} — ryantsuji.dev`;
+  const image = input.cover ? `${SITE_URL}${input.cover}` : null;
+
+  const meta: HeadMeta[] = [
+    { title: `${input.title} — ryantsuji.dev` },
+    { name: "description", content: description },
+    { property: "og:title", content: input.title },
+    { property: "og:description", content: description },
+    { property: "og:url", content: url },
+    { property: "og:type", content: "article" },
+  ];
+  if (image) {
+    meta.push({ property: "og:image", content: image });
+    meta.push({ name: "twitter:card", content: "summary_large_image" });
+    meta.push({ name: "twitter:image", content: image });
+  }
+  return meta;
+}
+
 /** @graph-connects tanstack-router [provides] /posts/$slug route */
 export const Route = createFileRoute("/posts/$slug")({
   validateSearch: SearchSchema,
@@ -139,6 +194,18 @@ export const Route = createFileRoute("/posts/$slug")({
       },
     });
     return { ...doc, engagement };
+  },
+  head: ({ loaderData, params }) => {
+    if (!loaderData) return {};
+    return {
+      meta: buildPostMeta({
+        slug: params.slug,
+        title: loaderData.frontmatter.title,
+        summary: loaderData.frontmatter.summary,
+        cover: loaderData.frontmatter.cover,
+        lang: loaderData.servedLang,
+      }),
+    };
   },
   component: PostDetail,
 });
