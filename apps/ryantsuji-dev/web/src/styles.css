@@ -1144,7 +1144,8 @@ main {
   }
 }
 
-/* mobile: pane を full-width bottom toolbar 風に */
+/* mobile: engagement section 内で sticky-bottom (section が viewport に入った時のみ底固定。
+   ページ全体に対する常時 fixed toolbar ではない) */
 @media (max-width: 959px) {
   .post-share-pane {
     flex-direction: row;

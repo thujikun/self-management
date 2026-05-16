@@ -54,7 +54,6 @@ describe("PostSharePane SSR", () => {
   it("認証済み + liked=false → like button + share buttons + RSS link", () => {
     const html = ssr(
       <PostSharePane
-        slug="hello"
         title="Hello"
         lang="en"
         postUrl="https://ryantsuji.dev/posts/hello"
@@ -72,13 +71,7 @@ describe("PostSharePane SSR", () => {
 
   it("liked=true → aria-pressed=true + ♥", () => {
     const html = ssr(
-      <PostSharePane
-        slug="x"
-        title="x"
-        lang="en"
-        postUrl="https://x"
-        likes={{ count: 1, liked: true }}
-      />,
+      <PostSharePane title="x" lang="en" postUrl="https://x" likes={{ count: 1, liked: true }} />,
     );
     expect(html).toMatch(/aria-pressed="true"/);
     expect(html).toMatch(/♥/);
@@ -86,23 +79,14 @@ describe("PostSharePane SSR", () => {
 
   it("likes=null + signInHref → sign-in Link fallback、like button は出さない", () => {
     const html = ssr(
-      <PostSharePane
-        slug="x"
-        title="x"
-        lang="en"
-        postUrl="https://x"
-        likes={null}
-        signInHref="/posts/x"
-      />,
+      <PostSharePane title="x" lang="en" postUrl="https://x" likes={null} signInHref="/posts/x" />,
     );
     expect(html).toMatch(/post-share-pane__btn--signin/);
     expect(html).not.toMatch(/post-share-pane__btn--like/);
   });
 
   it("likes=null + signInHref なし → like の代替も出さない (defensive)", () => {
-    const html = ssr(
-      <PostSharePane slug="x" title="x" lang="en" postUrl="https://x" likes={null} />,
-    );
+    const html = ssr(<PostSharePane title="x" lang="en" postUrl="https://x" likes={null} />);
     expect(html).not.toMatch(/post-share-pane__btn--like/);
     expect(html).not.toMatch(/post-share-pane__btn--signin/);
   });
@@ -110,7 +94,6 @@ describe("PostSharePane SSR", () => {
   it("lang=ja は RSS link が /rss/ja.xml に", () => {
     const html = ssr(
       <PostSharePane
-        slug="x"
         title="x"
         lang="ja"
         postUrl="https://x?lang=ja"

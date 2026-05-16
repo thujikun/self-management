@@ -10,12 +10,14 @@
  * - **Facebook share**: `https://www.facebook.com/sharer/sharer.php?u=...` で
  *   share dialog。
  *
- * mobile (<1024px) では sticky pane を出さず、bottom toolbar 風に full-width で
- * 出す ── CSS 側の `.post-share-pane` media query で切替。
+ * mobile (<960px) では `.engagement` セクション内で `position: sticky; bottom` に
+ * 切替え、コメント欄をスクロール中はその下辺に張り付く (= engagement section が
+ * viewport に入った時だけ底固定。ページ全体に対する常時 fixed toolbar ではない)。
+ * CSS 側の `.post-share-pane` media query で切替。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business 投稿詳細の share / like pane。左 sticky で常時表示、X / Facebook intent URL + RSS / like を集約。mobile では bottom 固定に。like は server fn 経由で auth-gate
+ * @graph-business 投稿詳細の share / like pane。左 sticky で常時表示、X / Facebook intent URL + RSS / like を集約。mobile では engagement section 内 sticky-bottom (= section が viewport に入った時だけ底固定)。like は server fn 経由で auth-gate
  * @graph-connects react [provides] sticky share + like pane
  */
 
@@ -23,7 +25,6 @@ import type { Lang } from "../server/i18n.js";
 
 /** @graph-connects none */
 export interface SharePaneInput {
-  slug: string;
   title: string;
   lang: Lang;
   /** post の絶対 URL (intent URL に乗せるための事前計算済 string)。 */
@@ -66,7 +67,6 @@ export function buildFacebookShareUrl(postUrl: string): string {
 
 /** @graph-connects react [provides] sticky share + like pane */
 export function PostSharePane({
-  slug,
   title,
   lang,
   postUrl,
@@ -144,7 +144,6 @@ export function PostSharePane({
         className="post-share-pane__btn post-share-pane__btn--rss"
         aria-label={`RSS feed (${lang.toUpperCase()})`}
         title={`RSS feed (${lang.toUpperCase()})`}
-        data-slug={slug}
       >
         <span className="post-share-pane__icon" aria-hidden="true">
           ⌁

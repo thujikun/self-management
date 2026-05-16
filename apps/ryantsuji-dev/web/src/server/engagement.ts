@@ -22,7 +22,11 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import { comments, likes, posts, viewCounts, type Db } from "@self/db";
 
-import { normalizeTimestamp, validateCommentBody } from "./engagement-validate.js";
+import {
+  normalizeTimestamp,
+  validateCommentBody,
+  validateReplyParent,
+} from "./engagement-validate.js";
 
 /**
  * `posts` row が無ければ insert、有れば title / publishedAt を最新化する upsert。
@@ -202,10 +206,12 @@ export async function listComments(db: Db, slug: string): Promise<CommentView[]>
  * 空 / 空白のみ body は reject (UI 側でも check するが server 側でも double-check)。
  *
  * `parentCommentId` を指定すると reply として登録される (1 階層のみ — UI 側で
- * thread に折り畳む)。親が同じ post slug に属することは DB 側で FK + slug filter
- * で担保される (本関数では post slug の追加 check はしない)。
+ * thread に折り畳む)。schema の FK は `comments(id)` のみで `post_slug` の一致や
+ * 階層深さは強制しないため、本関数で `(postSlug 一致 + 親も top-level)` を 1 SELECT
+ * で assert する: post 跨ぎ reply は `INVALID_PARENT_COMMENT`、reply の reply は
+ * `REPLY_DEPTH_EXCEEDED` を throw して silent な data 不整合を弾く。
  *
- * @graph-connects content [calls] comments INSERT
+ * @graph-connects content [calls] comments SELECT (親 row 検証) + INSERT
  */
 export async function addComment(
   db: Db,
@@ -219,6 +225,20 @@ export async function addComment(
   },
 ): Promise<CommentView> {
   const body = validateCommentBody(args.body);
+  if (args.parentCommentId) {
+    const parentRows = await db
+      .select({
+        postSlug: comments.postSlug,
+        parentCommentId: comments.parentCommentId,
+      })
+      .from(comments)
+      .where(eq(comments.id, args.parentCommentId))
+      .limit(1);
+    validateReplyParent({
+      parent: parentRows[0] ?? null,
+      expectedSlug: args.slug,
+    });
+  }
   const rows = await db
     .insert(comments)
     .values({
@@ -255,6 +275,11 @@ export async function addComment(
  * 認証 user が自分の comment を soft delete する。`deletedAt = now()` で row は残し、
  * `listComments` で除外される。authorId 不一致なら no-op (上位は 404 boundary に倒す
  * のではなく、後続 SELECT で消えてない事実から「権限なし」を察する設計)。
+ *
+ * **soft delete の子伝播**: cascade は `ON DELETE` (= hard delete) でのみ発火するため、
+ * 親に `deletedAt` を立てても子 row は残る。`buildCommentTree` 側は親不在 reply を
+ * top-level に昇格させて表示するので、UI 上は「親が消えて子は独立コメントになる」
+ * 挙動になる。意図的にこの形を採用 (子コメントの内容まで連動消去するのは過剰)。
  *
  * 戻り値は実際に削除した comment id (見つからず / 権限なしなら null)。
  *

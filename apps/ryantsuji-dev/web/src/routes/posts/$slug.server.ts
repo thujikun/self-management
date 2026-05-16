@@ -50,7 +50,6 @@ import {
  *
  * @graph-connects content [calls] renderMarkdown(source) で構造化 RenderedDoc に変換
  */
-/** @graph-connects content [calls] renderMarkdown(source) で構造化 RenderedDoc に変換 */
 export async function runRenderPost(
   slug: string,
   override: Lang | undefined,

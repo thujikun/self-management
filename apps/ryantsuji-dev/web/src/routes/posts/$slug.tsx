@@ -488,6 +488,9 @@ export function EngagementSection({
       const r = await deleteCommentFn({ data: commentId });
       if (r.deletedId) {
         setComments((prev) => prev.filter((c) => c.id !== r.deletedId));
+        // view count + 親 soft-delete に伴う orphan-promotion を最新化するため
+        // route loader を再走させる (post 経路の invalidate と同経路)。
+        router.invalidate();
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "delete failed");
@@ -500,7 +503,6 @@ export function EngagementSection({
   return (
     <section className="engagement" aria-label="engagement">
       <PostSharePane
-        slug={slug}
         title={title}
         lang={lang}
         postUrl={postUrl}

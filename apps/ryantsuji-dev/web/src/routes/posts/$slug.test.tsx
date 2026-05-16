@@ -892,6 +892,9 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
     await act(async () => deleteBtn.click());
     expect(mockDeleteComment).toHaveBeenCalled();
     expect(container.querySelector(".comments__item")).toBeNull();
+    // soft-delete に伴う orphan-promotion + view count の最新化のため router.invalidate
+    // が走る (post 経路の invalidate と同経路)
+    expect(mockInvalidate).toHaveBeenCalledTimes(1);
     await act(async () => root.unmount());
   });
 
@@ -918,6 +921,8 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
     await act(async () => deleteBtn.click());
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toBe("delete boom");
+    // catch path では invalidate しない (error 表示のみ)
+    expect(mockInvalidate).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 

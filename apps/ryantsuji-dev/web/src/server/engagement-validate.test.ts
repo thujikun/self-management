@@ -13,6 +13,7 @@ import {
   COMMENT_BODY_MAX,
   normalizeTimestamp,
   validateCommentBody,
+  validateReplyParent,
 } from "./engagement-validate.js";
 
 describe("validateCommentBody", () => {
@@ -55,5 +56,40 @@ describe("normalizeTimestamp", () => {
 
   it("undefined → 空文字", () => {
     expect(normalizeTimestamp(undefined)).toStrictEqual("");
+  });
+});
+
+describe("validateReplyParent", () => {
+  it("parent null (FK 解決不能) → INVALID_PARENT_COMMENT: not found", () => {
+    expect(() => validateReplyParent({ parent: null, expectedSlug: "a" })).toThrow(
+      /INVALID_PARENT_COMMENT: not found/,
+    );
+  });
+
+  it("post slug mismatch (post 跨ぎ reply) → INVALID_PARENT_COMMENT: post mismatch", () => {
+    expect(() =>
+      validateReplyParent({
+        parent: { postSlug: "other-post", parentCommentId: null },
+        expectedSlug: "this-post",
+      }),
+    ).toThrow(/INVALID_PARENT_COMMENT: post mismatch/);
+  });
+
+  it("親が既に reply (parentCommentId 非 null) → REPLY_DEPTH_EXCEEDED", () => {
+    expect(() =>
+      validateReplyParent({
+        parent: { postSlug: "p", parentCommentId: "some-parent-uuid" },
+        expectedSlug: "p",
+      }),
+    ).toThrow(/REPLY_DEPTH_EXCEEDED/);
+  });
+
+  it("親が top-level (parentCommentId=null) + slug 一致 → 通過 (void)", () => {
+    expect(
+      validateReplyParent({
+        parent: { postSlug: "p", parentCommentId: null },
+        expectedSlug: "p",
+      }),
+    ).toStrictEqual(undefined);
   });
 });
