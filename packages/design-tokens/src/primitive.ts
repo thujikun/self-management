@@ -40,25 +40,25 @@ export const gray = {
 } as const;
 
 /**
- * accent (warm brand) scale。
+ * accent (brand) scale — Tiffany blue (deep teal、`#0abab5` 起点)。
  *
- * 個人 brand を温かみのある orange-red 系に。chroma を控えめにして "声がデカくない"
- * 落ち着いた warmth を狙う (knife-edge ではなく blanket warmth)。
- * Phase 1 design discovery で hue / chroma を再調整する想定。
+ * 個人 brand color。ロゴ (`<rt>`) と統一の `#0abab5` (OKLCH 約 70% 0.13 188) を
+ * 500 step に置き、両側に等知覚距離で展開。chroma は中域 (400-600) を強めに、
+ * 端 (50-100, 800-900) は控えめにして UI 上の overuse 感を避ける。
  *
  * @graph-connects none
  */
 export const accent = {
-  50: "oklch(97% 0.015 50)",
-  100: "oklch(94% 0.03 50)",
-  200: "oklch(88% 0.06 50)",
-  300: "oklch(80% 0.1 50)",
-  400: "oklch(71% 0.14 50)",
-  500: "oklch(63% 0.16 50)",
-  600: "oklch(54% 0.16 50)",
-  700: "oklch(45% 0.14 50)",
-  800: "oklch(36% 0.11 50)",
-  900: "oklch(26% 0.07 50)",
+  50: "oklch(97% 0.015 188)",
+  100: "oklch(94% 0.03 188)",
+  200: "oklch(88% 0.06 188)",
+  300: "oklch(81% 0.1 188)",
+  400: "oklch(75% 0.12 188)",
+  500: "oklch(70% 0.13 188)", // ≒ #0abab5 (tiffany-deep)
+  600: "oklch(60% 0.13 188)",
+  700: "oklch(50% 0.12 188)",
+  800: "oklch(40% 0.09 188)",
+  900: "oklch(28% 0.06 188)",
 } as const;
 
 /**

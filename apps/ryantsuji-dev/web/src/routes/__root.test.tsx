@@ -14,10 +14,24 @@
 
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { renderToString } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { createRoot, type Root } from "react-dom/client";
+import { act } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getRouter } from "../router.js";
-import { Route } from "./__root.js";
+import {
+  Route,
+  computeNextTheme,
+  performSetLang,
+  performToggleTheme,
+  writeLangCookieDom,
+  writeThemeCookieDom,
+} from "./__root.js";
+
+vi.mock("./__root.server.js", () => ({
+  runResolveLang: vi.fn(() => ({ lang: "en", theme: null })),
+}));
+import { runResolveLang } from "./__root.server.js";
 
 describe("__root route", () => {
   it("head() に title / charset / viewport / theme-color / og meta を含む", async () => {
@@ -113,5 +127,303 @@ describe("__root route", () => {
     // landing copy: 「engineering / design / product」を主軸に
     expect(html).toContain("engineering / design / product");
     expect(html).toContain('href="/posts"');
+  });
+
+  describe("RootDocument の data-theme 分岐", () => {
+    const resolveLangMock = vi.mocked(runResolveLang);
+    beforeEach(() => {
+      resolveLangMock.mockReset();
+    });
+
+    async function ssrAt(initial: string): Promise<string> {
+      const router = getRouter({
+        history: createMemoryHistory({ initialEntries: [initial] }),
+      });
+      await router.load();
+      return renderToString(<RouterProvider router={router} />);
+    }
+
+    it("theme=null (cookie 未設定) は <html> に data-theme を出さない", async () => {
+      resolveLangMock.mockReturnValue({ lang: "en", theme: null });
+      const html = await ssrAt("/");
+      expect(html).not.toMatch(/<html[^>]+data-theme=/);
+    });
+
+    it('theme=dark は <html data-theme="dark"> を出す', async () => {
+      resolveLangMock.mockReturnValue({ lang: "en", theme: "dark" });
+      const html = await ssrAt("/");
+      expect(html).toMatch(/<html[^>]*data-theme="dark"/);
+    });
+
+    it('theme=light は <html data-theme="light"> を出す', async () => {
+      resolveLangMock.mockReturnValue({ lang: "en", theme: "light" });
+      const html = await ssrAt("/");
+      expect(html).toMatch(/<html[^>]*data-theme="light"/);
+    });
+  });
+
+  describe("LangSwitcher の active 状態", () => {
+    const resolveLangMock = vi.mocked(runResolveLang);
+    beforeEach(() => {
+      resolveLangMock.mockReset();
+    });
+
+    async function ssrAt(initial: string): Promise<string> {
+      const router = getRouter({
+        history: createMemoryHistory({ initialEntries: [initial] }),
+      });
+      await router.load();
+      return renderToString(<RouterProvider router={router} />);
+    }
+
+    it("lang=en の時 EN button が active", async () => {
+      resolveLangMock.mockReturnValue({ lang: "en", theme: null });
+      const html = await ssrAt("/");
+      expect(html).toMatch(/lang-switcher__btn lang-switcher__btn--active[^>]*>EN/);
+      expect(html).toMatch(/lang-switcher__btn[^"]*"[^>]*aria-pressed="false"[^>]*>JA/);
+    });
+
+    it("lang=ja の時 JA button が active", async () => {
+      resolveLangMock.mockReturnValue({ lang: "ja", theme: null });
+      const html = await ssrAt("/");
+      expect(html).toMatch(/lang-switcher__btn lang-switcher__btn--active[^>]*>JA/);
+    });
+  });
+
+  describe("ThemeSwitcher の aria-label / data-current 分岐", () => {
+    const resolveLangMock = vi.mocked(runResolveLang);
+    beforeEach(() => {
+      resolveLangMock.mockReset();
+    });
+
+    async function ssrAt(initial: string): Promise<string> {
+      const router = getRouter({
+        history: createMemoryHistory({ initialEntries: [initial] }),
+      });
+      await router.load();
+      return renderToString(<RouterProvider router={router} />);
+    }
+
+    it("current=null: aria-label='toggle theme' / data-current='auto'", async () => {
+      resolveLangMock.mockReturnValue({ lang: "en", theme: null });
+      const html = await ssrAt("/");
+      expect(html).toMatch(/aria-label="toggle theme"/);
+      expect(html).toMatch(/data-current="auto"/);
+    });
+
+    it("current=dark: aria-label='switch to light theme' / data-current='dark'", async () => {
+      resolveLangMock.mockReturnValue({ lang: "en", theme: "dark" });
+      const html = await ssrAt("/");
+      expect(html).toMatch(/aria-label="switch to light theme"/);
+      expect(html).toMatch(/data-current="dark"/);
+    });
+
+    it("current=light: aria-label='switch to dark theme' / data-current='light'", async () => {
+      resolveLangMock.mockReturnValue({ lang: "en", theme: "light" });
+      const html = await ssrAt("/");
+      expect(html).toMatch(/aria-label="switch to dark theme"/);
+      expect(html).toMatch(/data-current="light"/);
+    });
+  });
+
+  describe("computeNextTheme (pure)", () => {
+    it("explicit=dark → light", () => {
+      expect(computeNextTheme("dark", false)).toBe("light");
+    });
+    it("explicit=light → dark", () => {
+      expect(computeNextTheme("light", true)).toBe("dark");
+    });
+    it("explicit=null + prefersDark=true → light (system dark の逆)", () => {
+      expect(computeNextTheme(null, true)).toBe("light");
+    });
+    it("explicit=null + prefersDark=false → dark (system light の逆)", () => {
+      expect(computeNextTheme(null, false)).toBe("dark");
+    });
+  });
+
+  describe("writeLangCookieDom / writeThemeCookieDom (pure)", () => {
+    it("writeLangCookieDom は cookie に Path / Max-Age / SameSite を含む value をセットする", () => {
+      const doc = { cookie: "" };
+      writeLangCookieDom(doc, "ja");
+      expect(doc.cookie).toBe("ryantsuji_lang=ja; Path=/; Max-Age=31536000; SameSite=Lax");
+    });
+
+    it("writeThemeCookieDom は cookie に Path / Max-Age / SameSite を含む value をセットする", () => {
+      const doc = { cookie: "" };
+      writeThemeCookieDom(doc, "dark");
+      expect(doc.cookie).toBe("ryantsuji_theme=dark; Path=/; Max-Age=31536000; SameSite=Lax");
+    });
+  });
+
+  describe("performSetLang (pure)", () => {
+    it("docAvailable=false なら no-op (SSR early-return)", () => {
+      const doc = { cookie: "" };
+      const invalidate = vi.fn();
+      performSetLang({ docAvailable: false, doc, invalidate }, "ja");
+      expect(doc.cookie).toBe("");
+      expect(invalidate).not.toHaveBeenCalled();
+    });
+
+    it("docAvailable=true なら cookie 書き + invalidate", () => {
+      const doc = { cookie: "" };
+      const invalidate = vi.fn();
+      performSetLang({ docAvailable: true, doc, invalidate }, "ja");
+      expect(doc.cookie).toContain("ryantsuji_lang=ja");
+      expect(invalidate).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("LangSwitcher / ThemeSwitcher の click DOM interaction (createRoot)", () => {
+    const resolveLangMock = vi.mocked(runResolveLang);
+    let container: HTMLDivElement;
+    let root: Root;
+    let cookieJar = "";
+
+    beforeEach(() => {
+      resolveLangMock.mockReset();
+      resolveLangMock.mockReturnValue({ lang: "en", theme: null });
+      container = document.createElement("div");
+      document.body.appendChild(container);
+      cookieJar = "";
+      Object.defineProperty(document, "cookie", {
+        configurable: true,
+        get: () => cookieJar,
+        set: (v: string) => {
+          const first = v.split(";")[0];
+          if (first) cookieJar = cookieJar ? `${cookieJar}; ${first}` : first;
+        },
+      });
+      // matchMedia stub (happy-dom default は無し)
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        value: () => ({ matches: false }),
+      });
+    });
+
+    afterEach(() => {
+      act(() => root?.unmount());
+      container.remove();
+      Reflect.deleteProperty(document, "cookie");
+    });
+
+    async function mountRouter(initial: string) {
+      const router = getRouter({
+        history: createMemoryHistory({ initialEntries: [initial] }),
+      });
+      await router.load();
+      act(() => {
+        root = createRoot(container);
+        root.render(<RouterProvider router={router} />);
+      });
+    }
+
+    it("LangSwitcher の JA button click で cookie に ryantsuji_lang=ja", async () => {
+      await mountRouter("/");
+      const jaBtn = Array.from(container.querySelectorAll("button.lang-switcher__btn")).find(
+        (b) => b.textContent === "JA",
+      ) as HTMLButtonElement | undefined;
+      expect(jaBtn).toBeDefined();
+      act(() => {
+        jaBtn!.click();
+      });
+      expect(cookieJar).toContain("ryantsuji_lang=ja");
+    });
+
+    it("ThemeSwitcher の click で cookie に ryantsuji_theme が書かれる", async () => {
+      await mountRouter("/");
+      const themeBtn = container.querySelector("button.theme-switcher") as HTMLButtonElement | null;
+      expect(themeBtn).toBeTruthy();
+      act(() => {
+        themeBtn!.click();
+      });
+      expect(cookieJar).toMatch(/ryantsuji_theme=(dark|light)/);
+    });
+  });
+
+  describe("performToggleTheme (pure)", () => {
+    function makeHtmlEl(themeAttr: string | null) {
+      return {
+        getAttribute: (name: string) => (name === "data-theme" ? themeAttr : null),
+      };
+    }
+
+    it("docAvailable=false なら no-op", () => {
+      const doc = { cookie: "" };
+      const invalidate = vi.fn();
+      performToggleTheme({
+        docAvailable: false,
+        htmlEl: makeHtmlEl(null),
+        doc,
+        prefersDark: false,
+        invalidate,
+      });
+      expect(doc.cookie).toBe("");
+      expect(invalidate).not.toHaveBeenCalled();
+    });
+
+    it("explicit=dark → light に切替 + invalidate", () => {
+      const doc = { cookie: "" };
+      const invalidate = vi.fn();
+      performToggleTheme({
+        docAvailable: true,
+        htmlEl: makeHtmlEl("dark"),
+        doc,
+        prefersDark: false,
+        invalidate,
+      });
+      expect(doc.cookie).toContain("ryantsuji_theme=light");
+      expect(invalidate).toHaveBeenCalledOnce();
+    });
+
+    it("explicit=null + prefersDark=true → light", () => {
+      const doc = { cookie: "" };
+      performToggleTheme({
+        docAvailable: true,
+        htmlEl: makeHtmlEl(null),
+        doc,
+        prefersDark: true,
+        invalidate: () => {},
+      });
+      expect(doc.cookie).toContain("ryantsuji_theme=light");
+    });
+
+    it("explicit=null + prefersDark=false → dark", () => {
+      const doc = { cookie: "" };
+      performToggleTheme({
+        docAvailable: true,
+        htmlEl: makeHtmlEl(null),
+        doc,
+        prefersDark: false,
+        invalidate: () => {},
+      });
+      expect(doc.cookie).toContain("ryantsuji_theme=dark");
+    });
+  });
+
+  describe("SiteFooter の X handle 分岐", () => {
+    const resolveLangMock = vi.mocked(runResolveLang);
+    beforeEach(() => {
+      resolveLangMock.mockReset();
+    });
+
+    async function ssrAt(initial: string): Promise<string> {
+      const router = getRouter({
+        history: createMemoryHistory({ initialEntries: [initial] }),
+      });
+      await router.load();
+      return renderToString(<RouterProvider router={router} />);
+    }
+
+    it("lang=en は @ryantsuji を footer に出す", async () => {
+      resolveLangMock.mockReturnValue({ lang: "en", theme: null });
+      const html = await ssrAt("/");
+      expect(html).toMatch(/href="https:\/\/x\.com\/ryantsuji"/);
+    });
+
+    it("lang=ja は @RyanAircloset を footer に出す (JP 公式)", async () => {
+      resolveLangMock.mockReturnValue({ lang: "ja", theme: null });
+      const html = await ssrAt("/");
+      expect(html).toMatch(/href="https:\/\/x\.com\/RyanAircloset"/);
+    });
   });
 });

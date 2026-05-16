@@ -159,7 +159,8 @@ describe("/posts/$slug — detail (SSR)", () => {
     expect(html).toMatch(/<article class="post-body">/);
     expect(html).toMatch(/← all posts/);
     expect(html).toMatch(/\d+(?:<!--\s*-->)?\s*min read/);
-    expect(html).toMatch(/<aside class="post-detail__toc"/);
+    // TOC は PostToc component に切り出されて `post-toc` class を使う (desktop + mobile dialog)
+    expect(html).toMatch(/<aside class="post-toc post-toc--desktop"/);
     expect(html).toMatch(/<ul class="post-detail__tags">/);
   });
 
@@ -172,7 +173,7 @@ describe("/posts/$slug — detail (SSR)", () => {
 
     expect(html).toMatch(new RegExp(`<h1>${escapeRegexForHtmlBody(title)}</h1>`));
     expect(html).toMatch(/<article class="post-body">/);
-    expect(html).not.toMatch(/<aside class="post-detail__toc"/);
+    expect(html).not.toMatch(/<aside class="post-toc/);
     expect(html).not.toMatch(/<ul class="post-detail__tags">/);
   });
 
@@ -202,14 +203,18 @@ describe("/posts/$slug — engagement (SSR、未認証)", () => {
     mockLoadEngagement.mockReset();
   });
 
-  it("view count を post header の meta に表示", async () => {
+  it("view count は loader 経由で取得され DOM に乗らない (header から外した)", async () => {
+    // style refresh で view count は post header の表示から外した
+    // (engagement section の like カウントには残っている)。loader が viewCount を
+    // 返している事実は engagement の server fn test 側で担保する。
     mockLoadEngagement.mockResolvedValue({
       viewCount: "42",
       likes: { count: 7, liked: false },
       comments: [],
     });
     const html = await ssrAt("/posts/_minimal-fixture");
-    expect(html).toMatch(/<span class="post-detail__views">42(?:<!--\s*-->)?\s*views<\/span>/);
+    expect(html).not.toMatch(/post-detail__views/);
+    expect(html).toMatch(/<span class="like-button__count">7<\/span>/);
   });
 
   it("likes count + 未認証で disabled like button + sign-in CTA", async () => {

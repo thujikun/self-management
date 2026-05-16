@@ -58,22 +58,24 @@ describe("/posts — index", () => {
     expect(html).not.toMatch(/href="\/posts\/_draft-example"/);
   });
 
-  it("?lang=ja で override すると LangSwitcher の JP が active になる", async () => {
+  it("?lang=ja で override すると post の lang badge (JA) が served になる", async () => {
     const router = getRouter({
       history: createMemoryHistory({ initialEntries: ["/posts?lang=ja"] }),
     });
     await router.load();
     const html = renderToString(<RouterProvider router={router} />);
-    expect(html).toMatch(/lang-switcher__btn lang-switcher__btn--active[^>]*>JP/);
+    // 個別 post card の lang badge は override に従って JA served に。
+    // header の LangSwitcher は cookie 主体 (override は per-page) なので参照しない。
+    expect(html).toMatch(/post-card__lang post-card__lang--served[^>]*>JA/);
   });
 
-  it("?lang=en で override すると LangSwitcher の EN が active になる", async () => {
+  it("?lang=en で override すると post の lang badge (EN) が served になる", async () => {
     const router = getRouter({
       history: createMemoryHistory({ initialEntries: ["/posts?lang=en"] }),
     });
     await router.load();
     const html = renderToString(<RouterProvider router={router} />);
-    expect(html).toMatch(/lang-switcher__btn lang-switcher__btn--active[^>]*>EN/);
+    expect(html).toMatch(/post-card__lang post-card__lang--served[^>]*>EN/);
   });
 });
 

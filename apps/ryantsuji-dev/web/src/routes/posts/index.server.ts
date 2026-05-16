@@ -14,19 +14,36 @@
 
 import { pickLang, type Lang } from "../../server/i18n.js";
 import { listPosts, type PostListItem } from "../../server/posts.js";
-import { safeAcceptLanguage } from "../../server/request.server.js";
+import {
+  safeAcceptLanguage,
+  safeCookieLang,
+  writeLangCookie,
+} from "../../server/request.server.js";
 
 /**
- * /posts loader 本体。override (?lang= query) と Accept-Language から lang を決定し、
- * 当該 lang variant の post meta 一覧を返す。
+ * /posts loader 本体。priority: override (?lang=) > cookie > Accept-Language > en。
+ * override が指定された場合は cookie を上書きして次回 navigation 以降も維持する。
  *
- * @graph-connects content [calls] listPosts(lang)
+ * @graph-connects content [calls] listPosts(lang) で variant 解決済の一覧を取る
  */
-/** @graph-connects content [calls] listPosts(lang) で variant 解決済の一覧を取る */
-export function runListPosts(override: Lang | undefined): {
+export function runListPosts(
+  override: Lang | undefined,
+  tagFilter: string | undefined,
+): {
   lang: Lang;
   posts: PostListItem[];
+  tag: string | null;
 } {
-  const lang = pickLang(safeAcceptLanguage(), override);
-  return { lang, posts: listPosts(lang) };
+  const cookieLang = safeCookieLang();
+  const lang = pickLang({
+    override,
+    cookieLang,
+    acceptLanguage: safeAcceptLanguage(),
+  });
+  if (override && override !== cookieLang) {
+    writeLangCookie(lang);
+  }
+  const all = listPosts(lang);
+  const filtered = tagFilter ? all.filter((p) => p.tags.includes(tagFilter)) : all;
+  return { lang, posts: filtered, tag: tagFilter ?? null };
 }

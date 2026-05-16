@@ -6,9 +6,9 @@ slug: "meeting-intelligence"
 summary: "AI summaries aren't enough — context dies when a meeting ends. We pipe Google Meet recordings to Slack, transcribe everything, and make history queryable in natural language."
 tags:
   - "ai"
-  - "showdev"
-  - "architecture"
+  - "gcp"
   - "typescript"
+  - "webdev"
 lang: "en"
 syndication:
   zenn:
@@ -21,7 +21,7 @@ cover: /posts/meeting-intelligence.en.cover.png
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset — a fashion subscription service based in Japan.
 
-In previous posts, I wrote about building a [DB Graph MCP server](https://dev.to/ryosuke_tsuji_f08e20fdca1/democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5) that lets you query 991 database tables across 15 schemas with natural language, and a [suite of 17 MCP servers](https://dev.to/ryosuke_tsuji_f08e20fdca1/we-built-17-mcp-servers-to-let-ai-run-our-internal-operations-3lk2) that opened our internal operations to AI.
+In previous posts, I wrote about building a [DB Graph MCP server](/posts/db-graph-mcp) that lets you query 991 database tables across 15 schemas with natural language, and a [suite of 17 MCP servers](/posts/17-mcp-servers) that opened our internal operations to AI.
 
 This time, it's not about MCP. It's about something more fundamental — **turning meetings into a searchable knowledge base**. This is the system I've wanted to build first when thinking about digitizing our company's information assets.
 
@@ -778,7 +778,7 @@ Phase 2 is sent as a **thread reply** to Phase 1. The Phase 1 message's `ts` (ti
 
 All processing in this system is instrumented with **OpenTelemetry** and aggregated in **Grafana**. Meet Space creation, Pub/Sub event processing, Drive→GCS copy, embedding generation, Slack notifications — latency and error rates for each step are visible on a single dashboard.
 
-Through the Grafana MCP introduced in the [previous article](https://dev.to/ryosuke_tsuji_f08e20fdca1/we-built-17-mcp-servers-to-let-ai-run-our-internal-operations-3lk2), these logs and metrics are also accessible via MCP. Investigations like "Show me error logs from yesterday's Meet pipeline" can be done directly from Claude Code.
+Through the Grafana MCP introduced in the [previous article](/posts/17-mcp-servers), these logs and metrics are also accessible via MCP. Investigations like "Show me error logs from yesterday's Meet pipeline" can be done directly from Claude Code.
 
 For Gemini API costs, we track actual usage and costs via **Prometheus**. Token consumption for transcription and screen share analysis is visualized in real-time, so cost anomalies are caught immediately.
 
@@ -788,7 +788,7 @@ The system described so far is about "sharing and searching meeting recordings a
 
 ### Project-Level Meeting Data Integration
 
-At airCloset, Slack channels are created per project. The mapping between channels and projects is managed in Firestore, and through our Project Management MCP (described in the [previous article](https://dev.to/ryosuke_tsuji_f08e20fdca1/we-built-17-mcp-servers-to-let-ai-run-our-internal-operations-3lk2)), **meeting data linked to a project is searchable via MCP**.
+At airCloset, Slack channels are created per project. The mapping between channels and projects is managed in Firestore, and through our Project Management MCP (described in the [previous article](/posts/17-mcp-servers)), **meeting data linked to a project is searchable via MCP**.
 
 For example, "Tell me what was discussed about this spec in Project X's past meetings" searches all meeting transcripts from that project's Slack channel and returns relevant excerpts.
 

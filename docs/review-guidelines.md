@@ -19,6 +19,7 @@ cortex の [docs/review-guidelines.md](https://github.com/) と同じ構造を *
 | Product Graph | [guidelines/graph-integrity.md](./guidelines/graph-integrity.md) | `@graph-*` タグ、STACKS/DOMAINS、ドキュメント整合性 |
 | セキュリティ | [guidelines/security.md](./guidelines/security.md) | secret 管理、SA 最小権限、外部 API token |
 | テスト・品質 | [guidelines/testing.md](./guidelines/testing.md) | 90% per-file coverage、AAA、弱い matcher 禁止、flaky 禁止 |
+| スタイリング | [guidelines/styling.md](./guidelines/styling.md) | UI CSS / Tailwind 4 / `@self/design-tokens` semantic token 必須、magic number 禁止 |
 | ドキュメント | [guidelines/document-writing.md](./guidelines/document-writing.md) | 情報の置き場所優先順、何を書く/書かない |
 | 影響範囲 | [guidelines/impact-analysis.md](./guidelines/impact-analysis.md) | ryan-graph traverse + semantic で修正漏れ検出 |
 | 重要度分類 | [guidelines/severity.md](./guidelines/severity.md) | Critical / Major / Minor / Nit の判定 |
@@ -86,6 +87,15 @@ cortex の [docs/review-guidelines.md](https://github.com/) と同じ構造を *
 - flaky を retry / quarantine で隠していないか (root cause を直す)。
 
 詳細は [guidelines/testing.md](./guidelines/testing.md)。
+
+### スタイリング (design-tokens 必須)
+
+- UI CSS / Tailwind utility / inline style に literal magic number (`16px`, `#0abab5`, `44rem` 等) が直書きされていないか。
+- color / spacing / radius / blur / font / motion / layout container / breakpoint / overlay の 9 カテゴリで `@self/design-tokens` semantic var (または `@theme` で bridge した Tailwind utility) を経由しているか。
+- 既存 token に該当値が無い時は、`@theme` block か `packages/design-tokens/src/{primitive,semantic}.ts` に **先に追加** してから採用しているか。
+- 例外 (viewport units / 装飾固有の構造 literal) は **コメントで理由明示** されているか。
+
+詳細は [guidelines/styling.md](./guidelines/styling.md)。
 
 ### ドキュメント整合性
 

@@ -109,15 +109,20 @@ export const light: SemanticTokens = {
 };
 
 /**
- * dark theme semantic mapping。primitive を反転 + chroma 控えめに調整。
+ * dark theme semantic mapping。primitive を反転 + brand 色温度 (teal 188) を弱く乗せる。
+ *
+ * 純黒 (`gray[900]` = oklch(14% 0 0)) は背景に重みがありすぎて glass morphism の
+ * 半透明 layer が映えないため、bg base / surface / elevated に **brand chroma 0.01-0.02
+ * のみ**乗せ、ガラス越しに見える色温度を統一する。accessibility 上の contrast は
+ * 元の gray scale と同等を維持。
  *
  * @graph-connects none
  */
 export const dark: SemanticTokens = {
   bg: {
-    base: gray[900],
-    surface: gray[800],
-    elevated: gray[700],
+    base: "oklch(17% 0.018 188)", // 純黒回避、極弱 teal tint
+    surface: "oklch(22% 0.014 188)",
+    elevated: "oklch(28% 0.01 188)",
   },
   text: {
     primary: gray[50],
@@ -126,8 +131,8 @@ export const dark: SemanticTokens = {
     accent: accent[300],
   },
   border: {
-    subtle: gray[800],
-    default: gray[700],
+    subtle: "oklch(22% 0.014 188)",
+    default: "oklch(30% 0.012 188)",
     strong: gray[500],
   },
   accent: {
@@ -135,9 +140,9 @@ export const dark: SemanticTokens = {
     fg: gray[900],
     border: accent[400],
   },
-  // dark: 暗い surface 上での frost。highlight border を白系低 alpha でわずかにエッジ立たせる。
+  // dark: 半透明な brand tint + 白系低 alpha highlight。
   glass: {
-    bg: "oklch(20% 0 0 / 0.55)",
+    bg: "oklch(24% 0.02 188 / 0.55)",
     border: "oklch(100% 0 0 / 0.08)",
     blur: blur.lg,
   },

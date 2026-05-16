@@ -1,6 +1,60 @@
-/* @self/design-tokens の CSS variables を root に流す。light / dark の semantic
-   切替もここで吸収される。 */
+/* Tailwind 4 (utility-first toolkit) + @self/design-tokens (semantic CSS variables)
+   の 2 段構成。Tailwind utility は `@theme` で design-tokens の var に橋渡しする
+   (= `bg-accent` → `background-color: var(--accent-bg)`)。semantic class
+   (`.post-card` etc.) は引き続き存在し、内部実装は `@apply` で Tailwind utility を
+   合成する形に置き換えていく。 */
+@import "tailwindcss";
 @import "@self/design-tokens/css";
+
+@theme {
+  /* color: design-tokens の semantic variable を Tailwind の `bg-*` / `text-*` /
+     `border-*` utility に expose する。primitive (`accent-500` 等) も namespaced
+     で公開しておく (future-proof)。 */
+  --color-accent: var(--accent-bg);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-border: var(--accent-border);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-accent: var(--text-accent);
+  --color-bg-base: var(--bg-base);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-strong: var(--border-strong);
+  --color-glass-bg: var(--glass-bg);
+  --color-glass-border: var(--glass-border);
+
+  /* spacing / radius / blur: design-tokens の rem / px 値を Tailwind 標準 key と
+     一致するよう mapping。`p-6` = 1.5rem 等が design-tokens と同期する。 */
+  --spacing-1: var(--space-1);
+  --spacing-2: var(--space-2);
+  --spacing-3: var(--space-3);
+  --spacing-4: var(--space-4);
+  --spacing-6: var(--space-6);
+  --spacing-8: var(--space-8);
+  --spacing-12: var(--space-12);
+  --spacing-16: var(--space-16);
+  --spacing-24: var(--space-24);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+
+  --blur-sm: var(--blur-sm);
+  --blur-md: var(--blur-md);
+  --blur-lg: var(--blur-lg);
+
+  /* layout containers: main 本文 / TOC sidebar の固有幅 + floating breakpoint。
+     UI コンポーネントで 44rem / 16rem の magic 値を直書きしないために集約。 */
+  --container-content: 44rem;
+  --container-toc: 16rem;
+  --breakpoint-toc-float: 80rem; /* ≥1280px で floating TOC sidebar に切替 */
+
+  /* overlay 用の半透明 BG (lightbox / dialog backdrop)。light/dark 共通の overlay。 */
+  --color-overlay: oklch(0% 0 0 / 0.7);
+}
 
 :root {
   color-scheme: light dark;
@@ -11,10 +65,63 @@
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* dark でも完全な黒にせず、わずかに brand teal の温度を乗せた deep surface に
+     する (semantic.dark.bg.base 参照)。 */
+}
+
+/* `body` 直下に大きな ambient blob を 2 個 fixed 配置し、ガラスパネル越しに
+   ボヤッと滲む brand-tinted glow を作る。`pointer-events: none` で UI を邪魔せず、
+   `prefers-reduced-motion` 時も静止して問題ない (= アニメ無し)。 */
+html {
+  /* fixed-position の blob (body::before/::after) や `right: -Nvmax` で viewport を
+     超える装飾要素が mobile で横スクロールを引き起こすのを防ぐ。`clip` は
+     `hidden` と違って scroll position も生成しないので、装飾の overflow に
+     最適。 */
+  overflow-x: clip;
 }
 
 body {
   margin: 0;
+  min-height: 100vh;
+  background: var(--bg-base);
+  position: relative;
+  overflow-x: clip;
+  max-width: 100vw;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.5;
+}
+
+body::before {
+  width: 60vmax;
+  height: 60vmax;
+  top: -20vmax;
+  left: -20vmax;
+  background: radial-gradient(closest-side, var(--accent-bg), transparent 70%);
+}
+
+body::after {
+  width: 50vmax;
+  height: 50vmax;
+  bottom: -15vmax;
+  right: -15vmax;
+  background: radial-gradient(closest-side, var(--accent-border), transparent 70%);
+  opacity: 0.35;
+}
+
+/* UI 層はすべて blob より上に。 */
+main,
+.site-footer {
+  position: relative;
+  z-index: 1;
 }
 
 a {
@@ -28,7 +135,7 @@ a:hover {
 }
 
 main {
-  max-width: 44rem;
+  max-width: var(--container-content);
   margin: 0 auto;
   padding: var(--space-12) var(--space-6);
 }
@@ -36,25 +143,93 @@ main {
 /* ─── landing (`/`) ─────────────────────────── */
 
 .landing {
-  max-width: 36rem;
-  margin: var(--space-24) auto;
+  @apply mx-auto flex max-w-content flex-col gap-12;
+  padding-top: var(--space-16);
+  padding-bottom: var(--space-24);
 }
 
-.landing h1 {
+.landing__hero {
+  @apply flex flex-col items-center gap-3 text-center;
+}
+
+.landing__logo {
+  width: clamp(180px, 36vw, 320px);
+  height: auto;
+  filter: drop-shadow(0 6px 32px color-mix(in oklch, var(--accent-bg) 35%, transparent));
+}
+
+.landing__tagline {
+  margin: 0;
   font-family: var(--font-family-serif);
-  font-size: var(--font-size-3xl);
-  letter-spacing: -0.02em;
-  line-height: var(--line-height-tight);
-  margin: 0 0 var(--space-2);
-}
-
-.landing p {
-  margin: var(--space-1) 0;
+  font-size: var(--font-size-lg);
   color: var(--text-secondary);
+  letter-spacing: 0.04em;
 }
 
-.landing .meta {
-  margin-top: var(--space-8);
+.landing__bio {
+  margin: 0;
+  max-width: 36rem;
+  color: var(--text-secondary);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-relaxed);
+}
+
+.landing__cta {
+  @apply mt-2 flex justify-center;
+}
+
+.landing__cta-button {
+  @apply inline-block rounded-full border border-accent-border bg-accent px-6 py-2 font-medium text-accent-fg no-underline transition-colors;
+}
+
+.landing__cta-button:hover {
+  filter: brightness(1.08);
+  color: var(--accent-fg);
+}
+
+/* ─── landing latest section ─── */
+
+.landing__latest {
+  @apply mt-8;
+}
+
+.landing__latest-heading {
+  @apply m-0 mb-4 text-xs tracking-widest uppercase text-text-muted;
+  font-family: var(--font-family-sans);
+  font-weight: var(--font-weight-medium);
+}
+
+.landing__latest-list {
+  @apply m-0 flex list-none flex-col gap-2 p-0;
+}
+
+.landing__latest-item {
+  @apply block;
+}
+
+.landing__latest-link {
+  @apply flex items-baseline gap-4 rounded-md border border-glass-border bg-glass-bg px-4 py-3 no-underline backdrop-blur-md transition-colors;
+  color: var(--text-primary);
+}
+
+.landing__latest-link:hover {
+  border-color: var(--accent-border);
+  color: var(--accent-bg);
+}
+
+.landing__latest-date {
+  @apply shrink-0 font-mono text-xs tracking-wide text-text-muted;
+}
+
+.landing__latest-title {
+  font-family: var(--font-family-serif);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-snug);
+}
+
+.landing__meta {
+  margin: var(--space-8) 0 0;
+  text-align: center;
   font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
@@ -83,21 +258,25 @@ main {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-6);
 }
 
 .post-card {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
-  background: var(--bg-surface);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   transition:
     border-color var(--duration-fast) var(--easing-out),
-    background var(--duration-fast) var(--easing-out);
+    background var(--duration-fast) var(--easing-out),
+    transform var(--duration-fast) var(--easing-out);
 }
 
 .post-card:hover {
-  border-color: var(--border-default);
+  border-color: var(--accent-border);
   background: var(--bg-elevated);
+  transform: translateY(-1px);
 }
 
 .post-card__link {
@@ -128,18 +307,22 @@ main {
   line-height: var(--line-height-snug);
 }
 
+/* tag chip 群は card 全体 Link の外に置かれているので、card padding と揃える形で
+   独自に padding を入れる (link area と視覚的に同じ inset)。 */
 .post-card__tags {
-  list-style: none;
-  padding: 0;
-  margin: var(--space-3) 0 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  @apply m-0 flex list-none flex-wrap gap-2 px-6 pt-3 pb-6;
 }
 
 .post-card__tag {
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
+  @apply block;
+}
+
+.post-card__tag a {
+  @apply inline-block rounded-full border border-border-subtle bg-accent/10 px-2 py-0.5 text-xs font-medium tracking-wide text-text-muted no-underline transition-colors;
+}
+
+.post-card__tag a:hover {
+  @apply border-accent-border bg-accent/20 text-text-primary;
 }
 
 /* ─── post detail (`/posts/$slug`) ──────────── */
@@ -155,7 +338,7 @@ main {
 
 .post-detail__header h1 {
   font-family: var(--font-family-serif);
-  font-size: var(--font-size-3xl);
+  font-size: var(--font-size-2xl);
   line-height: var(--line-height-tight);
   letter-spacing: -0.02em;
   margin: 0 0 var(--space-3);
@@ -183,38 +366,115 @@ main {
   gap: var(--space-2);
 }
 
-.post-detail__toc {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: var(--space-4) var(--space-6);
-  background: var(--bg-surface);
-  margin: 0 0 var(--space-12);
-  font-size: var(--font-size-sm);
+/* ─── PostToc (Zenn 風 floating TOC) ─── */
+
+/* 共通 list / link / heading スタイル */
+.post-toc__heading {
+  @apply m-0 mb-3 text-xs uppercase tracking-widest text-text-muted;
+  font-weight: var(--font-weight-medium);
 }
 
-.post-detail__toc h2 {
-  margin: 0 0 var(--space-2);
+.post-toc__list {
+  @apply m-0 flex list-none flex-col gap-2 p-0;
   font-size: var(--font-size-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
 }
 
-.post-detail__toc ol {
-  list-style: none;
+.post-toc__item {
+  @apply leading-snug;
+}
+
+.post-toc__item[data-level="3"] {
+  @apply ml-4 border-l border-border-subtle pl-3;
+}
+
+.post-toc__link {
+  @apply text-text-secondary no-underline transition-colors;
+}
+
+.post-toc__link:hover {
+  color: var(--accent-bg);
+}
+
+/* desktop sticky aside (≥ --breakpoint-toc-float、現状 80rem = 1280px) ─ main
+   右側に張り付く。max-w-content の main を中央配置したまま、空いてる右領域に
+   floating で乗せる。`right` は viewport 幅から content + TOC の合計を引いた
+   余白を取る形で、画面幅が広がっても TOC が遠くに飛ばない。 */
+.post-toc--desktop {
+  display: none;
+}
+
+@media (min-width: 80rem) {
+  .post-toc--desktop {
+    display: block;
+    position: fixed;
+    top: calc(var(--space-16) + var(--space-4));
+    right: max(
+      var(--space-6),
+      calc((100vw - var(--container-content)) / 2 - var(--container-toc) - var(--space-6))
+    );
+    width: var(--container-toc);
+    max-height: calc(100vh - var(--space-24));
+    overflow-y: auto;
+    padding: var(--space-4) var(--space-6);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    z-index: 5;
+  }
+}
+
+/* mobile floating button (右下) */
+.post-toc__mobile-trigger {
+  @apply fixed bottom-4 right-4 z-20 inline-flex h-12 w-12 items-center justify-center rounded-full border border-glass-border bg-glass-bg text-text-primary backdrop-blur-md;
+  appearance: none;
+  cursor: pointer;
   padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  box-shadow: 0 4px 16px color-mix(in oklch, var(--accent-bg) 25%, transparent);
 }
 
-.post-detail__toc li[data-level="3"] {
-  padding-left: var(--space-4);
+.post-toc__mobile-trigger:hover {
+  background: var(--bg-elevated);
 }
 
-.post-detail__toc a {
-  color: var(--text-secondary);
+@media (min-width: 80rem) {
+  /* desktop は sticky aside 出してるので mobile button 非表示 */
+  .post-toc__mobile-trigger {
+    display: none;
+  }
+}
+
+/* mobile dialog (中央 modal) */
+.post-toc__dialog {
+  margin: auto;
+  border: none;
+  padding: 0;
+  background: transparent;
+  max-width: 90vw;
+  max-height: 80vh;
+  color: var(--text-primary);
+}
+
+.post-toc__dialog::backdrop {
+  background: oklch(0% 0 0 / 0.6);
+  backdrop-filter: blur(6px);
+}
+
+.post-toc__dialog-panel {
+  @apply max-h-[80vh] w-[min(90vw,24rem)] overflow-y-auto rounded-lg border border-glass-border bg-bg-surface p-6 backdrop-blur-md;
+}
+
+.post-toc__dialog-head {
+  @apply mb-4 flex items-center justify-between;
+}
+
+.post-toc__dialog-close {
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-full border border-glass-border bg-glass-bg text-xl text-text-primary;
+  appearance: none;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
 }
 
 /* ─── markdown body ─────────────────────────── */
@@ -243,6 +503,18 @@ main {
 
 .post-body p {
   margin: 0 0 var(--space-4);
+}
+
+/* dev.to / Zenn import 由来の img は width/height 属性が大きいまま埋め込まれる。
+   コンテナ幅で cap して上下中央配置、border-radius と faint border で他の glass
+   surface と馴染ませる。 */
+.post-body img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: var(--space-6) auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
 }
 
 .post-body code {
@@ -605,7 +877,7 @@ main {
 /* ─── /privacy, /terms (legal pages) ─── */
 
 .legal {
-  max-width: 44rem;
+  max-width: var(--container-content);
   margin: 0 auto;
   padding: var(--space-12) var(--space-6);
 }
@@ -663,7 +935,7 @@ main {
 /* ─── site footer (全 page 共通) ─── */
 
 .site-footer {
-  max-width: 44rem;
+  max-width: var(--container-content);
   margin: var(--space-12) auto var(--space-8);
   padding: var(--space-6);
   display: flex;
@@ -680,4 +952,253 @@ main {
 
 .site-footer a:hover {
   color: var(--text-secondary);
+}
+
+/* ─── lang switcher (一覧 / 詳細 / posts header 共通) ─── */
+
+.lang-switcher {
+  display: inline-flex;
+  gap: var(--space-1);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  padding: var(--space-1);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+/* `<button>` default の OS silver bezel を消し、`<a>` と統一の transparent pill に。 */
+.lang-switcher__btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: var(--space-1) var(--space-3);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+  border-radius: var(--radius-full);
+  text-decoration: none;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  transition:
+    color var(--duration-fast) var(--easing-out),
+    background var(--duration-fast) var(--easing-out);
+}
+
+.lang-switcher__btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.lang-switcher__btn--active,
+.lang-switcher__btn--active:hover {
+  background: var(--accent-bg);
+  color: var(--accent-fg);
+}
+
+/* ─── post card lang badge ─── */
+
+.post-card__langs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.post-card__lang {
+  font-size: 0.625rem;
+  font-weight: var(--font-weight-medium);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  line-height: 1.6;
+}
+
+.post-card__lang--served {
+  border-color: var(--accent-border);
+  color: var(--accent-bg);
+  background: color-mix(in oklch, var(--accent-bg) 8%, transparent);
+}
+
+.post-card__fallback-note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ─── site header (全 page 共通) ─── */
+
+.site-header {
+  position: sticky;
+  top: var(--space-3);
+  z-index: 10;
+  max-width: var(--container-content);
+  margin: var(--space-3) auto 0;
+  padding: var(--space-2) var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+.site-header__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-decoration: none;
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  letter-spacing: -0.01em;
+}
+
+.site-header__logo {
+  display: block;
+}
+
+.site-header__brand-text {
+  /* mobile では文字を畳む (logo だけ) */
+  display: none;
+}
+
+@media (min-width: 480px) {
+  .site-header__brand-text {
+    display: inline;
+  }
+}
+
+.site-header__nav {
+  display: inline-flex;
+  gap: var(--space-3);
+}
+
+.site-header__link {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  text-decoration: none;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  transition: color var(--duration-fast) var(--easing-out);
+}
+
+.site-header__link:hover {
+  color: var(--text-primary);
+}
+
+.site-header__link--active,
+.site-header__link--active .site-header__link {
+  color: var(--accent-bg);
+}
+
+/* ─── header preferences (lang + theme switcher を束ねる) ─── */
+
+.site-header__prefs {
+  @apply inline-flex items-center gap-2;
+}
+
+/* ─── theme switcher (sun ⇄ moon) ─── */
+
+.theme-switcher {
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-full border border-glass-border bg-glass-bg text-text-secondary backdrop-blur-md transition-colors;
+  appearance: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.theme-switcher:hover {
+  @apply bg-bg-elevated text-text-primary;
+}
+
+.theme-switcher__icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* default (light): moon を出して「click で dark へ」と示す */
+.theme-switcher__icon--sun {
+  display: none;
+}
+.theme-switcher__icon--moon {
+  display: block;
+}
+
+/* system が dark + cookie が light で上書きされてない → 実 render は dark → sun を見せる */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-switcher__icon--sun {
+    display: block;
+  }
+  :root:not([data-theme="light"]) .theme-switcher__icon--moon {
+    display: none;
+  }
+}
+
+/* explicit dark cookie → sun */
+:root[data-theme="dark"] .theme-switcher__icon--sun {
+  display: block;
+}
+:root[data-theme="dark"] .theme-switcher__icon--moon {
+  display: none;
+}
+
+/* explicit light cookie (system dark でも light を強制) → moon */
+:root[data-theme="light"] .theme-switcher__icon--sun {
+  display: none;
+}
+:root[data-theme="light"] .theme-switcher__icon--moon {
+  display: block;
+}
+
+/* ─── post body image (lightbox 対応) ─── */
+
+.post-body img {
+  cursor: zoom-in;
+}
+
+/* ─── lightbox overlay (native <dialog>) ─── */
+
+.lightbox {
+  border: none;
+  padding: 0;
+  background: transparent;
+  max-width: 95vw;
+  max-height: 95vh;
+  color: var(--text-primary);
+}
+
+.lightbox::backdrop {
+  background: oklch(0% 0 0 / 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.lightbox__img {
+  display: block;
+  max-width: 95vw;
+  max-height: 95vh;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: var(--bg-base);
+}
+
+.lightbox__close {
+  @apply absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-glass-border bg-glass-bg text-xl text-text-primary backdrop-blur-md;
+  appearance: none;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.lightbox__close:hover {
+  background: var(--bg-elevated);
 }

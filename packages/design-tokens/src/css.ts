@@ -55,7 +55,12 @@ export function semanticToVars(tokens: SemanticTokens): string[] {
  *
  * 構成:
  * - `:root` block: 全 primitive + light semantic
- * - `@media (prefers-color-scheme: dark)`: dark semantic で上書き
+ * - `@media (prefers-color-scheme: dark) :root`: cookie 無し時の system default (dark)
+ * - `:root[data-theme="dark"]`: cookie で dark を明示 (system が light でも dark を強制)
+ * - `:root[data-theme="light"]`: cookie で light を明示 (system が dark でも light を強制)
+ *
+ * `[data-theme]` 付きの :root selector は specificity (0,1,1) が `:root` (0,0,1) より
+ * 高いので、cookie 上書きが system preference より優先される。
  *
  * @graph-connects none
  */
@@ -87,15 +92,25 @@ export function buildCss(): string {
     ":root {",
     ...primitives,
     "",
-    "  /* light theme semantic */",
+    "  /* light theme semantic (default) */",
     ...lightSemantic,
     "}",
     "",
+    "/* system prefers dark — cookie 未設定時の自然な default */",
     "@media (prefers-color-scheme: dark) {",
     "  :root {",
-    "    /* dark theme semantic (primitive は引き継ぎ) */",
     ...darkSemantic.map((line) => `  ${line}`),
     "  }",
+    "}",
+    "",
+    "/* explicit cookie override: dark (system が light でも適用) */",
+    `:root[data-theme="dark"] {`,
+    ...darkSemantic,
+    "}",
+    "",
+    "/* explicit cookie override: light (system が dark でも適用) */",
+    `:root[data-theme="light"] {`,
+    ...lightSemantic,
     "}",
     "",
   ].join("\n");
