@@ -34,14 +34,14 @@ import { unified } from "unified";
 // `import { getSingletonHighlighter } from "shiki"` を使うと vite が全 200+ 言語の
 // grammar を dynamic import 候補として bundle に含めてしまい、Cloudflare Workers の
 // 3 MiB gzip 上限を超過する (emacs-lisp 単独で 761 KiB を占有していた)。静的 import
-// に切替えることで **本サイトで実使用する 18 言語** だけが bundle に含まれる構造に
-// なる。
+// に切替えることで **本サイトで実使用する 17 grammars** だけが bundle に含まれる構造
+// になる (`shellscript` 1 grammar が `bash` / `sh` / `shell` / `zsh` の 4 alias を
+// shiki 側 metadata で兼ねるため、grammar 数 17・対応 fence 21)。
 //
 // 新言語を post で使い始めたら、ここに 1 行追加するだけで OK。逆に削れば bundle が
 // 縮む — 言語追加 / 削除が bundle size に 1:1 で効く透明な構造。
 import githubDark from "shiki/themes/github-dark.mjs";
 import githubLight from "shiki/themes/github-light.mjs";
-import langBash from "shiki/langs/bash.mjs";
 import langCss from "shiki/langs/css.mjs";
 import langDiff from "shiki/langs/diff.mjs";
 import langGo from "shiki/langs/go.mjs";
@@ -93,6 +93,17 @@ const SHIKI_OPTIONS = {
 } as const;
 
 /**
+ * highlighter の **promise** を cache する singleton。値そのものではなく promise を
+ * 保持するのは、worker isolate で 2 つの `renderMarkdown` が並行して初回呼び出しに
+ * 入ったときに `createHighlighterCore` を 2 回走らせないため。先に await を挟むと
+ * 両方が `null` を観測して二重 init が起きる (= 17 grammars + JS regex engine の
+ * compile が 2 回走り、本 PR の cold start 改善目的と逆向き)。
+ *
+ * @graph-connects none
+ */
+let _highlighterPromise: Promise<HighlighterCore> | null = null;
+
+/**
  * fine-grained bundle で静的 import した theme / lang を core highlighter に渡す。
  * 同 module 内で 1 度だけ作って singleton 化、renderMarkdown 呼び出し毎の cold start
  * を避ける。
@@ -102,14 +113,10 @@ const SHIKI_OPTIONS = {
  *
  * @graph-connects shiki [calls] createHighlighterCore で静的 import 済 theme/lang を highlighter 化
  */
-let _highlighter: HighlighterCore | null = null;
-/** @graph-connects none */
-async function getShikiHighlighter(): Promise<HighlighterCore> {
-  if (_highlighter) return _highlighter;
-  _highlighter = await createHighlighterCore({
+function getShikiHighlighter(): Promise<HighlighterCore> {
+  _highlighterPromise ??= createHighlighterCore({
     themes: [githubLight, githubDark],
     langs: [
-      langBash,
       langCss,
       langDiff,
       langGo,
@@ -130,7 +137,7 @@ async function getShikiHighlighter(): Promise<HighlighterCore> {
     ],
     engine: createJavaScriptRegexEngine(),
   });
-  return _highlighter;
+  return _highlighterPromise;
 }
 
 /**
