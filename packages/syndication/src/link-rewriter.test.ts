@@ -61,4 +61,15 @@ describe("rewriteInternalLinks", () => {
     const input = "![alt](/images/foo.png)";
     expect(rewriteInternalLinks(input, resolver)).toBe(input);
   });
+
+  it("大文字混じり slug (本 repo の slug 規約違反) は regex に match させず原文維持", () => {
+    // 規約上 slug は `[_a-z0-9][_a-z0-9-]*` のみ。`/posts/Foo` のような大文字混じりを
+    // regex で拾うと resolver が null を返し「未配信」扱いされ、本当の未配信 link と
+    // 区別が付かなくなるため、regex 段で素通しさせる。
+    const input = "[bad](/posts/Foo) と [ok](/posts/db-graph-mcp)";
+    const out = rewriteInternalLinks(input, resolver);
+    expect(out).toBe(
+      "[bad](/posts/Foo) と [ok](https://zenn.dev/aircloset/articles/2731787582881a)",
+    );
+  });
 });

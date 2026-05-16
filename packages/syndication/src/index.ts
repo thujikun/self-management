@@ -1,7 +1,9 @@
 /**
  * `@self/syndication` — ryantsuji.dev の markdown source を Zenn / dev.to 向けに
- * 変換する pure pipeline。Phase 1 では transform 関数群と pipeline composer のみ。
- * 実際の publish (dev.to API PUT / Zenn GitHub repo push) は別 PR の CLI 層で実装。
+ * 変換する pure pipeline。Phase 1 ではまず link rewriter のみ。footer append /
+ * frontmatter builder / Zenn 独自記法 transformer / pipeline composer / CLI driver は
+ * 後続 commit で順次追加する。実際の publish (dev.to API PUT / Zenn GitHub repo
+ * push) は別 PR の CLI 層で実装。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing

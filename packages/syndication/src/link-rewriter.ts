@@ -34,9 +34,11 @@ export type SlugResolver = (slug: string) => string | null;
  */
 export function rewriteInternalLinks(content: string, resolver: SlugResolver): string {
   // `[text](/posts/<slug>...)` 形式。slug は kebab-case + 数字 + 末尾 _ (test fixture
-  // 用) を許容。fragment / query は捕捉して resolver 出力に concat。
+  // 用) を許容。大文字混じり slug は本 repo の slug 規約違反のため regex 段で素通しさせ、
+  // resolver を呼ばずに publish 層に判断を委ねる (大文字許容で resolver が hit せず
+  // 「未配信」扱いになるのを避ける)。fragment / query は捕捉して resolver 出力に concat。
   return content.replace(
-    /\]\(\/posts\/([_a-z0-9][_a-z0-9-]*)([#?][^)]*)?\)/gi,
+    /\]\(\/posts\/([_a-z0-9][_a-z0-9-]*)([#?][^)]*)?\)/g,
     (match, slug: string, suffix?: string) => {
       const external = resolver(slug);
       if (!external) return match;
