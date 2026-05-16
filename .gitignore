@@ -40,3 +40,6 @@ logs/
 
 # vitest coverage output
 coverage/
+
+# generated cover image fonts (downloaded on first run, cached for reuse)
+.cache/
