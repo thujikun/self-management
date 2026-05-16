@@ -37,5 +37,11 @@ if [ -n "$TS_FILES" ]; then
   pnpm exec eslint --max-warnings=0 --no-warn-ignored $TS_FILES
 fi
 
-# 6. test:coverage (per-file 90% 閾値、threshold 違反は exit 1)
+# 6. Prettier format check (staged file のみ)
+# CI が `pnpm format:check` を走らせるので、ここで弾かないと「commit は通るが CI で落ちる」事故になる。
+# `--ignore-unknown` で prettier 未対応の binary / 拡張子 (例: .png, .lock) を skip、
+# `--check` で diff 検出すると exit 1 → commit block。fix は `pnpm format` で。
+pnpm exec prettier --check --ignore-unknown $FILES
+
+# 7. test:coverage (per-file 90% 閾値、threshold 違反は exit 1)
 pnpm exec vitest run --coverage
