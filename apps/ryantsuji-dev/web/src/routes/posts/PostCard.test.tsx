@@ -56,6 +56,7 @@ function makePost(overrides: Partial<PostListItem> = {}): PostListItem {
     publishedAt: "2026-05-10",
     tags: [],
     draft: false,
+    syndication: {},
     lang: "en",
     availableLangs: ["en"],
     servedLang: "en",

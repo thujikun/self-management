@@ -1,0 +1,22 @@
+{
+  "name": "@self/syndication",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ryantsuji.dev の markdown を Zenn / dev.to 用に変換する pure pipeline + CLI",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsgo",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@self/content": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@typescript/native-preview": "catalog:"
+  }
+}

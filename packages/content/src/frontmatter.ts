@@ -39,6 +39,36 @@ export const FrontmatterSchema = z.object({
     .transform((arr) => Array.from(new Set(arr.map((t) => t.toLowerCase()))).sort()),
   canonical: z.string().url().optional(),
   draft: z.boolean().default(false),
+  /**
+   * cover image の **public/ からの絶対 path**。例: `/posts/<slug>.cover.png`。
+   * ryantsuji.dev では `<meta property="og:image">` に、Zenn / dev.to syndication
+   * では `cover_image` field に絶対 URL 化して渡す。
+   */
+  cover: z.string().startsWith("/").optional(),
+  /**
+   * syndication target の外部 ID マップ。`packages/syndication` がここを引いて
+   * publish / 内部 link 解決をする。値が無い post は当該 target に syndicate しない。
+   *
+   * - `zenn.id`: Zenn article id (e.g. `d9fc317c1336c2`)。Zenn GitHub sync repo 内の
+   *   `articles/<id>.md` のファイル名にもなる
+   * - `devto.id`: dev.to numeric article id (API `PUT /api/articles/{id}` で参照)
+   * - `devto.slug`: dev.to URL slug (公開 URL `https://dev.to/<user>/<slug>` の最後)
+   */
+  syndication: z
+    .object({
+      zenn: z
+        .object({
+          id: z.string().min(1),
+        })
+        .optional(),
+      devto: z
+        .object({
+          id: z.number().int().positive(),
+          slug: z.string().min(1),
+        })
+        .optional(),
+    })
+    .default({}),
 });
 
 /** @graph-connects none */

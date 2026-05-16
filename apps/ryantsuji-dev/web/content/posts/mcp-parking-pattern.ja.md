@@ -11,6 +11,12 @@ tags:
   - "oauth"
   - "claude"
 lang: "ja"
+syndication:
+  zenn:
+    id: "4c5f49f89db19f"
+  devto:
+    id: 3593900
+    slug: "cutting-self-built-mcp-server-token-usage-by-90-the-parking-pattern-3e7o"
 ---
 
 みなさまこんにちは！エアークローゼットでCTOをしている[辻](https://x.com/RyanAircloset)です。
@@ -198,7 +204,3 @@ DB Graph MCP → Spreadsheet出力 → URLを返す
 を紹介しました。設計としては地味ですが、**やる前と後でMCPの使用感がガラッと変わるくらい効きます**。
 
 自作MCPサーバーを社内で運用していてトークン消費に困っている方は、ぜひ試してみてください。
-
----
-
-私がCTOをしている株式会社エアークローゼットでは、AIと共に新しい開発体験を作り上げていくエンジニアを募集しています。興味のある方は、ぜひエンジニア採用サイト [エアクロクエスト](https://corp.air-closet.com/recruiting/developers/) をご覧ください！

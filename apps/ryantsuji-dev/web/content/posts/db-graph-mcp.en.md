@@ -10,6 +10,12 @@ tags:
   - "graphrag"
   - "showdev"
 lang: "en"
+syndication:
+  zenn:
+    id: "2731787582881a"
+  devto:
+    id: 3404451
+    slug: "democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5"
 ---
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at [airCloset](https://www.air-closet.com/) — Japan's leading fashion rental subscription service.
@@ -612,7 +618,3 @@ The biggest lesson from building this: **the real value of MCP is giving AI cont
 Making that happen required building the graph, securing cross-cloud access, automating permission management, and protecting PII — unglamorous but essential infrastructure, built with care.
 
 I hope this helps anyone wrestling with internal database management at scale.
-
----
-
-I'm CTO at [airCloset](https://www.air-closet.com/), a fashion rental subscription service in Japan. We're building the future of AI-powered development. If you're interested, check out our [engineering careers page](https://corp.air-closet.com/recruiting/developers/).
