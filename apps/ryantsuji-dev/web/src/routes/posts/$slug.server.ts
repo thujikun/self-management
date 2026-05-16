@@ -27,6 +27,7 @@ import { getSessionFromHeaders } from "../../server/auth-session.js";
 import { createDbFromEnv } from "../../server/db.js";
 import {
   addComment,
+  deleteComment,
   loadPostEngagement,
   toggleLike,
   type CommentView,
@@ -49,7 +50,6 @@ import {
  *
  * @graph-connects content [calls] renderMarkdown(source) で構造化 RenderedDoc に変換
  */
-/** @graph-connects content [calls] renderMarkdown(source) で構造化 RenderedDoc に変換 */
 export async function runRenderPost(
   slug: string,
   override: Lang | undefined,
@@ -121,13 +121,13 @@ export async function runToggleLike(
 }
 
 /**
- * addCommentServer の handler 本体。auth gate + body 受け渡し。
+ * addCommentServer の handler 本体。auth gate + body + 任意の parentCommentId 受け渡し。
  *
  * @graph-connects content [calls] addComment (auth 必須)
  */
 export async function runAddComment(
   env: Env,
-  args: { slug: string; body: string },
+  args: { slug: string; body: string; parentCommentId?: string | null },
 ): Promise<CommentView> {
   const session = await getSessionFromHeaders(new Headers(getRequestHeaders()), env);
   if (!session) throw new Error("UNAUTHENTICATED");
@@ -138,5 +138,22 @@ export async function runAddComment(
     authorName: session.user.name,
     authorEmail: session.user.email,
     body: args.body,
+    parentCommentId: args.parentCommentId ?? null,
   });
+}
+
+/**
+ * deleteCommentServer の handler 本体。auth gate + 自分の comment のみ soft delete。
+ * 戻り値の `deletedId` が null なら「対象なし or 権限なし」(UI は invalidate して再取得)。
+ *
+ * @graph-connects content [calls] deleteComment (auth 必須、author check は SQL where 句で)
+ */
+export async function runDeleteComment(
+  env: Env,
+  commentId: string,
+): Promise<{ deletedId: string | null }> {
+  const session = await getSessionFromHeaders(new Headers(getRequestHeaders()), env);
+  if (!session) throw new Error("UNAUTHENTICATED");
+  const db = createDbFromEnv(env);
+  return await deleteComment(db, { commentId, requesterId: session.user.id });
 }
