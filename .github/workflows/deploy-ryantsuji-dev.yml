@@ -11,13 +11,16 @@
 # を参照する Worker code が runtime で table not found に当たるのを防ぐ。PR run
 # は dry-run なので migration step は skip (DB に副作用を出さない)。
 #
-# auth: pulumi.yml と同じ WIF flow。GitHub OIDC → graph-app SA を impersonate
-# (`pulumi-ci@` ではなく Worker 用の deploy SA を将来分けても良いが、現状は
-# pulumi が既に `pulumi-ci@` SA を運用しているので同じ identity で実行)。
+# auth: pulumi.yml と同じ WIF flow。GitHub OIDC → `pulumi-ci@` SA を impersonate
+# (pulumi が既に運用している identity を再利用。将来 deploy 専用 SA を分けるなら
+# `vars.PULUMI_CI_SA_EMAIL` の参照先を DEPLOY_SA_EMAIL 等に切替)。
 # その上で `gcloud secrets versions access <name>` で各 secret を動的に取り出し、
 # job env に注入する (workflow yaml に直書きしない)。
 #
-# 必要な secret (GCP Secret Manager、graph-app SA に accessor 権限付与済):
+# 必要な secret (GCP Secret Manager、現状は `pulumi-ci@` SA が project レベルの
+# `roles/secretmanager.admin` で読み出している。`infra/core/index.ts` で
+# `graph-app` SA にも secretAccessor を bind 済だが、これは将来 deploy 専用 SA を
+# 分離した時に同パターンで bind し直す用途で、本 workflow の実行 SA ではない):
 # - `cloudflare-api-token` (Workers Scripts:Edit + Workers Routes:Edit)
 # - `neon-database-url` (Neon Postgres の pooled connection string)
 #
