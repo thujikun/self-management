@@ -36,6 +36,17 @@ const MAX_CONCURRENT = parseInt(process.env.AUTO_REVIEW_MAX_CONCURRENT ?? "2", 1
 const MAX_ITERATIONS_PER_PR = parseInt(process.env.AUTO_REVIEW_MAX_ITERATIONS ?? "10", 10);
 const REPO_ROOT = process.env.AUTO_REVIEW_REPO_ROOT ?? process.cwd();
 /**
+ * 起動から `EXIT_AFTER_UPTIME_MS` 経過 + queue idle なら process.exit(0) で抜ける。
+ * 外側の wrapper script (`loop.sh`) が `git fetch + reset --hard origin/main` してから
+ * tsx を再 spawn するので、merge された新コードを自動で取り込んで再起動する形になる。
+ * Node の import は同 process 内で再読込されないので、定期的に process を作り直すのが要点。
+ * 0 を指定すると self-exit 無効化 (旧 behavior、wrapper 無しでの開発時用)。
+ */
+const EXIT_AFTER_UPTIME_MS = parseInt(
+  process.env.AUTO_REVIEW_EXIT_AFTER_UPTIME_MS ?? `${30 * 60 * 1000}`,
+  10,
+);
+/**
  * 失敗 retry 制御:
  *   - 同じ SHA / commentId に対する review/fix の失敗回数が `MAX_*_FAILURES` 未満かつ
  *     最後の失敗から `*_FAILURE_BACKOFF_MS` 以上経過していれば再試行する
@@ -331,9 +342,32 @@ const stop = (sig: string): void => {
 process.on("SIGINT", () => stop("SIGINT"));
 process.on("SIGTERM", () => stop("SIGTERM"));
 
+const PROCESS_STARTED_AT = Date.now();
+
+/**
+ * 「起動から `EXIT_AFTER_UPTIME_MS` 経過 + queue idle」を満たしたら true を返す。
+ * 旧 import を抱えたまま走り続けると merge された新コードが反映されないので、
+ * 定期的に self-exit して wrapper script に再起動させる (loop.sh が `git reset --hard origin/main`
+ * してから tsx を再 spawn する)。
+ */
+function shouldSelfExit(): boolean {
+  if (EXIT_AFTER_UPTIME_MS <= 0) return false;
+  const uptime = Date.now() - PROCESS_STARTED_AT;
+  if (uptime < EXIT_AFTER_UPTIME_MS) return false;
+  const q = queue.status();
+  return q.running === 0 && q.queued === 0;
+}
+
 // 初回 tick = catch-up (起動時 state.json に未記録の open PR を全件処理)
 await tick();
 while (!stopping) {
+  if (shouldSelfExit()) {
+    log(
+      "[auto-review]",
+      `uptime >= ${EXIT_AFTER_UPTIME_MS}ms + queue idle → self-exit for wrapper restart (picks up latest main)`,
+    );
+    break;
+  }
   await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   if (stopping) break;
   await tick();

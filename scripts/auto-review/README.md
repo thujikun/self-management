@@ -24,8 +24,18 @@ claude setup-token
 echo 'export CLAUDE_CODE_OAUTH_TOKEN="sk-ant-oat-..."' >> .envrc.local
 direnv allow
 
-pnpm auto-review
+pnpm auto-review          # ← wrapper script (loop.sh) 経由、merge された新コードを自動反映
+pnpm auto-review:once     # ← wrapper 無しの 1 回限り (開発時用)
 ```
+
+`pnpm auto-review` は `scripts/auto-review/loop.sh` を経由する supervisor 構成:
+
+1. 各起動前に `git fetch origin main` + `git reset --hard origin/main` で self-management(-review) clone を最新化
+2. `tsx scripts/auto-review/poll.cli.ts` を spawn
+3. poll.cli.ts が **起動から 30 分経過 + queue idle** を満たすと self-exit (`process.exit(0)`)
+4. wrapper が `sleep 2` してから 1 へ戻る → 新 main + 新 script で再起動
+
+Node の import は同 process 内で再読込されないので、`pnpm auto-review` で merge した新機能 / fix は **次の自動再起動 (= 最長 30 分 + 進行中 job 完了待ち) で反映**。CTRL+C / SIGTERM は wrapper の trap で再起動せず exit する。
 
 **`CLAUDE_CODE_OAUTH_TOKEN` を設定しないと interactive Claude Code が logout される**:
 bot が spawn する `claude -p` は env に当該 token が無いと macOS Keychain の OAuth credential を読み、refresh token を rotation してしまう。interactive で使ってる Claude Code は旧 refresh token しか持っていないので、次の refresh で失敗 → logout。`setup-token` で発行した long-lived token を env で渡せば Keychain には触れず interactive と完全 isolate される。
@@ -44,6 +54,7 @@ env:
 | `AUTO_REVIEW_REVIEW_BACKOFF_MS` | `300000` (5 分) | review 失敗後、次 retry までの最小待機時間 (ms)。一過性 Claude flake の自然回復用 |
 | `AUTO_REVIEW_MAX_FIX_FAILURES` | `3` | 同 commentId に対する fix 失敗回数の cap。新 review (= 新 commentId) が来るまで skip |
 | `AUTO_REVIEW_FIX_BACKOFF_MS` | `300000` (5 分) | fix 失敗後、次 retry までの最小待機時間 (ms) |
+| `AUTO_REVIEW_EXIT_AFTER_UPTIME_MS` | `1800000` (30 分) | 起動からこの時間経過 + queue idle で self-exit。wrapper script が `git reset --hard origin/main` + 再 spawn することで新コードを反映。0 を指定すると無効化 (`auto-review:once` 相当) |
 | `AUTO_REVIEW_REPO_ROOT` | `process.cwd()` | git worktree base となるメイン repo path |
 | `CLAUDE_TIMEOUT_MS` | `1800000` (30 分) | claude -p 1 回の timeout |
 
@@ -130,7 +141,8 @@ scripts/auto-review/
 ├── dedup.ts           # body 正規化 + SHA-256 hash
 ├── log.ts             # `[HH:MM:SS] [+Xs] [scope] msg` 形式の logger + fmtDuration helper
 ├── state.ts           # ~/.cache/self-management-auto-review/state.json + StateMutex
-├── *.test.ts          # 各 module の test (11 ファイル)
+├── loop.sh            # supervisor wrapper (git reset --hard origin/main → tsx → restart on self-exit)
+├── *.test.ts          # 各 module の test
 └── README.md
 ```
 
