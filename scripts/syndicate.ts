@@ -10,10 +10,17 @@
  * を自動化する。
  *
  * 使い方:
- *   pnpm tsx scripts/syndicate.ts --target zenn               # 全 .ja.md
- *   pnpm tsx scripts/syndicate.ts --target devto              # 全 .en.md
+ *   pnpm tsx scripts/syndicate.ts --target zenn               # 全 .ja.md (dry-run)
+ *   pnpm tsx scripts/syndicate.ts --target devto              # 全 .en.md (dry-run)
  *   pnpm tsx scripts/syndicate.ts --target zenn --slug X      # 単一 slug
  *   pnpm tsx scripts/syndicate.ts --target all                # zenn + devto 両方
+ *   pnpm tsx scripts/syndicate.ts --target zenn --publish     # Zenn repo に commit & push
+ *   pnpm tsx scripts/syndicate.ts --target devto --publish    # dev.to API PUT で更新
+ *
+ * env:
+ *   DEV_TO_API_KEY              dev.to publish に必要 (`--target devto --publish`)
+ *   RYANTSUJI_CONTENT_REPO_DIR  Zenn 用 local clone path
+ *                               default: ~/Workspace/ryantsuji-dev-content
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
@@ -28,13 +35,22 @@ import { fileURLToPath } from "node:url";
 
 import matter from "gray-matter";
 import { parseFrontmatter, type Frontmatter } from "@self/content";
-import { syndicateForDevto, syndicateForZenn, type SlugResolver } from "@self/syndication";
+import {
+  publishToDevto,
+  publishToZenn,
+  syndicateForDevto,
+  syndicateForZenn,
+  type SlugResolver,
+} from "@self/syndication";
+import { homedir } from "node:os";
 
 const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPTS_DIR, "..");
 const POSTS_DIR = resolve(REPO_ROOT, "apps/ryantsuji-dev/web/content/posts");
 const ZENN_FOOTER_PATH = resolve(REPO_ROOT, "packages/syndication/config/footers/zenn.ja.md");
 const OUT_DIR = resolve(REPO_ROOT, "dist/syndication");
+const ZENN_REPO_REMOTE = "git@github.com:thujikun/ryantsuji-dev-content.git";
+const ZENN_REPO_LOCAL_DEFAULT = resolve(homedir(), "Workspace/ryantsuji-dev-content");
 
 /** parse + filename 由来 slug + lang。 */
 interface ParsedPost {
@@ -95,12 +111,16 @@ function buildDevtoResolver(posts: ParsedPost[]): SlugResolver {
   return (slug) => map.get(slug) ?? null;
 }
 
-/** Zenn 変換: 全 .ja.md を Zenn 用に書き出す (`syndication.zenn.id` がある post のみ)。 */
-async function emitZenn(posts: ParsedPost[], filter: { slug?: string }): Promise<void> {
+/** Zenn 変換: 全 .ja.md を Zenn 用に書き出す + 任意で repo に commit/push。 */
+async function emitZenn(
+  posts: ParsedPost[],
+  filter: { slug?: string; publish: boolean },
+): Promise<void> {
   const resolver = buildZennResolver(posts);
   const footer = await readFile(ZENN_FOOTER_PATH, "utf8");
   const outDir = resolve(OUT_DIR, "zenn");
   await mkdir(outDir, { recursive: true });
+  const repoDir = process.env.RYANTSUJI_CONTENT_REPO_DIR ?? ZENN_REPO_LOCAL_DEFAULT;
 
   for (const p of posts) {
     if (p.lang !== "ja") continue;
@@ -119,14 +139,34 @@ async function emitZenn(posts: ParsedPost[], filter: { slug?: string }): Promise
     const outPath = resolve(outDir, `${zennId}.md`);
     await writeFile(outPath, markdown, "utf8");
     console.log(`  zenn:  ${p.slug} → ${outPath}`);
+
+    if (filter.publish) {
+      const result = await publishToZenn({
+        repoDir,
+        remoteUrl: ZENN_REPO_REMOTE,
+        zennId,
+        markdown,
+        commitSubject: `chore: sync ${p.slug} (${zennId})`,
+      });
+      console.log(
+        `    publish: ${result.pushed ? `pushed ${result.commitSha?.slice(0, 8)}` : "no change"}`,
+      );
+    }
   }
 }
 
-/** dev.to 変換: 全 .en.md を API article attributes として JSON で書き出す。 */
-async function emitDevto(posts: ParsedPost[], filter: { slug?: string }): Promise<void> {
+/** dev.to 変換: 全 .en.md を API article attributes として JSON で書き出す + 任意で PUT publish。 */
+async function emitDevto(
+  posts: ParsedPost[],
+  filter: { slug?: string; publish: boolean },
+): Promise<void> {
   const resolver = buildDevtoResolver(posts);
   const outDir = resolve(OUT_DIR, "devto");
   await mkdir(outDir, { recursive: true });
+  const apiKey = filter.publish ? process.env.DEV_TO_API_KEY : undefined;
+  if (filter.publish && !apiKey) {
+    throw new Error("--publish requires DEV_TO_API_KEY env");
+  }
 
   for (const p of posts) {
     if (p.lang !== "en") continue;
@@ -147,6 +187,11 @@ async function emitDevto(posts: ParsedPost[], filter: { slug?: string }): Promis
     const outPath = resolve(outDir, `${p.slug}.json`);
     await writeFile(outPath, JSON.stringify({ id: devto.id, article }, null, 2) + "\n", "utf8");
     console.log(`  devto: ${p.slug} → ${outPath}`);
+
+    if (filter.publish && apiKey) {
+      const result = await publishToDevto({ apiKey, articleId: devto.id, article });
+      console.log(`    publish: ${result.url}`);
+    }
   }
 }
 
@@ -156,6 +201,7 @@ async function main(): Promise<void> {
   const target = targetIdx >= 0 ? args[targetIdx + 1] : "all";
   const slugIdx = args.indexOf("--slug");
   const slug = slugIdx >= 0 ? args[slugIdx + 1] : undefined;
+  const publish = args.includes("--publish");
   if (target !== "zenn" && target !== "devto" && target !== "all") {
     console.error(`unknown --target: ${target} (zenn | devto | all)`);
     process.exit(1);
@@ -163,14 +209,14 @@ async function main(): Promise<void> {
 
   const posts = await readAllPosts();
   console.log(
-    `loaded ${posts.length} posts (filter: target=${target}${slug ? `, slug=${slug}` : ""})`,
+    `loaded ${posts.length} posts (target=${target}${slug ? `, slug=${slug}` : ""}${publish ? ", publish" : ", dry-run"})`,
   );
 
   if (target === "zenn" || target === "all") {
-    await emitZenn(posts, { slug });
+    await emitZenn(posts, { slug, publish });
   }
   if (target === "devto" || target === "all") {
-    await emitDevto(posts, { slug });
+    await emitDevto(posts, { slug, publish });
   }
   console.log("done");
 }
