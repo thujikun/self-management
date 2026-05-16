@@ -31,6 +31,8 @@ import viteReact from "@vitejs/plugin-react";
 import rsc from "@vitejs/plugin-rsc";
 import { resolve } from "node:path";
 
+import { renderedPostsPlugin } from "./vite-plugins/rendered-posts.js";
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -42,6 +44,10 @@ export default defineConfig({
     // Tailwind 4 (CSS-first config、`src/styles.css` の `@import "tailwindcss"` +
     // `@theme` でデザイントークンを Tailwind の color/font 系 utility に橋渡しする)
     tailwindcss(),
+    // `content/posts/*.md` を build 時に renderMarkdown して `virtual:rendered-posts`
+    // で expose。runtime (CF Workers) では shiki を走らせず、HTML を lookup する
+    // だけで済むようにし、Error 1102 (CPU 上限) を解消する。
+    renderedPostsPlugin(resolve(__dirname, "content/posts")),
     tanstackStart({ rsc: { enabled: true }, server: { entry: "./src/server.ts" } }),
     rsc(),
     viteReact(),

@@ -19,7 +19,7 @@
  */
 
 import { getRequestHeaders } from "@tanstack/react-start/server";
-import { renderMarkdown, type RenderedDoc } from "@self/content";
+import type { RenderedDoc } from "@self/content";
 import { notFound } from "@tanstack/react-router";
 
 import type { Env } from "../../start.js";
@@ -32,7 +32,7 @@ import {
   type CommentView,
 } from "../../server/engagement.js";
 import { pickLang, type Lang } from "../../server/i18n.js";
-import { getPostSource } from "../../server/posts.js";
+import { getRenderedPost } from "../../server/posts.js";
 import {
   safeAcceptLanguage,
   safeCookieLang,
@@ -40,16 +40,17 @@ import {
 } from "../../server/request.server.js";
 
 /**
- * renderPostServer の handler 本体。`?lang=` override + Accept-Language で lang を
- * 確定 → `getPostSource(slug, lang)` で source 取得 (無ければ en fallback) →
- * `renderMarkdown` で構造化 RenderedDoc に変換。
+ * renderPostServer の handler 本体。`?lang=` override + Accept-Language + cookie で
+ * lang を確定 → `getRenderedPost(slug, lang)` で **build 時に pre-render 済の**
+ * RenderedDoc を lookup (無ければ en fallback) → そのまま返す。
  *
- * shiki / unified の重 dep は本関数経由 (= rsc env のみ bundle) で参照する。client 側は
- * 結果の html string + headings 配列だけ受け取る。
+ * 旧設計は runtime で `renderMarkdown` を回していたが、長い記事で Worker CPU 上限
+ * (Free plan 10ms) を超え Error 1102 が発生していた。新設計は build 時に shiki /
+ * unified を一括で回しておくので、runtime は lookup のみで CPU 消費ほぼゼロ。
  *
- * @graph-connects content [calls] renderMarkdown(source) で構造化 RenderedDoc に変換
+ * @graph-connects content [calls] getRenderedPost で pre-rendered HTML を取得
  */
-/** @graph-connects content [calls] renderMarkdown(source) で構造化 RenderedDoc に変換 */
+/** @graph-connects content [calls] getRenderedPost で pre-rendered HTML を取得 */
 export async function runRenderPost(
   slug: string,
   override: Lang | undefined,
@@ -68,14 +69,13 @@ export async function runRenderPost(
   if (override && override !== cookieLang) {
     writeLangCookie(lang);
   }
-  const result = getPostSource(slug, lang);
+  const result = getRenderedPost(slug, lang);
   if (!result) throw notFound();
-  const doc = await renderMarkdown(result.source);
   return {
-    html: doc.html,
-    frontmatter: doc.frontmatter,
-    headings: doc.headings,
-    readingTimeMinutes: doc.readingTimeMinutes,
+    html: result.rendered.html,
+    frontmatter: result.rendered.frontmatter,
+    headings: result.rendered.headings,
+    readingTimeMinutes: result.rendered.readingTimeMinutes,
     servedLang: result.servedLang,
     availableLangs: result.availableLangs,
   };

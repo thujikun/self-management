@@ -11,8 +11,12 @@
  * @graph-connects none
  */
 
+import { resolve } from "node:path";
+
 import { defineConfig } from "vitest/config";
 import type { Plugin } from "vite";
+
+import { renderedPostsPlugin } from "./vite-plugins/rendered-posts.js";
 
 /**
  * test 環境で `*.css?url` import を resolve するための固定 sentinel URL。
@@ -66,7 +70,13 @@ const cssUrlTestStub: Plugin = {
 };
 
 export default defineConfig({
-  plugins: [cssUrlTestStub],
+  plugins: [
+    cssUrlTestStub,
+    // vitest からも `virtual:rendered-posts` を提供する。production build と同じ
+    // pre-render を test の前に流すことで、posts.ts → getRenderedPost の経路を
+    // 実 markdown 上で踏める (= mocking なしで integration test が成立)。
+    renderedPostsPlugin(resolve(__dirname, "content/posts")),
+  ],
   test: {
     name: "ryantsuji-dev-web",
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
