@@ -27,8 +27,6 @@ const TEST_ENV: Env = {
   X_OAUTH2_CLIENT_SECRET: "x",
   GOOGLE_CLIENT_ID: "google",
   GOOGLE_CLIENT_SECRET: "google",
-  APPLE_CLIENT_ID: "apple",
-  APPLE_CLIENT_SECRET: "apple",
   FACEBOOK_CLIENT_ID: "fb",
   FACEBOOK_CLIENT_SECRET: "fb",
 };
