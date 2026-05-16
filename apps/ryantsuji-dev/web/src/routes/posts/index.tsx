@@ -62,7 +62,7 @@ function PostsIndex() {
       <header className="posts-index__header">
         <h1>posts</h1>
         <p className="meta">
-          source-of-truth for posts syndicated to <a href="https://zenn.dev/ryantsuji">Zenn</a> (JP)
+          source-of-truth for posts syndicated to <a href="https://zenn.dev/thujikun">Zenn</a> (JP)
           and <a href="https://dev.to/ryantsuji">dev.to</a> (EN).
         </p>
         <LangSwitcher current={lang} />
