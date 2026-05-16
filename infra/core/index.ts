@@ -366,10 +366,16 @@ export const neonDatabaseUrlSecretId = neonDatabaseUrlSecret.id;
  * (Grafana / Neon と同パターン)。Pulumi は **container と IAM のみ管理**、値は
  * Ryan が dev portal で OAuth app 作成 → `gcloud secrets versions add` で投入する運用。
  *
- * 認証 provider (4 個): GitHub / X (Twitter) / Google / Facebook。callback URL は
- * 全て `https://ryantsuji.dev/api/auth/callback/<provider>` 形式 (dev は
- * `http://localhost:3000/...` も合わせて登録)。Apple は Developer Program 有料 +
- * JWT clientSecret の半年毎手動 rotation 負担に見合わないので未対応。
+ * 認証 provider (3 個): GitHub / X (Twitter) / Google。callback URL は全て
+ * `https://ryantsuji.dev/api/auth/callback/<provider>` 形式 (dev は
+ * `http://localhost:3000/...` も合わせて登録)。
+ *
+ * 検討して落とした provider:
+ * - Apple: Developer Program 有料 + JWT clientSecret の半年毎手動 rotation 負担に
+ *   見合わない
+ * - Facebook: Meta App Review プロセス + App Domain / Valid OAuth Redirect URI の
+ *   二重設定要件を抜けないと外部 user が login できず、個人サイトの ROI に対して
+ *   運用負荷が高すぎる
  *
  * - `better-auth-secret`: 32+ char の暗号化 / 署名鍵 (`openssl rand -base64 32` で生成)
  * - `github-oauth-client-id` / `github-oauth-client-secret`:
@@ -378,14 +384,12 @@ export const neonDatabaseUrlSecretId = neonDatabaseUrlSecret.id;
  *   X (Twitter) OAuth 2.0 client (https://developer.x.com、xmcp が使う OAuth1 とは独立)
  * - `google-oauth-client-id` / `google-oauth-client-secret`:
  *   Google Cloud Console OAuth 2.0 Client (Web application、別 GCP project)
- * - `facebook-client-id` / `facebook-client-secret`:
- *   Meta for Developers app (https://developers.facebook.com)
  *
  * 消費経路:
- * - dev (.envrc): `gcloud secrets versions access` で 9 個の env var に展開
+ * - dev (.envrc): `gcloud secrets versions access` で 7 個の env var に展開
  * - production CF Workers: `wrangler secret put <NAME>` で binding に投入
  *
- * @graph-connects secret-manager [writes_to] Better Auth 9 secret container
+ * @graph-connects secret-manager [writes_to] Better Auth 7 secret container
  */
 const authSecretIds = [
   "better-auth-secret",
@@ -395,8 +399,6 @@ const authSecretIds = [
   "x-oauth2-client-secret",
   "google-oauth-client-id",
   "google-oauth-client-secret",
-  "facebook-client-id",
-  "facebook-client-secret",
 ] as const;
 /** @graph-connects none */
 const authSecrets: Record<string, gcp.secretmanager.Secret> = {};
@@ -431,10 +433,6 @@ export const xOauth2ClientSecretSecretId = authSecrets["x-oauth2-client-secret"]
 export const googleOauthClientIdSecretId = authSecrets["google-oauth-client-id"].id;
 /** @graph-connects none */
 export const googleOauthClientSecretSecretId = authSecrets["google-oauth-client-secret"].id;
-/** @graph-connects none */
-export const facebookClientIdSecretId = authSecrets["facebook-client-id"].id;
-/** @graph-connects none */
-export const facebookClientSecretSecretId = authSecrets["facebook-client-secret"].id;
 
 /**
  * Cloudflare API token (Workers deploy 用)。

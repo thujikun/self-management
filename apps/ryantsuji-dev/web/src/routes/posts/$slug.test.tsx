@@ -78,8 +78,6 @@ const TEST_ENV = {
   X_OAUTH2_CLIENT_SECRET: "x",
   GOOGLE_CLIENT_ID: "google",
   GOOGLE_CLIENT_SECRET: "google",
-  FACEBOOK_CLIENT_ID: "fb",
-  FACEBOOK_CLIENT_SECRET: "fb",
 };
 
 // auth session: 既定で未認証 (null) を返す。it ごとに mockReturnValue で session ありに切替可能。

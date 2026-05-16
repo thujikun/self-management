@@ -38,8 +38,6 @@ export const TEST_FAKE_ENV = {
   X_OAUTH2_CLIENT_SECRET: "x",
   GOOGLE_CLIENT_ID: "google",
   GOOGLE_CLIENT_SECRET: "google",
-  FACEBOOK_CLIENT_ID: "fb",
-  FACEBOOK_CLIENT_SECRET: "fb",
 } as const;
 
 vi.mock("@tanstack/react-start", async (importOriginal) => {
