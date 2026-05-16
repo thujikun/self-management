@@ -16,15 +16,31 @@ import {
   Outlet,
   Scripts,
   createRootRouteWithContext,
+  useRouter,
 } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
 import type { QueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+
+import { Lightbox } from "../components/Lightbox.js";
+import { LANG_COOKIE, LANG_COOKIE_MAX_AGE, SUPPORTED_LANGS, type Lang } from "../server/i18n.js";
+import { THEME_COOKIE, THEME_COOKIE_MAX_AGE, type Theme } from "../server/theme.js";
+
+import { runResolveLang } from "./__root.server.js";
 
 // `?url` で Vite に CSS asset として import させ、hashed pathname を取得する。
 // 直書きの `/styles.css` だと Vite が emit せず 404 する (src/styles.css は
 // public/ に置いてないため static serve されない) ので、必ず import 経由で
 // build pipeline に乗せる。
 import appCss from "../styles.css?url";
+
+/**
+ * root loader 用 server function。current lang を全 page で共通解決し、SiteHeader の
+ * LangSwitcher active state に流す。
+ *
+ * @graph-connects content [calls] runResolveLang
+ */
+const resolveLangServer = createServerFn().handler(() => runResolveLang());
 
 export interface RouterContext {
   queryClient: QueryClient;
@@ -42,6 +58,7 @@ const SITE_URL = "https://ryantsuji.dev";
 
 /** @graph-connects tanstack-router [provides] root route definition */
 export const Route = createRootRouteWithContext<RouterContext>()({
+  loader: async () => resolveLangServer(),
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -98,26 +115,262 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 
 /** @graph-connects none */
 function RootComponent() {
+  const { theme } = Route.useLoaderData();
   return (
-    <RootDocument>
+    <RootDocument theme={theme}>
       <Outlet />
     </RootDocument>
   );
 }
 
 /** @graph-connects none */
-function RootDocument({ children }: { children: ReactNode }) {
+function RootDocument({ children, theme }: { children: ReactNode; theme: Theme | null }) {
+  // `data-theme` は明示選択 (cookie) 時のみ付ける。null の時は CSS の
+  // `@media (prefers-color-scheme)` に判定を委ねる。
+  const htmlProps = theme ? { "data-theme": theme } : {};
   return (
-    <html lang="en">
+    <html lang="en" {...htmlProps}>
       <head>
         <HeadContent />
       </head>
       <body>
+        <SiteHeader />
         {children}
         <SiteFooter />
+        <Lightbox />
         <Scripts />
       </body>
     </html>
+  );
+}
+
+/**
+ * 全 page 共通 header。左に rt logo (home link 兼用)、中央に primary nav、
+ * 右上に LangSwitcher + ThemeSwitcher。glass morphism で sticky pill。
+ *
+ * @graph-connects tanstack-router [calls] Link で / と /posts に飛ばす
+ */
+function SiteHeader() {
+  const { lang, theme } = Route.useLoaderData();
+  return (
+    <header className="site-header">
+      <Link to="/" className="site-header__brand" aria-label="ryantsuji.dev home">
+        <img src="/logo-mark.svg" alt="" width={28} height={28} className="site-header__logo" />
+        <span className="site-header__brand-text">ryantsuji.dev</span>
+      </Link>
+      <nav className="site-header__nav" aria-label="primary">
+        <Link
+          to="/posts"
+          activeProps={{ className: "site-header__link site-header__link--active" }}
+        >
+          <span className="site-header__link">posts</span>
+        </Link>
+      </nav>
+      <div className="site-header__prefs">
+        <LangSwitcher current={lang} />
+        <ThemeSwitcher current={theme} />
+      </div>
+    </header>
+  );
+}
+
+/**
+ * SiteHeader 右上の言語切替。`SUPPORTED_LANGS` を map で iterate するので、対応
+ * 言語を増やしたら自動で UI も拡張される。
+ *
+ * 動作: 押下時に `document.cookie` を直接書いて、`router.invalidate()` で current
+ * route の loader 群を再実行 → 全 loader が新 cookie を読んで新 lang で render する。
+ * URL に `?lang=` を付ける per-link 伝播は廃止 (cookie で persistent に。 ?lang= は
+ * 外部からの override 用に server 側で引き続き受理する)。
+ *
+ * @graph-connects tanstack-router [calls] router.invalidate で loader を再実行
+ */
+/**
+ * LangSwitcher / ThemeSwitcher の click handler から呼ぶ pure 関数。
+ * `document.cookie` の書き込みは副作用だが、引数で `doc` を受けることで test 時に
+ * fake document を渡せる構造にする。`router.invalidate` は別途呼ぶ。
+ *
+ * @graph-connects none
+ */
+export function writeLangCookieDom(doc: { cookie: string }, lang: Lang): void {
+  doc.cookie = `${LANG_COOKIE}=${lang}; Path=/; Max-Age=${LANG_COOKIE_MAX_AGE}; SameSite=Lax`;
+}
+
+/**
+ * 現在の theme (data-theme 属性 + prefers-color-scheme) から「逆側」の theme を返す。
+ * テスト用に explicit theme と prefersDark を引数で受ける形に分離。
+ *
+ * @graph-connects none
+ */
+export function computeNextTheme(explicit: Theme | null, prefersDark: boolean): Theme {
+  const isDark = explicit === "dark" || (explicit === null && prefersDark);
+  return isDark ? "light" : "dark";
+}
+
+/**
+ * ThemeSwitcher click 時の cookie 書き込み (pure)。
+ *
+ * @graph-connects none
+ */
+export function writeThemeCookieDom(doc: { cookie: string }, theme: Theme): void {
+  doc.cookie = `${THEME_COOKIE}=${theme}; Path=/; Max-Age=${THEME_COOKIE_MAX_AGE}; SameSite=Lax`;
+}
+
+/**
+ * LangSwitcher 内 setLang の本体を pure に切り出し。引数で document / invalidate /
+ * 環境判定を inject し、test では fake document + spy invalidate を渡す。実装側は
+ * `typeof document === "undefined"` の early-return path を持つので、`docAvailable` を
+ * 引数化することで両 path を test できる。
+ *
+ * @graph-connects none
+ */
+export function performSetLang(
+  args: {
+    docAvailable: boolean;
+    doc: { cookie: string };
+    invalidate: () => void;
+  },
+  lang: Lang,
+): void {
+  if (!args.docAvailable) return;
+  writeLangCookieDom(args.doc, lang);
+  args.invalidate();
+}
+
+/**
+ * ThemeSwitcher 内 toggle の本体を pure に切り出し。document / matchMedia / invalidate
+ * を inject し、test で各 path を踏める。`docAvailable=false` の SSR early-return も
+ * 確認可能に。
+ *
+ * @graph-connects none
+ */
+export function performToggleTheme(args: {
+  docAvailable: boolean;
+  htmlEl: { getAttribute: (name: string) => string | null };
+  doc: { cookie: string };
+  prefersDark: boolean;
+  invalidate: () => void;
+}): void {
+  if (!args.docAvailable) return;
+  const explicit = args.htmlEl.getAttribute("data-theme") as Theme | null;
+  const next = computeNextTheme(explicit, args.prefersDark);
+  writeThemeCookieDom(args.doc, next);
+  args.invalidate();
+}
+
+/** @graph-connects tanstack-router [calls] router.invalidate */
+function LangSwitcher({ current }: { current: Lang }) {
+  const router = useRouter();
+  const setLang = (lang: Lang) => {
+    if (typeof document === "undefined") return;
+    performSetLang(
+      {
+        docAvailable: true,
+        doc: document,
+        invalidate: () => void router.invalidate(),
+      },
+      lang,
+    );
+  };
+  return (
+    <nav className="lang-switcher" aria-label="language">
+      {SUPPORTED_LANGS.map((l) => (
+        <button
+          key={l}
+          type="button"
+          onClick={() => setLang(l)}
+          className={
+            l === current ? "lang-switcher__btn lang-switcher__btn--active" : "lang-switcher__btn"
+          }
+          aria-pressed={l === current}
+        >
+          {l.toUpperCase()}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/**
+ * sun ↔ moon 切替ボタン。cookie 未設定 (= system 任せ) の時はどっちのアイコンを
+ * 出すべきか server 側では分からないので、CSS で `[data-theme]` / `prefers-color-scheme`
+ * に応じて 2 つの SVG を出し分ける (両方常時 DOM にあり、片方だけ visible)。
+ *
+ * 押下時に cookie を書いて `router.invalidate()` で全 loader 再実行 → `<html>` の
+ * `data-theme` 属性が再 render され、CSS variables が新 theme に切り替わる。
+ *
+ * @graph-connects tanstack-router [calls] router.invalidate で loader を再実行
+ */
+function ThemeSwitcher({ current }: { current: Theme | null }) {
+  const router = useRouter();
+  const toggle = () => {
+    // SSR では document が存在しない。click は client でしか発火しないので実害は
+    // ないが、defensive に early return して performToggleTheme には常に確定値だけ渡す。
+    if (typeof document === "undefined") return;
+    performToggleTheme({
+      docAvailable: true,
+      htmlEl: document.documentElement,
+      doc: document,
+      prefersDark: window.matchMedia("(prefers-color-scheme: dark)").matches,
+      invalidate: () => void router.invalidate(),
+    });
+  };
+  // SSR では explicit が null の時に「いまどっちか」を出力できないので、両方 render
+  // して CSS で出し分ける (hydration mismatch 回避)。
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      className="theme-switcher"
+      aria-label={
+        current === "dark"
+          ? "switch to light theme"
+          : current === "light"
+            ? "switch to dark theme"
+            : "toggle theme"
+      }
+      data-current={current ?? "auto"}
+    >
+      <SunIcon className="theme-switcher__icon theme-switcher__icon--sun" />
+      <MoonIcon className="theme-switcher__icon theme-switcher__icon--moon" />
+    </button>
+  );
+}
+
+/** @graph-connects none */
+function SunIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  );
+}
+
+/** @graph-connects none */
+function MoonIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
   );
 }
 
@@ -128,13 +381,18 @@ function RootDocument({ children }: { children: ReactNode }) {
  * @graph-connects tanstack-router [calls] Link で /privacy / /terms に飛ばす
  */
 function SiteFooter() {
+  const { lang } = Route.useLoaderData();
+  // X handle は lang で切替: ja → @RyanAircloset (JP 公式), en → @ryantsuji (EN 集約)
+  const xHref = lang === "ja" ? "https://x.com/RyanAircloset" : "https://x.com/ryantsuji";
   return (
     <footer className="site-footer">
       <Link to="/privacy">privacy</Link>
       <span aria-hidden="true">·</span>
       <Link to="/terms">terms</Link>
       <span aria-hidden="true">·</span>
-      <a href="https://github.com/thujikun">github</a>
+      <a href={xHref}>X</a>
+      <span aria-hidden="true">·</span>
+      <a href="https://github.com/thujikun">GitHub</a>
     </footer>
   );
 }

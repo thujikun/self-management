@@ -6,9 +6,9 @@ slug: "sandbox-mcp"
 summary: "Non-engineers can build AI apps, but publishing safely is still gated by engineers. Sandbox MCP gives them a one-command path to deploy Web/API/DB/Cron with guardrails."
 tags:
   - "ai"
-  - "webdev"
+  - "typescript"
   - "mcp"
-  - "cloudflarechallenge"
+  - "webdev"
 lang: "en"
 syndication:
   zenn:
@@ -21,7 +21,7 @@ cover: /posts/sandbox-mcp.en.cover.png
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.
 
-In my previous posts, I've introduced our internal MCP servers: [an MCP server for natural-language search across all our databases](https://dev.to/ryosuke_tsuji_f08e20fdca1/democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5), [the full picture of our 17 internal MCP servers](https://dev.to/ryosuke_tsuji_f08e20fdca1/we-built-17-mcp-servers-to-let-ai-run-our-internal-operations-3lk2), and [a custom Graph RAG that lets AI answer "Did that initiative actually work?"](https://dev.to/ryosuke_tsuji_f08e20fdca1/we-built-a-custom-graph-rag-to-let-ai-answer-did-that-initiative-actually-work-3oda).
+In my previous posts, I've introduced our internal MCP servers: [an MCP server for natural-language search across all our databases](/posts/db-graph-mcp), [the full picture of our 17 internal MCP servers](/posts/17-mcp-servers), and [a custom Graph RAG that lets AI answer "Did that initiative actually work?"](/posts/initiative-graph-rag).
 
 This time I'm covering something a bit different: **Sandbox MCP** — a platform that lets non-engineer employees deploy apps they built with AI to a safe, internal-only URL **with a single command**.
 

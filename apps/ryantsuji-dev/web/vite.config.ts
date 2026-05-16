@@ -24,6 +24,7 @@
  */
 
 import { cloudflare } from "@cloudflare/vite-plugin";
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
@@ -38,6 +39,9 @@ export default defineConfig({
   },
   plugins: [
     cloudflare({ viteEnvironment: { name: "ssr", childEnvironments: ["rsc"] } }),
+    // Tailwind 4 (CSS-first config、`src/styles.css` の `@import "tailwindcss"` +
+    // `@theme` でデザイントークンを Tailwind の color/font 系 utility に橋渡しする)
+    tailwindcss(),
     tanstackStart({ rsc: { enabled: true }, server: { entry: "./src/server.ts" } }),
     rsc(),
     viteReact(),

@@ -20,43 +20,49 @@ import { createServerFn } from "@tanstack/react-start";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { displayTags } from "../../lib/tags.js";
 import { runListPosts } from "./index.server.js";
 import type { Lang } from "../../server/i18n.js";
 import type { PostListItem } from "../../server/posts.js";
 
 /**
- * `?lang=en|ja` で override。invalid 値は捨てて Accept-Language fallback に任せる。
+ * `?lang=en|ja` で lang を override (cookie に persist)、`?tag=<tag>` で listing を
+ * filter。invalid 値は捨てる。
  *
  * @graph-connects none
  */
 const SearchSchema = z.object({
   lang: z.enum(["en", "ja"]).optional(),
+  tag: z.string().min(1).max(50).optional(),
 });
 
 /**
- * server function: 投稿一覧 meta を返す。input の override (?lang=) と server 側で
- * 読む Accept-Language から lang を確定する。
+ * server function: 投稿一覧 meta を返す。input の override (?lang=) と ?tag= を
+ * 受け、server 側で cookie / Accept-Language と合わせて lang を確定し、tag で filter する。
  *
  * @graph-connects content [calls] runListPosts → listPosts
  */
 /** @graph-connects none */
-const ListPostsInputSchema = z.object({ override: z.enum(["en", "ja"]).optional() });
+const ListPostsInputSchema = z.object({
+  override: z.enum(["en", "ja"]).optional(),
+  tag: z.string().optional(),
+});
 /** @graph-connects content [calls] runListPosts → listPosts */
 const listPostsServer = createServerFn()
   .inputValidator((data: unknown) => ListPostsInputSchema.parse(data))
-  .handler(async ({ data }) => runListPosts(data.override));
+  .handler(async ({ data }) => runListPosts(data.override, data.tag));
 
 /** @graph-connects tanstack-router [provides] /posts route */
 export const Route = createFileRoute("/posts/")({
   validateSearch: SearchSchema,
-  loaderDeps: ({ search }) => ({ override: search.lang }),
-  loader: async ({ deps }) => listPostsServer({ data: { override: deps.override } }),
+  loaderDeps: ({ search }) => ({ override: search.lang, tag: search.tag }),
+  loader: async ({ deps }) => listPostsServer({ data: { override: deps.override, tag: deps.tag } }),
   component: PostsIndex,
 });
 
 /** @graph-connects none */
 function PostsIndex() {
-  const { lang, posts } = Route.useLoaderData();
+  const { lang, posts, tag } = Route.useLoaderData();
   return (
     <main className="posts-index">
       <header className="posts-index__header">
@@ -65,7 +71,14 @@ function PostsIndex() {
           source-of-truth for posts syndicated to <a href="https://zenn.dev/thujikun">Zenn</a> (JP)
           and <a href="https://dev.to/ryantsuji">dev.to</a> (EN).
         </p>
-        <LangSwitcher current={lang} />
+        {tag ? (
+          <p className="posts-index__filter">
+            filtered by <strong>#{tag}</strong>{" "}
+            <Link to="/posts" className="posts-index__filter-clear">
+              clear
+            </Link>
+          </p>
+        ) : null}
       </header>
       <ul className="post-card-list">
         {posts.map((post) => (
@@ -73,37 +86,6 @@ function PostsIndex() {
         ))}
       </ul>
     </main>
-  );
-}
-
-/**
- * 一覧 / 詳細 page で共通の lang toggle。`?lang=` query を切替える 2 ボタン
- * (active state は current で highlight)。
- *
- * @graph-connects tanstack-router [calls] Link で `?lang=` を付けて navigate
- */
-function LangSwitcher({ current }: { current: Lang }) {
-  return (
-    <nav className="lang-switcher" aria-label="language">
-      <Link
-        to="/posts"
-        search={(prev) => ({ ...prev, lang: "en" })}
-        className={
-          current === "en" ? "lang-switcher__btn lang-switcher__btn--active" : "lang-switcher__btn"
-        }
-      >
-        EN
-      </Link>
-      <Link
-        to="/posts"
-        search={(prev) => ({ ...prev, lang: "ja" })}
-        className={
-          current === "ja" ? "lang-switcher__btn lang-switcher__btn--active" : "lang-switcher__btn"
-        }
-      >
-        JP
-      </Link>
-    </nav>
   );
 }
 
@@ -117,6 +99,7 @@ function LangSwitcher({ current }: { current: Lang }) {
  */
 export function PostCard({ post, requestedLang }: { post: PostListItem; requestedLang: Lang }) {
   const isFallback = post.servedLang !== requestedLang;
+  const tags = displayTags(post.tags);
   return (
     <li className="post-card">
       <Link to="/posts/$slug" params={{ slug: post.slug }} className="post-card__link">
@@ -144,16 +127,20 @@ export function PostCard({ post, requestedLang }: { post: PostListItem; requeste
             (showing {post.servedLang.toUpperCase()} — {requestedLang.toUpperCase()} not available)
           </p>
         ) : null}
-        {post.tags.length > 0 ? (
-          <ul className="post-card__tags">
-            {post.tags.map((tag) => (
-              <li key={tag} className="post-card__tag">
-                #{tag}
-              </li>
-            ))}
-          </ul>
-        ) : null}
       </Link>
+      {/* tags は card 全体 Link の外に置いて、tag click で `/posts?tag=` 移動できるよう
+          にする (nested Link を避ける目的)。 */}
+      {tags.length > 0 ? (
+        <ul className="post-card__tags">
+          {tags.map((tag) => (
+            <li key={tag} className="post-card__tag">
+              <Link to="/posts" search={{ tag }}>
+                #{tag}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </li>
   );
 }

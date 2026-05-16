@@ -91,8 +91,13 @@ describe("PostCard", () => {
     expect(html).toMatch(/<p class="post-card__summary">short summary<\/p>/);
     // React SSR は text 隣接 child 間に `<!-- -->` separator を挟むため、`#` と tag 名の
     // 間に comment が入る可能性も許容する正規表現で固定する。
-    expect(html).toMatch(/<li class="post-card__tag">#(?:<!--\s*-->)?rsc<\/li>/);
-    expect(html).toMatch(/<li class="post-card__tag">#(?:<!--\s*-->)?typescript<\/li>/);
+    // tag は ?tag= filter URL の anchor で wrap される (tag click で filter)
+    expect(html).toMatch(
+      /<li class="post-card__tag"><a href="\/posts(?:\?tag=rsc)?">#(?:<!--\s*-->)?rsc<\/a><\/li>/,
+    );
+    expect(html).toMatch(
+      /<li class="post-card__tag"><a href="\/posts(?:\?tag=typescript)?">#(?:<!--\s*-->)?typescript<\/a><\/li>/,
+    );
   });
 
   it("servedLang の lang badge に --served modifier が付き、他 lang badge には付かない", () => {

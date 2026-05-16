@@ -6,9 +6,9 @@ slug: "mcp-parking-pattern"
 summary: "MCP responses fill the context window fast. The parking pattern stores heavy payloads externally and returns only a key — about 90% token savings in production."
 tags:
   - "architecture"
-  - "llm"
+  - "ai"
   - "mcp"
-  - "performance"
+  - "webdev"
 lang: "en"
 syndication:
   zenn:
@@ -21,7 +21,7 @@ cover: /posts/mcp-parking-pattern.en.cover.png
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.
 
-In my previous posts I introduced [the full picture of our 17 internal MCP servers](https://dev.to/ryosuke_tsuji_f08e20fdca1/we-built-17-mcp-servers-to-let-ai-run-our-internal-operations-3lk2), [an MCP server that lets you search 991 internal tables in natural language](https://dev.to/ryosuke_tsuji_f08e20fdca1/democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5), [a Graph RAG MCP for measuring initiative impact](https://dev.to/ryosuke_tsuji_f08e20fdca1/we-built-a-custom-graph-rag-to-let-ai-answer-did-that-initiative-actually-work-3oda), and [the Sandbox MCP that lets non-engineers publish AI-built apps safely](https://dev.to/ryosuke_tsuji_f08e20fdca1/bridging-i-want-to-build-and-i-want-to-publish-safely-for-non-engineers-sandbox-mcp-392a).
+In my previous posts I introduced [the full picture of our 17 internal MCP servers](/posts/17-mcp-servers), [an MCP server that lets you search 991 internal tables in natural language](/posts/db-graph-mcp), [a Graph RAG MCP for measuring initiative impact](/posts/initiative-graph-rag), and [the Sandbox MCP that lets non-engineers publish AI-built apps safely](/posts/sandbox-mcp).
 
 This time I want to share something that came out of running those in production — **a small trick we use to cut token consumption on self-built MCP servers**.
 
@@ -61,7 +61,7 @@ Two examples from airCloset.
 
 ## Example 1: Lighter Requests — Sandbox MCP × Self-Hosted Git Server
 
-[Last time](https://dev.to/ryosuke_tsuji_f08e20fdca1/bridging-i-want-to-build-and-i-want-to-publish-safely-for-non-engineers-sandbox-mcp-392a) I wrote about **Sandbox MCP**, the platform that lets non-engineers publish AI-built apps internally. The first iteration was fully **MCP tool-driven file uploads**.
+[Last time](/posts/sandbox-mcp) I wrote about **Sandbox MCP**, the platform that lets non-engineers publish AI-built apps internally. The first iteration was fully **MCP tool-driven file uploads**.
 
 ```ruby
 sandbox_write_file(app_name: "todo-app", path: "index.html", content: "<html>...")
@@ -103,7 +103,7 @@ By the way, we **don't use GitHub Organizations** here. Issuing GitHub seats for
 
 ## Example 2: Lighter Responses — DB Graph MCP × Spreadsheet
 
-[DB Graph MCP](https://dev.to/ryosuke_tsuji_f08e20fdca1/democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5) is the MCP that lets us search and query 991 internal tables in natural language.
+[DB Graph MCP](/posts/db-graph-mcp) is the MCP that lets us search and query 991 internal tables in natural language.
 
 The annoying-but-common case here is **"give me everything"-style queries**:
 

@@ -6,9 +6,9 @@ slug: "agentic-graph-rag-mcp"
 summary: "Vector RAG and one-shot Graph RAG both flatten the search step. Agentic Graph RAG hands the graph to an LLM as an MCP and lets it traverse relationships iteratively."
 tags:
   - "ai"
-  - "webdev"
   - "graphrag"
   - "mcp"
+  - "webdev"
 lang: "en"
 syndication:
   zenn:
@@ -21,7 +21,7 @@ cover: /posts/agentic-graph-rag-mcp.en.cover.png
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.
 
-Over my last few posts, I've introduced internal MCP servers we've been building: [DB Graph MCP](https://dev.to/ryantsuji/democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5), [the full picture of our 17 internal MCP servers](https://dev.to/ryantsuji/we-built-17-mcp-servers-to-let-ai-run-our-internal-operations-3lk2), [Biz Graph](https://dev.to/ryantsuji/we-built-a-custom-graph-rag-to-let-ai-answer-did-that-initiative-actually-work-3oda), and [Sandbox MCP](https://dev.to/ryantsuji/bridging-i-want-to-build-and-i-want-to-publish-safely-for-non-engineers-sandbox-mcp-392a).
+Over my last few posts, I've introduced internal MCP servers we've been building: [DB Graph MCP](/posts/db-graph-mcp), [the full picture of our 17 internal MCP servers](/posts/17-mcp-servers), [Biz Graph](/posts/initiative-graph-rag), and [Sandbox MCP](/posts/sandbox-mcp).
 
 DB Graph is built from ORM parsing. Biz Graph extracts initiatives from meeting slides and uses a hand-designed Week node structure. Sandbox MCP is an app deployment platform. The purposes and implementations are completely different — but as I was writing each piece, I noticed that **the design ideas at the root are the same**.
 
@@ -247,7 +247,7 @@ Nobody had to tell the AI "now look at warehouse." **The response itself is the 
 
 ## DB Graph in Action — A Production Investigation in 4 Steps
 
-Here's the full flow (also shown in the [DB Graph MCP article](https://dev.to/ryantsuji/democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5)).
+Here's the full flow (also shown in the [DB Graph MCP article](/posts/db-graph-mcp)).
 
 The scenario: a CS agent asks, "This member shows 'returned' in the app, but did the warehouse actually confirm receipt?"
 
@@ -295,7 +295,7 @@ This is a different experience from both Vector RAG and classical Graph RAG. Vec
 
 This pattern — what we adopt: **human-designed graph + deterministic retrieval tools + responses that double as AI runbooks** — isn't limited to DB Graph and Biz Graph. We use it across many MCP servers internally.
 
-Including the ones I mentioned by name in [the 17 internal MCP servers post](https://dev.to/ryantsuji/we-built-17-mcp-servers-to-let-ai-run-our-internal-operations-3lk2), the lineup looks like this:
+Including the ones I mentioned by name in [the 17 internal MCP servers post](/posts/17-mcp-servers), the lineup looks like this:
 
 | Graph | What it covers |
 |-------|----------------|
@@ -340,7 +340,7 @@ Don't pile everything into one giant tool. Split into search-style entry points,
 
 ### 4. Tool descriptions are AI runbooks
 
-Write tool descriptions as **execution guides for the AI**, not human documentation. "If you see this kind of response, call this tool next." "In this situation, format the argument like this." As I mentioned in [the Sandbox MCP post](https://dev.to/ryantsuji/bridging-i-want-to-build-and-i-want-to-publish-safely-for-non-engineers-sandbox-mcp-392a), this directly determines how smart the agent appears.
+Write tool descriptions as **execution guides for the AI**, not human documentation. "If you see this kind of response, call this tool next." "In this situation, format the argument like this." As I mentioned in [the Sandbox MCP post](/posts/sandbox-mcp), this directly determines how smart the agent appears.
 
 ### 5. Embed "next move candidates" in responses
 

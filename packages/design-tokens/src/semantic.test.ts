@@ -31,8 +31,8 @@ describe("semantic tokens — light theme", () => {
     expect(light).toMatchInlineSnapshot(`
       {
         "accent": {
-          "bg": "oklch(54% 0.16 50)",
-          "border": "oklch(63% 0.16 50)",
+          "bg": "oklch(60% 0.13 188)",
+          "border": "oklch(70% 0.13 188)",
           "fg": "oklch(100% 0 0)",
         },
         "bg": {
@@ -51,7 +51,7 @@ describe("semantic tokens — light theme", () => {
           "border": "oklch(0% 0 0 / 0.06)",
         },
         "text": {
-          "accent": "oklch(45% 0.14 50)",
+          "accent": "oklch(50% 0.12 188)",
           "muted": "oklch(60% 0 0)",
           "primary": "oklch(14% 0 0)",
           "secondary": "oklch(36% 0 0)",
@@ -66,27 +66,27 @@ describe("semantic tokens — dark theme", () => {
     expect(dark).toMatchInlineSnapshot(`
       {
         "accent": {
-          "bg": "oklch(63% 0.16 50)",
-          "border": "oklch(71% 0.14 50)",
+          "bg": "oklch(70% 0.13 188)",
+          "border": "oklch(75% 0.12 188)",
           "fg": "oklch(14% 0 0)",
         },
         "bg": {
-          "base": "oklch(14% 0 0)",
-          "elevated": "oklch(36% 0 0)",
-          "surface": "oklch(24% 0 0)",
+          "base": "oklch(17% 0.018 188)",
+          "elevated": "oklch(28% 0.01 188)",
+          "surface": "oklch(22% 0.014 188)",
         },
         "border": {
-          "default": "oklch(36% 0 0)",
+          "default": "oklch(30% 0.012 188)",
           "strong": "oklch(60% 0 0)",
-          "subtle": "oklch(24% 0 0)",
+          "subtle": "oklch(22% 0.014 188)",
         },
         "glass": {
-          "bg": "oklch(20% 0 0 / 0.55)",
+          "bg": "oklch(24% 0.02 188 / 0.55)",
           "blur": "16px",
           "border": "oklch(100% 0 0 / 0.08)",
         },
         "text": {
-          "accent": "oklch(80% 0.1 50)",
+          "accent": "oklch(81% 0.1 188)",
           "muted": "oklch(74% 0 0)",
           "primary": "oklch(98.5% 0 0)",
           "secondary": "oklch(92% 0 0)",
@@ -97,9 +97,9 @@ describe("semantic tokens — dark theme", () => {
 });
 
 describe("semantic tokens — light/dark の差分", () => {
-  it("bg.base: light は白、dark は黒寄り", () => {
+  it("bg.base: light は白、dark は黒寄りで極弱 teal tint", () => {
     expect(light.bg.base).toMatch(/100%/);
-    expect(dark.bg.base).toMatch(/14%/);
+    expect(dark.bg.base).toMatch(/17%/);
   });
 
   it("glass.blur は両 theme で同じ (blur radius は theme 非依存)", () => {

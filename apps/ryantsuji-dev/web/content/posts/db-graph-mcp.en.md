@@ -6,9 +6,9 @@ slug: "db-graph-mcp"
 summary: "Internal data lives across 15 schemas, 991 tables, 11 SQL DBs and 6 MongoDBs. DB Graph MCP lets Claude search and query the whole thing in natural language."
 tags:
   - "ai"
+  - "security"
   - "mcp"
-  - "graphrag"
-  - "showdev"
+  - "webdev"
 lang: "en"
 syndication:
   zenn:
