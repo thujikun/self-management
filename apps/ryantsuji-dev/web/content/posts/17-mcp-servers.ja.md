@@ -11,6 +11,12 @@ tags:
   - "mcp"
   - "claude"
 lang: "ja"
+syndication:
+  zenn:
+    id: "d9fc317c1336c2"
+  devto:
+    id: 3467141
+    slug: "we-built-17-mcp-servers-to-let-ai-run-our-internal-operations-3lk2"
 ---
 
 ## はじめに

@@ -11,6 +11,12 @@ tags:
   - "mcp"
   - "graphrag"
 lang: "ja"
+syndication:
+  zenn:
+    id: "7a0b06cb2a35d8"
+  devto:
+    id: 3527776
+    slug: "we-built-a-custom-graph-rag-to-let-ai-answer-did-that-initiative-actually-work-3oda"
 ---
 
 みなさまこんにちは！エアークローゼットでCTOをしている[辻](https://x.com/RyanAircloset)です。
@@ -535,7 +541,3 @@ MetricDomain のマッピング（「マーケティング広告 → acquisition
 これにより、「あの施策、効果あった？」「新規獲得に効いた施策を探して」「前年比で指標を見せて、施策を重ねて」— こうした質問に、AI が自律的にグラフを探索して答えられるようになりました。
 
 グラフは「あるもの」ではなく「設計するもの」。特にビジネスデータにおいては。
-
----
-
-株式会社エアークローゼットでは、AI と共に働き方そのものを再定義していく仲間を募集中です。ご興味あれば[エアクロクエスト（採用サイト）](https://corp.air-closet.com/recruiting/developers/)を参照してください。

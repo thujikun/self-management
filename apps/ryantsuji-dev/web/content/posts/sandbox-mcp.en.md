@@ -10,6 +10,12 @@ tags:
   - "mcp"
   - "cloudflarechallenge"
 lang: "en"
+syndication:
+  zenn:
+    id: "65efe9614f8e73"
+  devto:
+    id: 3559369
+    slug: "bridging-i-want-to-build-and-i-want-to-publish-safely-for-non-engineers-sandbox-mcp-392a"
 ---
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.
@@ -563,7 +569,3 @@ Building this, what struck me again is that **the role of platforms in an AI-pow
 At the same time, by **limiting what the builder is responsible for**, we drastically lower the barrier to "let me just try something." That's the entry point that turns a non-engineer's "I want to build this" into actual operational improvements.
 
 I hope this is useful for anyone designing internal platforms.
-
----
-
-At airCloset, we're looking for engineers who want to build a new development experience together with AI. If you're interested, please check out our careers page at [airCloset Quest](https://corp.air-closet.com/recruiting/developers/).

@@ -10,6 +10,12 @@ tags:
   - "graphrag"
   - "mcp"
 lang: "en"
+syndication:
+  zenn:
+    id: "341dffee42f454"
+  devto:
+    id: 3622364
+    slug: "graph-rag-isnt-a-one-shot-anymore-the-case-for-agentic-graph-rag-mcps-1dj5"
 ---
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.
@@ -379,7 +385,3 @@ The graphs we've built internally — DB Graph, Biz Graph, Code Graph, Product G
 If you're building AI-native internal infrastructure, give this perspective a try. **Don't hand the AI an answer. Hand it a map.** It walks much further than you think.
 
 And the quality of that map comes down to how deeply you understand the domain — at least for the domains where the relevant knowledge sits as tacit understanding inside people's heads. **In those domains, the best AI systems are still built by the people who know the problem space best.** Domain expertise hasn't lost value in the AI era — it's gained it. That's been my strongest takeaway from two years of building graphs across our company.
-
----
-
-At airCloset, we're hiring engineers who want to build new development experiences alongside AI. If interested, take a look at our [airCloset Quest careers page](https://corp.air-closet.com/recruiting/developers/).

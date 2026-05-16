@@ -21,6 +21,7 @@ describe("parseFrontmatter", () => {
       publishedAt: "2026-05-08",
       tags: [],
       draft: false,
+      syndication: {},
     });
   });
 
@@ -37,6 +38,7 @@ describe("parseFrontmatter", () => {
       publishedAt: "2026-05-08",
       tags: [],
       draft: false,
+      syndication: {},
     });
   });
 
@@ -68,5 +70,58 @@ describe("parseFrontmatter", () => {
         canonical: "https://zenn.dev/thujikun/articles/abc",
       }).canonical,
     ).toMatch(/^https:\/\//);
+  });
+
+  it("cover は `/` 始まりの絶対 path のみ受理 (相対 path は reject)", () => {
+    expect(() =>
+      parseFrontmatter({
+        title: "x",
+        publishedAt: "2026-05-08",
+        cover: "posts/x.cover.png",
+      }),
+    ).toThrow();
+    expect(
+      parseFrontmatter({
+        title: "x",
+        publishedAt: "2026-05-08",
+        cover: "/posts/x.cover.png",
+      }).cover,
+    ).toBe("/posts/x.cover.png");
+  });
+
+  it("syndication.zenn.id / devto.id+slug の組合せを受理", () => {
+    const out = parseFrontmatter({
+      title: "x",
+      publishedAt: "2026-05-08",
+      syndication: {
+        zenn: { id: "d9fc317c1336c2" },
+        devto: { id: 3655760, slug: "we-built-17-mcp-servers-3lk2" },
+      },
+    });
+    expect(out.syndication.zenn?.id).toBe("d9fc317c1336c2");
+    expect(out.syndication.devto?.id).toBe(3655760);
+    expect(out.syndication.devto?.slug).toBe("we-built-17-mcp-servers-3lk2");
+  });
+
+  it("syndication.devto.id は正の整数のみ (0 / 負数 / 文字列で throw)", () => {
+    for (const bad of [0, -1, "3655760"]) {
+      expect(() =>
+        parseFrontmatter({
+          title: "x",
+          publishedAt: "2026-05-08",
+          syndication: { devto: { id: bad, slug: "y" } },
+        }),
+      ).toThrow();
+    }
+  });
+
+  it("syndication 部分指定 (zenn だけ / devto だけ) も受理", () => {
+    const only_zenn = parseFrontmatter({
+      title: "x",
+      publishedAt: "2026-05-08",
+      syndication: { zenn: { id: "abc" } },
+    });
+    expect(only_zenn.syndication.zenn?.id).toBe("abc");
+    expect(only_zenn.syndication.devto).toBeUndefined();
   });
 });

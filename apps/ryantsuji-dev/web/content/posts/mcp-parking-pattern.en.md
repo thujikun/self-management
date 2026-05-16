@@ -10,6 +10,12 @@ tags:
   - "mcp"
   - "performance"
 lang: "en"
+syndication:
+  zenn:
+    id: "4c5f49f89db19f"
+  devto:
+    id: 3593900
+    slug: "cutting-self-built-mcp-server-token-usage-by-90-the-parking-pattern-3e7o"
 ---
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.
@@ -200,7 +206,3 @@ A few small tricks for keeping self-built MCP server token consumption under con
 It's an unflashy design move, but **the difference in MCP usability before and after is dramatic**.
 
 If you're running self-built MCP servers internally and feeling the token squeeze, give it a try.
-
----
-
-At airCloset, we're looking for engineers who want to build a new development experience together with AI. If you're interested, please check out our careers page at [airCloset Quest](https://corp.air-closet.com/recruiting/developers/).

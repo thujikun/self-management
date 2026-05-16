@@ -129,6 +129,7 @@ describe("variantFor (internal、fallback ロジックと invariant 破れの fa
       slug: "_ja-only-test",
       tags: [],
       draft: false,
+      syndication: {},
       lang: "ja" as const,
     },
     source: "---\ntitle: 'ja'\npublishedAt: 2026-01-01\n---\nja body",
