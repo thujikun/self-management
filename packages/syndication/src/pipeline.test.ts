@@ -1,0 +1,108 @@
+/**
+ * pipeline composer (syndicateForZenn / syndicateForDevto) の統合テスト。
+ *
+ * 個別 transform (link rewriter / footer / frontmatter builder) は単体 test 済なので、
+ * ここでは「compose した時に順序と output shape が期待通り」を確認する。
+ *
+ * @graph-stack ryantsuji-dev
+ * @graph-domain publishing
+ * @graph-business pipeline composer の統合 test。link rewrite + footer append + frontmatter build が target 別に正しい順で適用され、Zenn は完成 markdown 文字列、dev.to は API attribute object を返すことを保証
+ * @graph-connects none
+ */
+
+import { describe, expect, it } from "vitest";
+import type { Frontmatter } from "@self/content";
+
+import { syndicateForDevto, syndicateForZenn } from "./pipeline.js";
+
+const meta: Frontmatter = {
+  title: "DB Graph",
+  publishedAt: "2026-05-01",
+  tags: ["ai", "mcp"],
+  draft: false,
+  syndication: {},
+  summary: "summary",
+};
+
+const resolver = (slug: string): string | null => {
+  if (slug === "other-post") return "https://zenn.dev/aircloset/articles/abc";
+  return null;
+};
+
+describe("syndicateForZenn", () => {
+  it("frontmatter + link 書き換え + footer append を順に適用", () => {
+    const out = syndicateForZenn({
+      meta,
+      body: "前回の [Other](/posts/other-post) を参照。\n",
+      resolver,
+      footerMarkdown: "---\n採用中。",
+      emoji: "📊",
+      publicationName: "aircloset",
+    });
+    // frontmatter (---で挟む)
+    expect(out.startsWith("---\n")).toBe(true);
+    expect(out).toContain('title: "DB Graph"');
+    expect(out).toContain('emoji: "📊"');
+    expect(out).toContain('publication_name: "aircloset"');
+    // 内部 link 書き換え済
+    expect(out).toContain("https://zenn.dev/aircloset/articles/abc");
+    expect(out).not.toContain("/posts/other-post");
+    // footer 末尾に
+    expect(out.trim().endsWith("採用中。")).toBe(true);
+  });
+
+  it("footerMarkdown=null は footer を付けない", () => {
+    const out = syndicateForZenn({
+      meta,
+      body: "本文。",
+      resolver,
+      footerMarkdown: null,
+    });
+    expect(out).not.toContain("採用中");
+    expect(out.trim().endsWith("本文。")).toBe(true);
+  });
+
+  it("publicationName=null で個人 publish (publication_name 行を omit)", () => {
+    const out = syndicateForZenn({
+      meta,
+      body: "x",
+      resolver,
+      footerMarkdown: null,
+      publicationName: null,
+    });
+    expect(out).not.toContain("publication_name");
+  });
+});
+
+describe("syndicateForDevto", () => {
+  it("link 書き換え後の body を含めた article attribute を返す", () => {
+    const out = syndicateForDevto({
+      meta,
+      body: "see [other](/posts/other-post)",
+      slug: "db-graph",
+      resolver,
+      canonicalHost: "https://ryantsuji.dev",
+    });
+    expect(out.title).toBe("DB Graph");
+    expect(out.published).toBe(true);
+    expect(out.body_markdown).toContain("https://zenn.dev/aircloset/articles/abc");
+    expect(out.body_markdown).not.toContain("/posts/other-post");
+    expect(out.canonical_url).toBe("https://ryantsuji.dev/posts/db-graph");
+    expect(out.tags).toStrictEqual(["ai", "mcp"]);
+    expect(out.description).toBe("summary");
+  });
+
+  it("cover / series option を attribute に反映", () => {
+    const out = syndicateForDevto({
+      meta,
+      body: "x",
+      slug: "db-graph",
+      resolver,
+      canonicalHost: "https://ryantsuji.dev",
+      coverImageUrl: "https://ryantsuji.dev/posts/db-graph.cover.png",
+      series: "ai-harness",
+    });
+    expect(out.cover_image).toBe("https://ryantsuji.dev/posts/db-graph.cover.png");
+    expect(out.series).toBe("ai-harness");
+  });
+});
