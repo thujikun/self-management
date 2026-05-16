@@ -38,16 +38,25 @@ const MAX_CONCURRENT = parseInt(process.env.AUTO_REVIEW_MAX_CONCURRENT ?? "2", 1
 const MAX_ITERATIONS_PER_PR = parseInt(process.env.AUTO_REVIEW_MAX_ITERATIONS ?? "10", 10);
 const REPO_ROOT = process.env.AUTO_REVIEW_REPO_ROOT ?? process.cwd();
 /**
- * 起動から `EXIT_AFTER_UPTIME_MS` 経過 + queue idle なら process.exit(0) で抜ける。
+ * 起動から `EXIT_AFTER_UPTIME_MS` 経過 + queue idle なら main loop を break して
+ * `queue.waitIdle()` の後に natural exit (exit code 0) する。
  * 外側の wrapper script (`loop.sh`) が `git fetch + reset --hard origin/main` してから
  * tsx を再 spawn するので、merge された新コードを自動で取り込んで再起動する形になる。
  * Node の import は同 process 内で再読込されないので、定期的に process を作り直すのが要点。
  * 0 を指定すると self-exit 無効化 (旧 behavior、wrapper 無しでの開発時用)。
+ *
+ * 非数値 / 部分解釈可能な値 (例: `"abc"`, `""`, `"30m"`) を許すと、`parseInt` が NaN や
+ * 想定外の小さい値を返し、wrapper script との組み合わせで「起動 → 即 self-exit → 2 秒で再起動」
+ * の暴走 loop に陥る。anti-loop 5 層の趣旨に反するので、起動時に fail-fast する。
  */
-const EXIT_AFTER_UPTIME_MS = parseInt(
-  process.env.AUTO_REVIEW_EXIT_AFTER_UPTIME_MS ?? `${30 * 60 * 1000}`,
-  10,
-);
+const EXIT_AFTER_UPTIME_MS_RAW =
+  process.env.AUTO_REVIEW_EXIT_AFTER_UPTIME_MS ?? `${30 * 60 * 1000}`;
+if (!/^\d+$/.test(EXIT_AFTER_UPTIME_MS_RAW)) {
+  throw new Error(
+    `AUTO_REVIEW_EXIT_AFTER_UPTIME_MS must be a non-negative integer (got: ${JSON.stringify(process.env.AUTO_REVIEW_EXIT_AFTER_UPTIME_MS)})`,
+  );
+}
+const EXIT_AFTER_UPTIME_MS = parseInt(EXIT_AFTER_UPTIME_MS_RAW, 10);
 /**
  * 失敗 retry 制御:
  *   - 同じ SHA / commentId に対する review/fix の失敗回数が `MAX_*_FAILURES` 未満かつ
