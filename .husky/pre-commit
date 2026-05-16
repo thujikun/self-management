@@ -1,10 +1,18 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 # pre-commit guard。
-# staged file を取り、各 check を順次実行。
-# どれか fail なら commit を block。
+#
+# gate 一覧は `scripts/hooks/gates.sh` が single source of truth。
+# CI workflow も同じ list を consume するので、ここに gate 漏れがあれば CI も漏れるし、
+# 逆に CI を更新したら hook も自動で揃う (構造的に drift しない)。
+#
+# 各 gate は staged file 限定で走る (pre-commit は incremental が前提、
+# フル check は CI 側 `full` mode で repo 全体を再評価する)。
 #
 # `--no-verify` 等で bypass するのは絶対禁止 (CLAUDE.md ルール 1)。
 # hook が落ちたら根本原因を直す。
+#
+# 注意: husky は環境により sh / dash で実行する場合があるため、POSIX 互換で記述する
+# (bash 専用構文 process substitution `<(...)` や array は使わない)。
 
 set -e
 
@@ -13,35 +21,10 @@ if [ -z "$FILES" ]; then
   exit 0
 fi
 
-# 1. シークレット混入検査 (cortex から流用)
-bash scripts/hooks/secret-check.sh $FILES
-
-# 2. 抑制コメント禁止 (詳細は scripts/hooks/check-no-ignore.sh)
-bash scripts/hooks/check-no-ignore.sh $FILES
-
-# 3. ファイル行数上限 (コメント・空行除外、CAP=500)
-pnpm exec tsx scripts/hooks/check-line-count.cli.ts $FILES
-
-# 4. @graph-* タグ整合性
-pnpm exec tsx scripts/hooks/check-graph-tags.cli.ts $FILES
-
-# 4b. operations/log.md の古い entry が archive されているか (md 肥大化防止)
-pnpm exec tsx scripts/compact-log.cli.ts --check
-
-# 5. ESLint (max-warnings=0)
-# staged TS だけ走らせる (フルプロジェクト lint は CI 側で再度走る前提)。
-# `--no-warn-ignored` で ignores に該当する staged file (routeTree.gen.ts 等) の
-# warning を抑止 (warning が `--max-warnings=0` を踏むのを回避)。
-TS_FILES=$(echo "$FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|cjs)$' || true)
-if [ -n "$TS_FILES" ]; then
-  pnpm exec eslint --max-warnings=0 --no-warn-ignored $TS_FILES
-fi
-
-# 6. Prettier format check (staged file のみ)
-# CI が `pnpm format:check` を走らせるので、ここで弾かないと「commit は通るが CI で落ちる」事故になる。
-# `--ignore-unknown` で prettier 未対応の binary / 拡張子 (例: .png, .lock) を skip、
-# `--check` で diff 検出すると exit 1 → commit block。fix は `pnpm format` で。
-pnpm exec prettier --check --ignore-unknown $FILES
-
-# 7. test:coverage (per-file 90% 閾値、threshold 違反は exit 1)
-pnpm exec vitest run --coverage
+# gate 名を newline 区切りで取得、IFS word-split で順次実行
+GATES_LIST=$(bash scripts/hooks/gates.sh list staged)
+for gate in $GATES_LIST; do
+  # $FILES は意図的に unquoted → space で word-split して gates.sh の positional args になる
+  # shellcheck disable=SC2086
+  bash scripts/hooks/gates.sh run "$gate" staged $FILES
+done
