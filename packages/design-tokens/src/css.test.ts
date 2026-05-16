@@ -40,13 +40,13 @@ describe("semanticToVars", () => {
         "  --text-primary: oklch(14% 0 0);",
         "  --text-secondary: oklch(36% 0 0);",
         "  --text-muted: oklch(60% 0 0);",
-        "  --text-accent: oklch(45% 0.14 50);",
+        "  --text-accent: oklch(50% 0.12 188);",
         "  --border-subtle: oklch(96% 0 0);",
         "  --border-default: oklch(92% 0 0);",
         "  --border-strong: oklch(74% 0 0);",
-        "  --accent-bg: oklch(54% 0.16 50);",
+        "  --accent-bg: oklch(60% 0.13 188);",
         "  --accent-fg: oklch(100% 0 0);",
-        "  --accent-border: oklch(63% 0.16 50);",
+        "  --accent-border: oklch(70% 0.13 188);",
         "  --glass-bg: oklch(100% 0 0 / 0.65);",
         "  --glass-border: oklch(0% 0 0 / 0.06);",
         "  --glass-blur: 16px;",
@@ -57,20 +57,20 @@ describe("semanticToVars", () => {
   it("dark の output 全体を snapshot で固定", () => {
     expect(semanticToVars(dark)).toMatchInlineSnapshot(`
       [
-        "  --bg-base: oklch(14% 0 0);",
-        "  --bg-surface: oklch(24% 0 0);",
-        "  --bg-elevated: oklch(36% 0 0);",
+        "  --bg-base: oklch(17% 0.018 188);",
+        "  --bg-surface: oklch(22% 0.014 188);",
+        "  --bg-elevated: oklch(28% 0.01 188);",
         "  --text-primary: oklch(98.5% 0 0);",
         "  --text-secondary: oklch(92% 0 0);",
         "  --text-muted: oklch(74% 0 0);",
-        "  --text-accent: oklch(80% 0.1 50);",
-        "  --border-subtle: oklch(24% 0 0);",
-        "  --border-default: oklch(36% 0 0);",
+        "  --text-accent: oklch(81% 0.1 188);",
+        "  --border-subtle: oklch(22% 0.014 188);",
+        "  --border-default: oklch(30% 0.012 188);",
         "  --border-strong: oklch(60% 0 0);",
-        "  --accent-bg: oklch(63% 0.16 50);",
+        "  --accent-bg: oklch(70% 0.13 188);",
         "  --accent-fg: oklch(14% 0 0);",
-        "  --accent-border: oklch(71% 0.14 50);",
-        "  --glass-bg: oklch(20% 0 0 / 0.55);",
+        "  --accent-border: oklch(75% 0.12 188);",
+        "  --glass-bg: oklch(24% 0.02 188 / 0.55);",
         "  --glass-border: oklch(100% 0 0 / 0.08);",
         "  --glass-blur: 16px;",
       ]
@@ -107,16 +107,16 @@ describe("buildCss", () => {
         --color-gray-800: oklch(24% 0 0);
         --color-gray-900: oklch(14% 0 0);
         --color-gray-1000: oklch(0% 0 0);
-        --color-accent-50: oklch(97% 0.015 50);
-        --color-accent-100: oklch(94% 0.03 50);
-        --color-accent-200: oklch(88% 0.06 50);
-        --color-accent-300: oklch(80% 0.1 50);
-        --color-accent-400: oklch(71% 0.14 50);
-        --color-accent-500: oklch(63% 0.16 50);
-        --color-accent-600: oklch(54% 0.16 50);
-        --color-accent-700: oklch(45% 0.14 50);
-        --color-accent-800: oklch(36% 0.11 50);
-        --color-accent-900: oklch(26% 0.07 50);
+        --color-accent-50: oklch(97% 0.015 188);
+        --color-accent-100: oklch(94% 0.03 188);
+        --color-accent-200: oklch(88% 0.06 188);
+        --color-accent-300: oklch(81% 0.1 188);
+        --color-accent-400: oklch(75% 0.12 188);
+        --color-accent-500: oklch(70% 0.13 188);
+        --color-accent-600: oklch(60% 0.13 188);
+        --color-accent-700: oklch(50% 0.12 188);
+        --color-accent-800: oklch(40% 0.09 188);
+        --color-accent-900: oklch(28% 0.06 188);
         --space-0: 0;
         --space-1: 0.25rem;
         --space-2: 0.5rem;
@@ -155,6 +155,7 @@ describe("buildCss", () => {
         --blur-md: 8px;
         --blur-lg: 16px;
         --blur-xl: 24px;
+        --blur-ambient: 80px;
         --duration-instant: 0ms;
         --duration-fast: 120ms;
         --duration-base: 200ms;
@@ -164,45 +165,85 @@ describe("buildCss", () => {
         --easing-inOut: cubic-bezier(0.65, 0, 0.35, 1);
         --easing-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-        /* light theme semantic */
+        /* light theme semantic (default) */
         --bg-base: oklch(100% 0 0);
         --bg-surface: oklch(98.5% 0 0);
         --bg-elevated: oklch(96% 0 0);
         --text-primary: oklch(14% 0 0);
         --text-secondary: oklch(36% 0 0);
         --text-muted: oklch(60% 0 0);
-        --text-accent: oklch(45% 0.14 50);
+        --text-accent: oklch(50% 0.12 188);
         --border-subtle: oklch(96% 0 0);
         --border-default: oklch(92% 0 0);
         --border-strong: oklch(74% 0 0);
-        --accent-bg: oklch(54% 0.16 50);
+        --accent-bg: oklch(60% 0.13 188);
         --accent-fg: oklch(100% 0 0);
-        --accent-border: oklch(63% 0.16 50);
+        --accent-border: oklch(70% 0.13 188);
         --glass-bg: oklch(100% 0 0 / 0.65);
         --glass-border: oklch(0% 0 0 / 0.06);
         --glass-blur: 16px;
       }
 
+      /* system prefers dark — cookie 未設定時の自然な default */
       @media (prefers-color-scheme: dark) {
         :root {
-          /* dark theme semantic (primitive は引き継ぎ) */
-          --bg-base: oklch(14% 0 0);
-          --bg-surface: oklch(24% 0 0);
-          --bg-elevated: oklch(36% 0 0);
+          --bg-base: oklch(17% 0.018 188);
+          --bg-surface: oklch(22% 0.014 188);
+          --bg-elevated: oklch(28% 0.01 188);
           --text-primary: oklch(98.5% 0 0);
           --text-secondary: oklch(92% 0 0);
           --text-muted: oklch(74% 0 0);
-          --text-accent: oklch(80% 0.1 50);
-          --border-subtle: oklch(24% 0 0);
-          --border-default: oklch(36% 0 0);
+          --text-accent: oklch(81% 0.1 188);
+          --border-subtle: oklch(22% 0.014 188);
+          --border-default: oklch(30% 0.012 188);
           --border-strong: oklch(60% 0 0);
-          --accent-bg: oklch(63% 0.16 50);
+          --accent-bg: oklch(70% 0.13 188);
           --accent-fg: oklch(14% 0 0);
-          --accent-border: oklch(71% 0.14 50);
-          --glass-bg: oklch(20% 0 0 / 0.55);
+          --accent-border: oklch(75% 0.12 188);
+          --glass-bg: oklch(24% 0.02 188 / 0.55);
           --glass-border: oklch(100% 0 0 / 0.08);
           --glass-blur: 16px;
         }
+      }
+
+      /* explicit cookie override: dark (system が light でも適用) */
+      :root[data-theme="dark"] {
+        --bg-base: oklch(17% 0.018 188);
+        --bg-surface: oklch(22% 0.014 188);
+        --bg-elevated: oklch(28% 0.01 188);
+        --text-primary: oklch(98.5% 0 0);
+        --text-secondary: oklch(92% 0 0);
+        --text-muted: oklch(74% 0 0);
+        --text-accent: oklch(81% 0.1 188);
+        --border-subtle: oklch(22% 0.014 188);
+        --border-default: oklch(30% 0.012 188);
+        --border-strong: oklch(60% 0 0);
+        --accent-bg: oklch(70% 0.13 188);
+        --accent-fg: oklch(14% 0 0);
+        --accent-border: oklch(75% 0.12 188);
+        --glass-bg: oklch(24% 0.02 188 / 0.55);
+        --glass-border: oklch(100% 0 0 / 0.08);
+        --glass-blur: 16px;
+      }
+
+      /* explicit cookie override: light (system が dark でも適用) */
+      :root[data-theme="light"] {
+        --bg-base: oklch(100% 0 0);
+        --bg-surface: oklch(98.5% 0 0);
+        --bg-elevated: oklch(96% 0 0);
+        --text-primary: oklch(14% 0 0);
+        --text-secondary: oklch(36% 0 0);
+        --text-muted: oklch(60% 0 0);
+        --text-accent: oklch(50% 0.12 188);
+        --border-subtle: oklch(96% 0 0);
+        --border-default: oklch(92% 0 0);
+        --border-strong: oklch(74% 0 0);
+        --accent-bg: oklch(60% 0.13 188);
+        --accent-fg: oklch(100% 0 0);
+        --accent-border: oklch(70% 0.13 188);
+        --glass-bg: oklch(100% 0 0 / 0.65);
+        --glass-border: oklch(0% 0 0 / 0.06);
+        --glass-blur: 16px;
       }
       "
     `);

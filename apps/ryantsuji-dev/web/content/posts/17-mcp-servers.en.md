@@ -6,9 +6,9 @@ slug: "17-mcp-servers"
 summary: "Overview of 17 MCP servers we built in three months at airCloset, covering DBs, infra, docs, project management, observability, CI/CD, and even non-engineer code edits."
 tags:
   - "ai"
-  - "automation"
-  - "mcp"
-  - "showdev"
+  - "gcp"
+  - "typescript"
+  - "webdev"
 lang: "en"
 syndication:
   zenn:
@@ -23,7 +23,7 @@ cover: /posts/17-mcp-servers.en.cover.png
 
 In a previous article, I introduced "DB Graph MCP" — a system that enables safe, cross-schema search and query execution across our entire database estate of 17 DBs and 994 tables.
 
-https://dev.to/ryosuke_tsuji_f08e20fdca1/democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5
+/posts/db-graph-mcp
 
 Thanks to the positive response, this time I'd like to introduce **the rest of our MCP server fleet** beyond DB Graph.
 
@@ -35,7 +35,7 @@ Here's the full lineup:
 
 | Category | Server | Description |
 |----------|--------|-------------|
-| **Data** | DB Graph | Company-wide DB dictionary + query execution ([previous article](https://zenn.dev/aircloset/articles/2731787582881a)) |
+| **Data** | DB Graph | Company-wide DB dictionary + query execution ([previous article](/posts/db-graph-mcp)) |
 | **Infrastructure** | GCloud | GCP resources, read-only |
 | | AWS | AWS resources, read-only |
 | **Docs & Knowledge** | GWS | Full Google Workspace access |
@@ -50,7 +50,7 @@ Here's the full lineup:
 | | UX Insights | UX analytics from BQ |
 | | freee | Accounting API integration |
 | **Dev Platform** | Workspace | ACL-gated monorepo editing & deployment |
-| | Sandbox | [App deployment for non-engineers](https://dev.to/ryosuke_tsuji_f08e20fdca1/bridging-i-want-to-build-and-i-want-to-publish-safely-for-non-engineers-sandbox-mcp-392a) |
+| | Sandbox | [App deployment for non-engineers](/posts/sandbox-mcp) |
 
 All servers are implemented in **TypeScript**, deployed to **GCP via Pulumi**, and authenticated with **Google OAuth**.
 
@@ -280,7 +280,7 @@ No gcloud, no Docker. Just tell Claude "I want a tool that does X" and it's publ
 
 Deployed apps are protected by **Cloudflare Access with Google Workspace authentication**, so only internal members can access them. Even though they're on the public internet, access from outside the organization is impossible.
 
-I wrote [detail article](https://dev.to/ryosuke_tsuji_f08e20fdca1/bridging-i-want-to-build-and-i-want-to-publish-safely-for-non-engineers-sandbox-mcp-392a).
+I wrote [detail article](/posts/sandbox-mcp).
 
 ## Graph Servers: Code Graph / Product Graph / Biz Graph
 
@@ -288,7 +288,7 @@ A family of servers that analyze codebases and business logic as graph structure
 
 | Server | Scope | Key Feature |
 |--------|-------|-------------|
-| DB Graph | Company-wide DBs ([previous article](https://zenn.dev/aircloset/articles/2731787582881a)) | Table dictionary + semantic search + live DB queries + PII anonymization |
+| DB Graph | Company-wide DBs ([previous article](/posts/db-graph-mcp)) | Table dictionary + semantic search + live DB queries + PII anonymization |
 | Code Graph | All source code (cross-repository) | Static analysis tracking function → API → DB → event dependencies across repos |
 | Product Graph | Internal monorepo | Unified knowledge graph of code + DB + docs. Every node has business context |
 | Biz Graph | Business initiatives & metrics | Initiative × metric relationship graph |

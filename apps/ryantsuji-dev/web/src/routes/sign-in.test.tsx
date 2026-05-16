@@ -39,16 +39,16 @@ describe("/sign-in SSR", () => {
   it("3 つの OAuth provider ボタンが全部 render される (Apple / Facebook は未対応)", async () => {
     const html = await ssrAt("/sign-in");
     expect(html).toMatch(/<h1>sign in<\/h1>/);
-    expect(html).toMatch(/continue with GitHub/);
-    expect(html).toMatch(/continue with X/);
-    expect(html).toMatch(/continue with Google/);
-    expect(html).not.toMatch(/continue with Apple/);
-    expect(html).not.toMatch(/continue with Facebook/);
+    expect(html).toMatch(/Continue with GitHub/);
+    expect(html).toMatch(/Continue with X/);
+    expect(html).toMatch(/Continue with Google/);
+    expect(html).not.toMatch(/Continue with Apple/);
+    expect(html).not.toMatch(/Continue with Facebook/);
   });
 
   it("?redirect=/posts/foo を渡しても sign-in page は render される", async () => {
     const html = await ssrAt("/sign-in?redirect=%2Fposts%2Ffoo");
-    expect(html).toMatch(/continue with GitHub/);
+    expect(html).toMatch(/Continue with GitHub/);
   });
 
   it("Route export は validateSearch / component を持つ", () => {
@@ -107,12 +107,12 @@ describe("SignInButton", () => {
       createElement(SignInButton, {
         provider: "github",
         callbackURL: "/account",
-        label: "continue with GitHub",
+        label: "Continue with GitHub",
         className: "auth__provider auth__provider--github",
       }),
     );
     expect(html).toMatch(/<button[^>]*class="auth__provider auth__provider--github"/);
-    expect(html).toMatch(/continue with GitHub/);
+    expect(html).toMatch(/Continue with GitHub/);
   });
 });
 

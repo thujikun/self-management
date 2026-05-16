@@ -6,8 +6,8 @@ slug: "initiative-graph-rag"
 summary: "Measuring 'did that initiative actually work?' usually means manual SQL spelunking. We modeled initiatives × KPIs as a graph and let an LLM traverse it via MCP."
 tags:
   - "ai"
-  - "mcp"
-  - "graphrag"
+  - "typescript"
+  - "bigquery"
   - "webdev"
 lang: "en"
 syndication:
@@ -21,7 +21,7 @@ cover: /posts/initiative-graph-rag.en.cover.png
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.
 
-In my previous posts, I introduced [an MCP server that lets you search all company databases in natural language](https://dev.to/ryosuke_tsuji_f08e20fdca1/democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5) and showed [the full picture of our 17 internal MCP servers](https://dev.to/ryosuke_tsuji_f08e20fdca1/we-built-17-mcp-servers-to-let-ai-run-our-internal-operations-3lk2). This time, I'm diving deep into what I briefly mentioned as "Biz Graph."
+In my previous posts, I introduced [an MCP server that lets you search all company databases in natural language](/posts/db-graph-mcp) and showed [the full picture of our 17 internal MCP servers](/posts/17-mcp-servers). This time, I'm diving deep into what I briefly mentioned as "Biz Graph."
 
 **This is the story of how we represented the relationship between business initiatives and KPIs as a graph structure, enabling AI to answer "Did that initiative actually work?"**
 

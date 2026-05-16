@@ -17,10 +17,47 @@
  * @graph-connects better-auth [calls] signIn.social でプロバイダ OAuth に飛ばす
  */
 
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { signIn } from "../lib/auth-client.js";
+import type { Lang } from "../server/i18n.js";
+
+/**
+ * root loader (lang) 参照用。複数 page から共有する pattern。
+ *
+ * @graph-connects tanstack-router [calls] __root__ route の loader data (lang) を読む
+ */
+const rootApi = getRouteApi("__root__");
+
+/**
+ * lang 別の sign-in page コピー。GitHub / X / Google ボタンの label も lang で
+ * 切替えると違和感ないので EN/JA で別に持つ。
+ *
+ * @graph-connects none
+ */
+const COPY: Record<
+  Lang,
+  {
+    title: string;
+    github: string;
+    twitter: string;
+    google: string;
+  }
+> = {
+  en: {
+    title: "sign in",
+    github: "Continue with GitHub",
+    twitter: "Continue with X",
+    google: "Continue with Google",
+  },
+  ja: {
+    title: "サインイン",
+    github: "GitHub で続ける",
+    twitter: "X で続ける",
+    google: "Google で続ける",
+  },
+};
 
 /**
  * `?redirect=` で受け取る戻り先 path の許容判定 (open redirect = CWE-601 ガード):
@@ -117,18 +154,19 @@ export const Route = createFileRoute("/sign-in")({
 /** @graph-connects none */
 function SignInPage() {
   const { redirect } = Route.useSearch();
+  const { lang } = rootApi.useLoaderData();
+  const copy = COPY[lang];
   const callbackURL = redirect ?? "/account";
 
   return (
     <main className="auth">
-      <h1>sign in</h1>
-      <p className="auth__lead">good で comments / likes を有効化。</p>
+      <h1>{copy.title}</h1>
       <ul className="auth__providers">
         <li>
           <SignInButton
             provider="github"
             callbackURL={callbackURL}
-            label="continue with GitHub"
+            label={copy.github}
             className="auth__provider auth__provider--github"
           />
         </li>
@@ -136,7 +174,7 @@ function SignInPage() {
           <SignInButton
             provider="twitter"
             callbackURL={callbackURL}
-            label="continue with X"
+            label={copy.twitter}
             className="auth__provider auth__provider--x"
           />
         </li>
@@ -144,7 +182,7 @@ function SignInPage() {
           <SignInButton
             provider="google"
             callbackURL={callbackURL}
-            label="continue with Google"
+            label={copy.google}
             className="auth__provider auth__provider--google"
           />
         </li>

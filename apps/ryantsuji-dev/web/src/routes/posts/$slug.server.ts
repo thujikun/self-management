@@ -33,7 +33,11 @@ import {
 } from "../../server/engagement.js";
 import { pickLang, type Lang } from "../../server/i18n.js";
 import { getPostSource } from "../../server/posts.js";
-import { safeAcceptLanguage } from "../../server/request.server.js";
+import {
+  safeAcceptLanguage,
+  safeCookieLang,
+  writeLangCookie,
+} from "../../server/request.server.js";
 
 /**
  * renderPostServer の handler 本体。`?lang=` override + Accept-Language で lang を
@@ -55,7 +59,15 @@ export async function runRenderPost(
     availableLangs: Lang[];
   }
 > {
-  const lang = pickLang(safeAcceptLanguage(), override);
+  const cookieLang = safeCookieLang();
+  const lang = pickLang({
+    override,
+    cookieLang,
+    acceptLanguage: safeAcceptLanguage(),
+  });
+  if (override && override !== cookieLang) {
+    writeLangCookie(lang);
+  }
   const result = getPostSource(slug, lang);
   if (!result) throw notFound();
   const doc = await renderMarkdown(result.source);

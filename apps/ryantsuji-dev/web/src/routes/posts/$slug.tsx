@@ -28,6 +28,8 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { useSession } from "../../lib/auth-client.js";
+import { displayTags } from "../../lib/tags.js";
+import { PostToc } from "../../components/PostToc.js";
 import { PostBody } from "../../server-components/PostBody.js";
 import { type CommentView } from "../../server/engagement.js";
 import type { Lang } from "../../server/i18n.js";
@@ -205,15 +207,8 @@ export const Route = createFileRoute("/posts/$slug")({
 
 /** @graph-connects none */
 function PostDetail() {
-  const {
-    html,
-    frontmatter,
-    headings,
-    readingTimeMinutes,
-    engagement,
-    servedLang,
-    availableLangs,
-  } = Route.useLoaderData();
+  const { html, frontmatter, headings, readingTimeMinutes, engagement, servedLang } =
+    Route.useLoaderData();
   const { slug } = Route.useParams();
   return (
     <main className="post-detail" lang={servedLang}>
@@ -222,43 +217,31 @@ function PostDetail() {
       </nav>
       <header className="post-detail__header">
         <h1>{frontmatter.title}</h1>
-        <PostLangSwitcher slug={slug} servedLang={servedLang} availableLangs={availableLangs} />
         <p className="post-detail__meta">
           <time dateTime={frontmatter.publishedAt}>{frontmatter.publishedAt}</time>
           <span className="post-detail__divider" aria-hidden="true">
             ·
           </span>
           <span>{readingTimeMinutes} min read</span>
-          <span className="post-detail__divider" aria-hidden="true">
-            ·
-          </span>
-          <span className="post-detail__views">{engagement.viewCount} views</span>
-          {frontmatter.tags.length > 0 ? (
+          {displayTags(frontmatter.tags).length > 0 ? (
             <>
               <span className="post-detail__divider" aria-hidden="true">
                 ·
               </span>
               <ul className="post-detail__tags">
-                {frontmatter.tags.map((tag) => (
-                  <li key={tag}>#{tag}</li>
+                {displayTags(frontmatter.tags).map((tag) => (
+                  <li key={tag}>
+                    <Link to="/posts" search={{ tag }}>
+                      #{tag}
+                    </Link>
+                  </li>
                 ))}
               </ul>
             </>
           ) : null}
         </p>
       </header>
-      {headings.length > 1 ? (
-        <aside className="post-detail__toc" aria-label="目次">
-          <h2>目次</h2>
-          <ol>
-            {headings.map((h) => (
-              <li key={h.id} data-level={h.level}>
-                <a href={`#${h.id}`}>{h.text}</a>
-              </li>
-            ))}
-          </ol>
-        </aside>
-      ) : null}
+      <PostToc headings={headings} />
       <PostBody html={html} />
       <EngagementSection
         slug={slug}
@@ -266,44 +249,6 @@ function PostDetail() {
         initialComments={engagement.comments}
       />
     </main>
-  );
-}
-
-/**
- * 詳細 page の language toggle。`?lang=` query を切替える。利用可能な lang のみ
- * 表示し、不在 lang はそもそも button を出さない (= EN-only post には JP button
- * を出さない方針、user に空クリックさせない)。
- *
- * @graph-connects tanstack-router [calls] Link で /posts/$slug?lang= に navigate
- */
-function PostLangSwitcher({
-  slug,
-  servedLang,
-  availableLangs,
-}: {
-  slug: string;
-  servedLang: Lang;
-  availableLangs: Lang[];
-}) {
-  if (availableLangs.length <= 1) return null;
-  return (
-    <nav className="lang-switcher" aria-label="language">
-      {availableLangs.map((l) => (
-        <Link
-          key={l}
-          to="/posts/$slug"
-          params={{ slug }}
-          search={(prev) => ({ ...prev, lang: l })}
-          className={
-            l === servedLang
-              ? "lang-switcher__btn lang-switcher__btn--active"
-              : "lang-switcher__btn"
-          }
-        >
-          {l.toUpperCase()}
-        </Link>
-      ))}
-    </nav>
   );
 }
 

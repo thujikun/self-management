@@ -6,9 +6,9 @@ slug: "ai-harness-intro"
 summary: "Series intro to cortex, airCloset's internal AI platform that auto-reviews PRs, self-heals ops, and lets non-engineers ship apps. Why harness engineering matters now."
 tags:
   - "ai"
-  - "webdev"
+  - "devops"
   - "graphrag"
-  - "typescript"
+  - "webdev"
 lang: "en"
 syndication:
   devto:
@@ -19,7 +19,7 @@ cover: /posts/ai-harness-intro.en.cover.png
 
 Hi, I'm [Ryan](https://x.com/ryantsuji), CTO at airCloset.
 
-In my previous posts I've introduced [the full picture of our 17 internal MCP servers](https://dev.to/ryantsuji/we-built-17-mcp-servers-to-let-ai-run-our-internal-operations-3lk2), [an MCP server that searches 991 internal tables in natural language](https://dev.to/ryantsuji/democratizing-internal-data-building-an-mcp-server-that-lets-you-search-991-tables-in-natural-1da5), [a custom Graph RAG for measuring initiative impact](https://dev.to/ryantsuji/we-built-a-custom-graph-rag-to-let-ai-answer-did-that-initiative-actually-work-3oda), and [the Sandbox MCP that lets non-engineers publish AI-built apps safely](https://dev.to/ryantsuji/bridging-i-want-to-build-and-i-want-to-publish-safely-for-non-engineers-sandbox-mcp-392a).
+In my previous posts I've introduced [the full picture of our 17 internal MCP servers](/posts/17-mcp-servers), [an MCP server that searches 991 internal tables in natural language](/posts/db-graph-mcp), [a custom Graph RAG for measuring initiative impact](/posts/initiative-graph-rag), and [the Sandbox MCP that lets non-engineers publish AI-built apps safely](/posts/sandbox-mcp).
 
 All of those run on top of an internal AI development platform we call **cortex**. This post is the first in a series about cortex itself — the platform, the design choices, and the operational experience.
 
@@ -77,7 +77,7 @@ From here, I'll show **how the "harness beats model" thesis takes concrete shape
 
 For the first few months, **I wrote 100% of cortex by myself**. The accurate framing isn't "without a harness, others can't safely PR" but rather "**without a harness, no one — including me with extra hands — could ride this thing**."
 
-Even back then, between [our Google Meet recording pipeline](https://zenn.dev/aircloset/articles/a820ce302ec5e9) (Japanese), about half of the [17 MCP servers](https://dev.to/ryantsuji/we-built-17-mcp-servers-to-let-ai-run-our-internal-operations-3lk2), and a long tail of unpublished features, **roughly 50 loosely-coupled applications were already running**. Each one had its purpose, background, and data flow documented carefully. But the volume was such that **even with AI in the loop, you couldn't realistically have it read all the relevant docs and absorb the whole picture for any given change**. The codebase had outgrown what a person — or an AI given pieces — could hold in their head at once.
+Even back then, between [our Google Meet recording pipeline](/posts/meeting-intelligence) (Japanese), about half of the [17 MCP servers](/posts/17-mcp-servers), and a long tail of unpublished features, **roughly 50 loosely-coupled applications were already running**. Each one had its purpose, background, and data flow documented carefully. But the volume was such that **even with AI in the loop, you couldn't realistically have it read all the relevant docs and absorb the whole picture for any given change**. The codebase had outgrown what a person — or an AI given pieces — could hold in their head at once.
 
 Recently, with the harness in place, **non-engineers** (business-side managers, PMOs, etc.) have started shipping PRs to cortex too. As of writing, the cumulative commit ratio is **~91% me, ~9% other recent contributors**.
 
@@ -280,7 +280,7 @@ The series is planned as 6 parts.
    The big picture of what cortex is and why it works in "harness" form. The map to the rest of the series.
 
 **Part 2: Product Graph — code, docs, DB, infrastructure as one unified graph** ★ recommended next
-   The implementation side: how the unified graph is built and maintained. What happens when you take the design principles from [the Agentic Graph RAG MCP post](https://zenn.dev/aircloset/articles/341dffee42f454) and apply them to the entire cortex codebase.
+   The implementation side: how the unified graph is built and maintained. What happens when you take the design principles from [the Agentic Graph RAG MCP post](/posts/agentic-graph-rag-mcp) and apply them to the entire cortex codebase.
 
 **Part 3: AI reviews, fixes, merges, and deploys PRs**
    GitHub webhook → AI review → on REQUEST_CHANGES, AI fixes via worktree → auto squash merge → changed-stack detection → parallel deploy: the full pipeline.
@@ -292,7 +292,7 @@ The series is planned as 6 parts.
    Full OTel + Faro + Prometheus, Gemini cost tracking, and how the quality gates are designed to be "non-loweriable, non-bypassable."
 
 **Part 6: A dev environment non-engineers can ship in**
-   How business-side members can open PRs directly to cortex, how AI review and auto-fix uphold the quality bar, and how this differs from the [Sandbox MCP](https://dev.to/ryantsuji/bridging-i-want-to-build-and-i-want-to-publish-safely-for-non-engineers-sandbox-mcp-392a) lane.
+   How business-side members can open PRs directly to cortex, how AI review and auto-fix uphold the quality bar, and how this differs from the [Sandbox MCP](/posts/sandbox-mcp) lane.
 
 Each post stands on its own, but **Part 2 (Product Graph) is the foundation for the others**, so the recommended reading order is Part 1 → Part 2 → any.
 

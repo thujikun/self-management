@@ -24,9 +24,17 @@ import type { Plugin } from "vite";
  * regression を再発防止できない)。本 plugin で `?url` を sentinel に差し替え、
  * test が href の literal 値を `toStrictEqual` できる状態を作る。
  *
+ * 値は **空 CSS の data URI** (= `data:text/css;base64,Lyo=` → `/*`)。
+ * happy-dom 上で `createRoot().render(<RouterProvider />)` が走ると `<link
+ * rel="stylesheet" href="...">` を自動 fetch しようとするため、`/__test__/...`
+ * のような相対 URL だと `http://localhost:3000/__test__/styles.css` への connect
+ * が refused になり unhandled rejection で vitest が exit 1 する。data URI なら
+ * happy-dom が inline 解決して network を踏まないので、test 側の href 一致 assert
+ * は維持したまま、coverage gate を fail させずに済む。
+ *
  * @graph-connects none
  */
-const TEST_CSS_URL = "/__test__/styles.css";
+const TEST_CSS_URL = "data:text/css;base64,Lyo=";
 
 /**
  * `*.css?url` import を vitest 環境で sentinel URL に解決する Vite plugin。
