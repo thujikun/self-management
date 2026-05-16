@@ -116,4 +116,21 @@ describe("publishToDevto", () => {
     // 5 回 retry + 6 回目で throw = fetch は 6 回呼ばれる
     expect(fetchSpy).toHaveBeenCalledTimes(6);
   });
+
+  it("sleepFn 未指定時は default の setTimeout backoff を使う (retry 経路)", async () => {
+    vi.useFakeTimers();
+    fetchSpy
+      .mockResolvedValueOnce(rateLimitResponse())
+      .mockResolvedValueOnce(okResponse({ url: "https://dev.to/x", edited_at: null }));
+    const promise = publishToDevto({
+      apiKey: "test-key",
+      articleId: 1,
+      article: baseArticle,
+    });
+    // 1 回目 retry は 2_000ms 待つ。timer を進めて resolve させる。
+    await vi.advanceTimersByTimeAsync(2_000);
+    const result = await promise;
+    expect(result.url).toBe("https://dev.to/x");
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
 });

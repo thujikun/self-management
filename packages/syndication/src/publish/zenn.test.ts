@@ -8,7 +8,7 @@
  * @graph-connects none
  */
 
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -118,5 +118,59 @@ describe("publishToZenn (integration with real git)", () => {
     expect(second.pushed).toBe(true);
     const log = gitSync(["log", "--oneline", "-1"], repos.workDir);
     expect(log.stdout).toContain("chore: update v2");
+  });
+
+  it("repoDir 未作成なら remoteUrl から clone してから書き出す (dryRun)", async () => {
+    const cloneTarget = resolve(repos.root, "fresh-clone");
+    const result = await publishToZenn({
+      repoDir: cloneTarget,
+      remoteUrl: repos.bare,
+      zennId: "cloned1",
+      markdown: "---\ntitle: cloned\n---\nbody",
+      dryRun: true,
+    });
+    expect(result.filePath).toBe(resolve(cloneTarget, "articles/cloned1.md"));
+    expect(result.commitSha).toBeNull();
+    expect(result.pushed).toBe(false);
+    // 自動 clone で remote が設定されているはず
+    const remoteOut = gitSync(["remote", "get-url", "origin"], cloneTarget);
+    expect(remoteOut.code).toBe(0);
+    expect(remoteOut.stdout.trim()).toBe(repos.bare);
+  });
+
+  it("git CLI が失敗 (= git repo ではない dir) したら runGit が throw する", async () => {
+    const notARepo = resolve(repos.root, "not-a-repo");
+    await mkdir(notARepo, { recursive: true });
+    await expect(
+      publishToZenn({
+        repoDir: notARepo,
+        remoteUrl: repos.bare,
+        zennId: "broken1",
+        markdown: "x",
+      }),
+    ).rejects.toThrow(/git/);
+  });
+
+  it("write が結果として HEAD と同じ index になる場合 staged が空で commit skip", async () => {
+    // 初回 commit で V1 を入れる
+    const v1 = "---\ntitle: stable\n---\nv1";
+    await publishToZenn({
+      repoDir: repos.workDir,
+      remoteUrl: repos.bare,
+      zennId: "stable1",
+      markdown: v1,
+    });
+    // working tree を V2 にだけ書き換え (commit しない)
+    const stubPath = resolve(repos.workDir, "articles/stable1.md");
+    await writeFile(stubPath, "---\ntitle: stable\n---\nv2", "utf8");
+    // publishToZenn に V1 を渡す: prev=V2, args.markdown=V1 → unchanged=false で書き直し → index=HEAD=V1
+    const result = await publishToZenn({
+      repoDir: repos.workDir,
+      remoteUrl: repos.bare,
+      zennId: "stable1",
+      markdown: v1,
+    });
+    expect(result.commitSha).toBeNull();
+    expect(result.pushed).toBe(false);
   });
 });
