@@ -79,6 +79,14 @@ jobs:
           echo "::add-mask::$token"
           echo "token=$token" >> "$GITHUB_OUTPUT"
 
+      # web の vite build は workspace dep `@self/design-tokens` の dist/tokens.css を
+      # `@import "@self/design-tokens/css"` で読むため、deploy 前に upstream workspace
+      # dep を turbo で build しておく (`^...` で本 package 自身は除外し dep のみ)。
+      # これを忘れると postcss-import が `ENOENT: open '@self/design-tokens/css'` で落ちる。
+      - name: Build upstream workspace deps (turbo)
+        working-directory: .
+        run: pnpm turbo run build --filter=@self/ryantsuji-dev-web^...
+
       # PR は dry-run (build 通すだけ、CF への upload 無し)、main は本番 deploy。
       - name: ${{ github.event_name == 'pull_request' && 'pnpm run deploy:dry' || 'pnpm run deploy' }}
         run: pnpm run ${{ github.event_name == 'pull_request' && 'deploy:dry' || 'deploy' }}
