@@ -26,9 +26,39 @@ import rehypeStringify from "rehype-stringify";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
-import { getSingletonHighlighter } from "shiki";
+import { createHighlighterCore, type HighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { unified } from "unified";
+
+// shiki の **fine-grained bundle** path から theme / lang を **静的 import** する。
+// `import { getSingletonHighlighter } from "shiki"` を使うと vite が全 200+ 言語の
+// grammar を dynamic import 候補として bundle に含めてしまい、Cloudflare Workers の
+// 3 MiB gzip 上限を超過する (emacs-lisp 単独で 761 KiB を占有していた)。静的 import
+// に切替えることで **本サイトで実使用する 17 grammars** だけが bundle に含まれる構造
+// になる (`shellscript` 1 grammar が `bash` / `sh` / `shell` / `zsh` の 4 alias を
+// shiki 側 metadata で兼ねるため、grammar 数 17・対応 fence 21)。
+//
+// 新言語を post で使い始めたら、ここに 1 行追加するだけで OK。逆に削れば bundle が
+// 縮む — 言語追加 / 削除が bundle size に 1:1 で効く透明な構造。
+import githubDark from "shiki/themes/github-dark.mjs";
+import githubLight from "shiki/themes/github-light.mjs";
+import langCss from "shiki/langs/css.mjs";
+import langDiff from "shiki/langs/diff.mjs";
+import langGo from "shiki/langs/go.mjs";
+import langHtml from "shiki/langs/html.mjs";
+import langJavascript from "shiki/langs/javascript.mjs";
+import langJson from "shiki/langs/json.mjs";
+import langJsonc from "shiki/langs/jsonc.mjs";
+import langJsx from "shiki/langs/jsx.mjs";
+import langMarkdown from "shiki/langs/markdown.mjs";
+import langPython from "shiki/langs/python.mjs";
+import langRust from "shiki/langs/rust.mjs";
+import langShellscript from "shiki/langs/shellscript.mjs";
+import langSql from "shiki/langs/sql.mjs";
+import langToml from "shiki/langs/toml.mjs";
+import langTsx from "shiki/langs/tsx.mjs";
+import langTypescript from "shiki/langs/typescript.mjs";
+import langYaml from "shiki/langs/yaml.mjs";
 
 import { parseFrontmatter, type Frontmatter } from "./frontmatter.js";
 import { estimateReadingTimeMinutes, extractHeadings, type Heading } from "./headings.js";
@@ -63,51 +93,51 @@ const SHIKI_OPTIONS = {
 } as const;
 
 /**
- * 本サイトの post で使う最小集合の言語。**全 bundledLanguages (200+) を読み込むと
- * CF Workers の CPU 制限を超過する** (cold start 時に highlighter compile が走るため)。
- * 必要に応じて post を書く時に追加。
+ * highlighter の **promise** を cache する singleton。値そのものではなく promise を
+ * 保持するのは、worker isolate で 2 つの `renderMarkdown` が並行して初回呼び出しに
+ * 入ったときに `createHighlighterCore` を 2 回走らせないため。先に await を挟むと
+ * 両方が `null` を観測して二重 init が起きる (= 17 grammars + JS regex engine の
+ * compile が 2 回走り、本 PR の cold start 改善目的と逆向き)。
  *
  * @graph-connects none
  */
-const SHIKI_LANGS = [
-  "typescript",
-  "javascript",
-  "tsx",
-  "jsx",
-  "bash",
-  "shell",
-  "json",
-  "jsonc",
-  "yaml",
-  "toml",
-  "markdown",
-  "css",
-  "html",
-  "go",
-  "python",
-  "rust",
-  "sql",
-  "diff",
-];
+let _highlighterPromise: Promise<HighlighterCore> | null = null;
 
 /**
- * shiki highlighter singleton。CF Workers runtime は wasm code generation を
- * 許可しない (`WebAssembly.instantiate disallowed by embedder`) ので、
- * **JavaScript regex engine** に差し替える (oniguruma WASM default を回避)。
+ * fine-grained bundle で静的 import した theme / lang を core highlighter に渡す。
+ * 同 module 内で 1 度だけ作って singleton 化、renderMarkdown 呼び出し毎の cold start
+ * を避ける。
  *
- * 言語を `SHIKI_LANGS` に絞ることで cold start の CPU 消費を Workers 制限内に。
- * `@shikijs/rehype` の default entry は `getSingletonHighlighter` を engine 指定なしで
- * 呼ぶので、明示的に core entry (`rehypeShikiFromHighlighter`) に自作 highlighter を
- * 渡す形に切替。
+ * 言語追加: 本 file の import を 1 行追加 → 下の配列にも 1 行追加。これ以外の場所で
+ * shiki の dynamic 機能を呼ばない (= vite tree-shake が効く構造を維持する)。
  *
- * @graph-connects shiki [calls] getSingletonHighlighter({ engine: js-regex, langs: 限定 })
+ * @graph-connects shiki [calls] createHighlighterCore で静的 import 済 theme/lang を highlighter 化
  */
-async function getShikiHighlighter() {
-  return await getSingletonHighlighter({
-    themes: [SHIKI_OPTIONS.themes.light, SHIKI_OPTIONS.themes.dark],
-    langs: SHIKI_LANGS,
+function getShikiHighlighter(): Promise<HighlighterCore> {
+  _highlighterPromise ??= createHighlighterCore({
+    themes: [githubLight, githubDark],
+    langs: [
+      langCss,
+      langDiff,
+      langGo,
+      langHtml,
+      langJavascript,
+      langJson,
+      langJsonc,
+      langJsx,
+      langMarkdown,
+      langPython,
+      langRust,
+      langShellscript,
+      langSql,
+      langToml,
+      langTsx,
+      langTypescript,
+      langYaml,
+    ],
     engine: createJavaScriptRegexEngine(),
   });
+  return _highlighterPromise;
 }
 
 /**
