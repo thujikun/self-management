@@ -98,6 +98,8 @@ pnpm deploy:dry
    pnpm exec wrangler secret put X_OAUTH2_CLIENT_SECRET
    pnpm exec wrangler secret put GOOGLE_CLIENT_ID
    pnpm exec wrangler secret put GOOGLE_CLIENT_SECRET
+   # admin draft preview 用 (optional)。未投入なら全 user で draft 不可視 (= 公開挙動)
+   pnpm exec wrangler secret put ADMIN_EMAIL               # session.user.email がこの値の時のみ draft preview 可
    pnpm exec wrangler secret put OTLP_ENDPOINT             # Grafana Cloud OTLP HTTP endpoint
    pnpm exec wrangler secret put OTLP_AUTH_HEADER          # "Basic <base64(instance:token)>"
    # 自前 analytics 用 (BQ 書き込み権限を持つ SA の JSON key を丸ごと投入)
@@ -214,7 +216,10 @@ content source は `apps/ryantsuji-dev/web/content/posts/` 配下に置き、
   strip するので、ファイル名から導出した値が常に優先される
 - `_` prefix slug (e.g. `_minimal-fixture.en.md`) は **`/posts` 一覧から除外** される
   test fixture 用 convention。直接 URL (`/posts/_minimal-fixture`) では引続き reachable
-- frontmatter で `draft: true` を立てた variant は listing / 詳細の全経路から除外
+- frontmatter で `draft: true` を立てた variant は **公開経路 (anonymous + 非 admin
+  session) からは除外**。`ADMIN_EMAIL` と一致する session のみ listing / 詳細 / series
+  loader で preview 可能。RSS / sitemap 等の feed 経路は常に public (admin 経路を
+  踏まない) なので draft は出ない。`ADMIN_EMAIL` 未投入時は全 user で draft 不可視
 
 ### lang fallback の挙動
 

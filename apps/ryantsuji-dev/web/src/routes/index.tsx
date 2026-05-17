@@ -21,6 +21,7 @@ import { createServerFn } from "@tanstack/react-start";
 import type { ReactNode } from "react";
 
 import type { Lang } from "../server/i18n.js";
+import { isAdminFromCurrentRequest } from "../server/request.server.js";
 
 import { runLanding } from "./index.server.js";
 
@@ -29,7 +30,10 @@ import { runLanding } from "./index.server.js";
  *
  * @graph-connects content [calls] runLanding
  */
-const landingServer = createServerFn().handler(() => runLanding());
+const landingServer = createServerFn().handler(async ({ context }) => {
+  const includeDrafts = await isAdminFromCurrentRequest(context.env);
+  return runLanding({ includeDrafts });
+});
 
 /** @graph-connects tanstack-router [provides] / route */
 export const Route = createFileRoute("/")({

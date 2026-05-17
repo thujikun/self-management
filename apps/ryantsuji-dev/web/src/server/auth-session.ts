@@ -54,3 +54,23 @@ export async function getSessionFromHeaders(
   if (!result) return null;
   return result as AuthSession;
 }
+
+/**
+ * draft post の preview 権限。`env.ADMIN_EMAIL` が設定されていて、かつ request の
+ * session.user.email が一致した時のみ true を返す。未設定 / 未認証 / email 不一致は false。
+ *
+ * listing / 詳細 / series loader はこの戻り値を `includeDrafts` フラグに流す。RSS
+ * など公開 feed 経路はこの関数を呼ばず常に false 相当の挙動を貫く (anonymous reader
+ * が draft URL を踏んでも 404、admin 経由で踏むと preview 可能)。
+ *
+ * @graph-connects better-auth [calls] getSessionFromHeaders で email を比較
+ */
+export async function isAdminRequest(
+  headers: Headers,
+  env: AuthEnv & { ADMIN_EMAIL?: string },
+): Promise<boolean> {
+  if (!env.ADMIN_EMAIL) return false;
+  const sess = await getSessionFromHeaders(headers, env);
+  if (!sess) return false;
+  return sess.user.email === env.ADMIN_EMAIL;
+}

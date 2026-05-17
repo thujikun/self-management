@@ -20,11 +20,14 @@ import { safeAcceptLanguage, safeCookieLang } from "../server/request.server.js"
  *
  * @graph-connects content [calls] listPosts(lang)
  */
-export function runLanding(): { lang: Lang; latest: PostListItem[] } {
+export function runLanding(options: { includeDrafts?: boolean } = {}): {
+  lang: Lang;
+  latest: PostListItem[];
+} {
   const lang = pickLang({
     cookieLang: safeCookieLang(),
     acceptLanguage: safeAcceptLanguage(),
   });
-  const latest = listPosts(lang).slice(0, 3);
+  const latest = listPosts(lang, { includeDrafts: options.includeDrafts ?? false }).slice(0, 3);
   return { lang, latest };
 }

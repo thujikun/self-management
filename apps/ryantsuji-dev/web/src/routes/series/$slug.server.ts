@@ -28,6 +28,7 @@ import {
 export function runListSeriesPosts(
   seriesSlug: string,
   override: Lang | undefined,
+  options: { includeDrafts?: boolean } = {},
 ): {
   lang: Lang;
   meta: SeriesMeta | null;
@@ -46,5 +47,9 @@ export function runListSeriesPosts(
   if (!meta) {
     return { lang, meta: null, posts: [] };
   }
-  return { lang, meta, posts: listSeriesPosts(seriesSlug, lang) };
+  return {
+    lang,
+    meta,
+    posts: listSeriesPosts(seriesSlug, lang, { includeDrafts: options.includeDrafts ?? false }),
+  };
 }

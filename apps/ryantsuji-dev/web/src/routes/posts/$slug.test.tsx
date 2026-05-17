@@ -88,6 +88,9 @@ const TEST_ENV = {
 const mockGetSession = vi.fn().mockResolvedValue(null);
 vi.mock("../../server/auth-session.js", () => ({
   getSessionFromHeaders: (headers: Headers) => mockGetSession(headers),
+  // isAdminRequest は draft preview gate。SSR test では admin でない前提 (public 経路)
+  // を踏ませるため常に false を返す。
+  isAdminRequest: async () => false,
 }));
 
 // engagement: 既定 = view 0 / likes 0 / comments 空。it ごとに override 可能。
@@ -402,6 +405,69 @@ describe("server fn handlers (run*)", () => {
       expect(mockLoadEngagement).toHaveBeenCalledWith(mockDb, {
         slug: "bar",
         identifier: "u42",
+        bumpView: true,
+        post: POST_META,
+      });
+    });
+
+    it("admin email 一致 (draft preview 経路) → bumpView=false で view 加算しない", async () => {
+      // ADMIN_EMAIL を立てた env で同 email の session を渡すと、preview 中に view が
+      // 伸びると merge 前 reload で初期値 0 が壊れるので bumpView=false に倒す。
+      const adminEnv = { ...TEST_ENV, ADMIN_EMAIL: "admin@example.com" };
+      mockGetSession.mockResolvedValue({
+        user: { id: "uadmin", email: "admin@example.com", name: "Admin", image: null },
+        session: { id: "s", userId: "uadmin", expiresAt: new Date("2099-01-01") },
+      });
+      mockLoadEngagement.mockResolvedValue({
+        viewCount: "9",
+        likes: { count: 0, liked: false },
+        comments: [],
+      });
+      await runLoadEngagement(adminEnv, { slug: "baz", post: POST_META });
+      expect(mockLoadEngagement).toHaveBeenCalledWith(mockDb, {
+        slug: "baz",
+        identifier: "uadmin",
+        bumpView: false,
+        post: POST_META,
+      });
+    });
+
+    it("ADMIN_EMAIL 未設定なら admin email 相当 session でも bumpView=true (公開挙動)", async () => {
+      // ADMIN_EMAIL 未投入時は誰でも公開挙動 = view を加算する。env.ADMIN_EMAIL の
+      // 単純 falsy 短絡が効くことを回帰検知。
+      mockGetSession.mockResolvedValue({
+        user: { id: "uadmin", email: "admin@example.com", name: "Admin", image: null },
+        session: { id: "s", userId: "uadmin", expiresAt: new Date("2099-01-01") },
+      });
+      mockLoadEngagement.mockResolvedValue({
+        viewCount: "3",
+        likes: { count: 0, liked: false },
+        comments: [],
+      });
+      await runLoadEngagement(TEST_ENV, { slug: "qux", post: POST_META });
+      expect(mockLoadEngagement).toHaveBeenCalledWith(mockDb, {
+        slug: "qux",
+        identifier: "uadmin",
+        bumpView: true,
+        post: POST_META,
+      });
+    });
+
+    it("ADMIN_EMAIL 設定済 + 別 email session → bumpView=true (admin 以外は公開挙動)", async () => {
+      const adminEnv = { ...TEST_ENV, ADMIN_EMAIL: "admin@example.com" };
+      mockGetSession.mockResolvedValue({
+        user: { id: "u1", email: "other@example.com", name: "Other", image: null },
+        session: { id: "s", userId: "u1", expiresAt: new Date("2099-01-01") },
+      });
+      mockLoadEngagement.mockResolvedValue({
+        viewCount: "2",
+        likes: { count: 0, liked: false },
+        comments: [],
+      });
+      await runLoadEngagement(adminEnv, { slug: "qux2", post: POST_META });
+      expect(mockLoadEngagement).toHaveBeenCalledWith(mockDb, {
+        slug: "qux2",
+        identifier: "u1",
         bumpView: true,
         post: POST_META,
       });
