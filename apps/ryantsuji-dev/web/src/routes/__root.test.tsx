@@ -22,8 +22,10 @@ import { getRouter } from "../router.js";
 import {
   Route,
   computeNextTheme,
+  performInitFaroClient,
   performSetLang,
   performToggleTheme,
+  readFaroCollectorUrl,
   writeLangCookieDom,
   writeThemeCookieDom,
 } from "./__root.js";
@@ -400,6 +402,110 @@ describe("__root route", () => {
         invalidate: () => {},
       });
       expect(doc.cookie).toContain("ryantsuji_theme=dark");
+    });
+  });
+
+  describe("readFaroCollectorUrl (pure)", () => {
+    it("env が undefined (= import.meta.env 自体が無い SSR like 環境) なら undefined", () => {
+      expect(readFaroCollectorUrl(undefined)).toStrictEqual(undefined);
+    });
+
+    it("env に VITE_FARO_COLLECTOR_URL が無ければ undefined", () => {
+      expect(readFaroCollectorUrl({})).toStrictEqual(undefined);
+    });
+
+    it("env.VITE_FARO_COLLECTOR_URL に値があればその文字列をそのまま返す", () => {
+      expect(
+        readFaroCollectorUrl({ VITE_FARO_COLLECTOR_URL: "https://faro.example.com/collect" }),
+      ).toStrictEqual("https://faro.example.com/collect");
+    });
+
+    it("引数省略時は import.meta.env を読む (default 経路: VITE_FARO_COLLECTOR_URL 未投入で undefined)", () => {
+      expect(readFaroCollectorUrl()).toStrictEqual(undefined);
+    });
+  });
+
+  describe("performInitFaroClient (pure)", () => {
+    it("docAvailable=false (SSR) なら readUrl / importFaro / initFaro を呼ばず false", async () => {
+      const readUrl = vi.fn();
+      const initFaro = vi.fn();
+      const importFaro = vi.fn(async () => ({ initFaro }));
+      const result = await performInitFaroClient({
+        docAvailable: false,
+        readUrl,
+        importFaro,
+      });
+      expect({
+        result,
+        readUrlCalls: readUrl.mock.calls.length,
+        importFaroCalls: importFaro.mock.calls.length,
+        initFaroCalls: initFaro.mock.calls.length,
+      }).toStrictEqual({
+        result: false,
+        readUrlCalls: 0,
+        importFaroCalls: 0,
+        initFaroCalls: 0,
+      });
+    });
+
+    it("URL 未投入 (readUrl が undefined を返す) なら importFaro を呼ばず false", async () => {
+      const readUrl = vi.fn(() => undefined);
+      const initFaro = vi.fn();
+      const importFaro = vi.fn(async () => ({ initFaro }));
+      const result = await performInitFaroClient({
+        docAvailable: true,
+        readUrl,
+        importFaro,
+      });
+      expect({
+        result,
+        readUrlCalls: readUrl.mock.calls.length,
+        importFaroCalls: importFaro.mock.calls.length,
+        initFaroCalls: initFaro.mock.calls.length,
+      }).toStrictEqual({
+        result: false,
+        readUrlCalls: 1,
+        importFaroCalls: 0,
+        initFaroCalls: 0,
+      });
+    });
+
+    it("URL 空文字列も未投入扱いで importFaro を呼ばない", async () => {
+      const initFaro = vi.fn();
+      const importFaro = vi.fn(async () => ({ initFaro }));
+      const result = await performInitFaroClient({
+        docAvailable: true,
+        readUrl: () => "",
+        importFaro,
+      });
+      expect({
+        result,
+        importFaroCalls: importFaro.mock.calls.length,
+        initFaroCalls: initFaro.mock.calls.length,
+      }).toStrictEqual({
+        result: false,
+        importFaroCalls: 0,
+        initFaroCalls: 0,
+      });
+    });
+
+    it("URL があれば importFaro → initFaro(url) の順で発火し true", async () => {
+      const initFaro = vi.fn(() => true);
+      const importFaro = vi.fn(async () => ({ initFaro }));
+      const result = await performInitFaroClient({
+        docAvailable: true,
+        readUrl: () => "https://faro.example.com/collect",
+        importFaro,
+      });
+      expect({
+        result,
+        importFaroCalls: importFaro.mock.calls.length,
+        initFaroArgs: initFaro.mock.calls,
+      }).toStrictEqual({
+        result: true,
+        importFaroCalls: 1,
+        initFaroArgs: [["https://faro.example.com/collect"]],
+      });
     });
   });
 
