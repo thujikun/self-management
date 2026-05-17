@@ -98,6 +98,11 @@ export async function readAllPosts(
   for (const f of files) {
     const parsed = parseFileName(f);
     if (!parsed) continue;
+    // `_` prefix slug は test fixture (e.g. `_draft-example` / `_minimal-fixture`)。
+    // listing / detail / scheduler が同 prefix で除外する規約と整合させる。
+    // ここで弾かないと `--include-drafts` 経路で dev.to に CREATE されてしまう
+    // (= 2026-05-17 16:48Z run 25996825130 で実際に発生したインシデント)。
+    if (parsed.slug.startsWith("_")) continue;
     const raw = await readFile(resolve(postsDir, f), "utf8");
     const grayMatter = matter(raw);
     const meta = parseFrontmatter(grayMatter.data);
