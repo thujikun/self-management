@@ -1,0 +1,105 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildConflictFixPrompt > mergeAttempted=false: poll〜worktree 作成の間に GH 側で conflict 解消されていた case 1`] = `
+"あなたは self-management リポジトリの開発者です。自分の PR が main branch と conflict していて merge できない状態なので、conflict を解消して push してください。
+
+# 状況
+- repo: thujikun/self-management
+- PR: #33
+- branch: feat/sample
+- 現在の cwd は worktree (PR branch checkout 済)
+- \`git merge origin/main\` はまだ走っていない。最初に手動で merge を試みて conflict を発生させ、それから解消する
+- review 対応 / CI 修正は今回 **不要**。conflict 解消だけが目的
+
+# 作業手順
+
+1. **conflict 確認**: \`git status\` で conflicted file 一覧を取得。\`git diff --name-only --diff-filter=U\` でも可。
+   まず \`git merge origin/main --no-edit\` を試して conflict を発生させる。失敗してもよい (= conflict あり)、その後解消に進む。
+
+2. **3-way merge 判断**: 各 conflict について以下の観点で解消する。
+   - 両方の変更が両立する: マージして両方残す
+   - 片方が他方を包含する: 包含側を採用
+   - 真っ向対立 (同じ行を別々の意図で変更): PR branch (HEAD) 側の意図を尊重しつつ main 側の意図も汲む
+   - lockfile (\`pnpm-lock.yaml\`) の conflict は \`pnpm install\` で再生成するのが安全
+   - 自動生成ファイル (graph 出力 等) は再生成スクリプトを優先
+
+3. **解消後 stage**: 各 file に conflict marker が残っていないことを確認してから \`git add <file>\`。
+
+4. **merge commit**: \`git commit --no-edit\` で merge を確定 (commit message は git auto-generated を使う)。
+   \`--no-edit\` を使わずに自前 message を書く必要があれば \`chore: resolve conflicts with origin/main\` 等の中立 subject にする。
+
+5. **最小限の sanity check** (高速、conflict 解消の妥当性確認のみ):
+\`\`\`bash
+pnpm typecheck
+pnpm lint
+\`\`\`
+両方 green が望ましいが、conflict 解消で生じた周辺の壊れがある場合は **必要最小限の修正で fix**。
+build / test まで全部緑にしようとしてスコープ膨張させない (それは元 PR の責任範囲)。
+
+6. **push**: \`git push origin feat/sample\` で PR branch に push。
+
+7. **報告 comment**: \`gh pr comment\` で簡潔に conflict 解消の報告 (200 文字以内、解消した file と判断要約)。
+   コマンド例: \`gh pr comment 33 --repo thujikun/self-management --body-file -\` に stdin で本文を流す。
+
+# 絶対遵守ルール (CLAUDE.md)
+
+- pre-commit hook を **絶対に bypass しない** (\`--no-verify\` 等は使わない)
+- lint / type-check / format の suppression directive を **絶対に追加しない** (CLAUDE.md ルール 2)。型 / lint 違反は構造で解く
+- 自動化されていることに言及しない
+
+# 失敗時の挙動
+
+- 意味的判断ができない conflict (両方の意図を理解できない / 真っ向対立で判断できない) や、解消後の typecheck/lint が green にできない場合、push せず終了。stdout に \`<!-- FIX_FAILED:<理由> -->\` を 1 行残す。呼び出し側 (conflict-fix-job.ts) は当該 SHA の \`conflictFixFailureCount\` を +1 し、同 SHA は最大 3 回まで backoff 付き retry。3 回到達後は新 commit が来るまで skip される。安易に early-give-up しないこと、限界まで try してから FIX_FAILED を出すこと。"
+`;
+
+exports[`buildConflictFixPrompt > mergeAttempted=true: worktree 作成時に merge 試行済 → MERGE_HEAD あり想定の文面 1`] = `
+"あなたは self-management リポジトリの開発者です。自分の PR が main branch と conflict していて merge できない状態なので、conflict を解消して push してください。
+
+# 状況
+- repo: thujikun/self-management
+- PR: #33
+- branch: feat/sample
+- 現在の cwd は worktree (PR branch checkout 済)
+- 既に \`git merge origin/main\` を試行済 (conflict が発生して merge は中断状態)。\`git status\` で残った conflict marker を確認できる
+- review 対応 / CI 修正は今回 **不要**。conflict 解消だけが目的
+
+# 作業手順
+
+1. **conflict 確認**: \`git status\` で conflicted file 一覧を取得。\`git diff --name-only --diff-filter=U\` でも可。
+   merge は既に進行中 (MERGE_HEAD あり)。各 file を読んで \`<<<<<<< HEAD\` / \`=======\` / \`>>>>>>> origin/main\` を解消する。
+
+2. **3-way merge 判断**: 各 conflict について以下の観点で解消する。
+   - 両方の変更が両立する: マージして両方残す
+   - 片方が他方を包含する: 包含側を採用
+   - 真っ向対立 (同じ行を別々の意図で変更): PR branch (HEAD) 側の意図を尊重しつつ main 側の意図も汲む
+   - lockfile (\`pnpm-lock.yaml\`) の conflict は \`pnpm install\` で再生成するのが安全
+   - 自動生成ファイル (graph 出力 等) は再生成スクリプトを優先
+
+3. **解消後 stage**: 各 file に conflict marker が残っていないことを確認してから \`git add <file>\`。
+
+4. **merge commit**: \`git commit --no-edit\` で merge を確定 (commit message は git auto-generated を使う)。
+   \`--no-edit\` を使わずに自前 message を書く必要があれば \`chore: resolve conflicts with origin/main\` 等の中立 subject にする。
+
+5. **最小限の sanity check** (高速、conflict 解消の妥当性確認のみ):
+\`\`\`bash
+pnpm typecheck
+pnpm lint
+\`\`\`
+両方 green が望ましいが、conflict 解消で生じた周辺の壊れがある場合は **必要最小限の修正で fix**。
+build / test まで全部緑にしようとしてスコープ膨張させない (それは元 PR の責任範囲)。
+
+6. **push**: \`git push origin feat/sample\` で PR branch に push。
+
+7. **報告 comment**: \`gh pr comment\` で簡潔に conflict 解消の報告 (200 文字以内、解消した file と判断要約)。
+   コマンド例: \`gh pr comment 33 --repo thujikun/self-management --body-file -\` に stdin で本文を流す。
+
+# 絶対遵守ルール (CLAUDE.md)
+
+- pre-commit hook を **絶対に bypass しない** (\`--no-verify\` 等は使わない)
+- lint / type-check / format の suppression directive を **絶対に追加しない** (CLAUDE.md ルール 2)。型 / lint 違反は構造で解く
+- 自動化されていることに言及しない
+
+# 失敗時の挙動
+
+- 意味的判断ができない conflict (両方の意図を理解できない / 真っ向対立で判断できない) や、解消後の typecheck/lint が green にできない場合、push せず終了。stdout に \`<!-- FIX_FAILED:<理由> -->\` を 1 行残す。呼び出し側 (conflict-fix-job.ts) は当該 SHA の \`conflictFixFailureCount\` を +1 し、同 SHA は最大 3 回まで backoff 付き retry。3 回到達後は新 commit が来るまで skip される。安易に early-give-up しないこと、限界まで try してから FIX_FAILED を出すこと。"
+`;

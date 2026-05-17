@@ -6,35 +6,51 @@
  *   - author mode: bot 自身の最新 verdict コメント (REQUEST_CHANGES marker) を未対応なら fix job に enqueue
  *   - ci-fix mode: bot 自身の最新 APPROVE + CI に failing job あり → ci-fix job に enqueue (bot 自身が CI 失敗を fix)
  *   - merge mode: bot 自身の最新 APPROVE + CI 全 green ならば merge job に enqueue
+ *   - update-branch mode: mergeable=MERGEABLE + mergeStateStatus=BEHIND の PR は script-only / no-AI で `gh pr update-branch` を即実行 (review verdict / CI 結果に関係なく proactively 走る、軽量)
+ *   - conflict-fix mode: mergeable=CONFLICTING の PR は AI に conflict 解消 → push をさせる
  *   - index mode: tick 毎に `origin/main` SHA を見て、前回 index 時から動いていたら detached `pnpm graph:build` を kick
  *
- * - 並行度は MAX_CONCURRENT (default 2)
- * - 同 PR の review/fix/ci-fix/merge は per-PR mutex で直列化
- * - iteration cap 超過で当該 PR を stalled としてスキップ (成功 review/fix/ci-fix push で +1 ずつ)
+ * - 並行度は MAX_CONCURRENT (default 6)
+ * - 同 PR の review/fix/ci-fix/merge/update-branch/conflict-fix は per-PR mutex で直列化
+ * - iteration cap 超過で当該 PR を stalled としてスキップ (成功 review/fix/ci-fix/conflict-fix push で +1 ずつ)
  *
  * 各 tick / job の進捗を `[scope] message` 形式で stdout に逐次ログする。
  *
  * SIGINT / SIGTERM で graceful stop (in-flight job を待ってから exit)。
  */
 
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-import { runCiFixJob, type FailingCheck } from "./ci-fix-job.js";
-import { ciFixEligibility, fixEligibility, reviewEligibility } from "./eligibility.js";
+import { runCiFixJob } from "./ci-fix-job.js";
+import { runConflictFixJob } from "./conflict-fix-job.js";
+import {
+  ciFixEligibility,
+  conflictFixEligibility,
+  fixEligibility,
+  reviewEligibility,
+  updateBranchEligibility,
+} from "./eligibility.js";
 import { runFixJob } from "./fix-job.js";
 import { runIndexJob } from "./index-job.js";
 import { JobQueue } from "./job-queue.js";
 import { log, warn } from "./log.js";
 import { runMergeJob } from "./merge-job.js";
+import {
+  extractFailingChecks,
+  fetchPrChecks,
+  getBotVerdictComments,
+  isWipTitle,
+  listOpenPRs,
+  summarizeCiStatus,
+  type BotComment,
+  type CheckEntry,
+  type PR,
+} from "./pr-fetch.js";
 import { runReviewJob } from "./review-job.js";
 import { loadState, saveState, setPR, StateMutex, type State } from "./state.js";
-
-const execFileP = promisify(execFile);
+import { runUpdateBranchJob } from "./update-branch-job.js";
 
 const REPO = process.env.AUTO_REVIEW_REPO ?? "thujikun/self-management";
 const POLL_INTERVAL_MS = parseInt(process.env.AUTO_REVIEW_POLL_INTERVAL_MS ?? "60000", 10);
-const MAX_CONCURRENT = parseInt(process.env.AUTO_REVIEW_MAX_CONCURRENT ?? "2", 10);
+const MAX_CONCURRENT = parseInt(process.env.AUTO_REVIEW_MAX_CONCURRENT ?? "6", 10);
 const MAX_ITERATIONS_PER_PR = parseInt(process.env.AUTO_REVIEW_MAX_ITERATIONS ?? "10", 10);
 const REPO_ROOT = process.env.AUTO_REVIEW_REPO_ROOT ?? process.cwd();
 /**
@@ -85,6 +101,23 @@ const CI_FIX_FAILURE_BACKOFF_MS = parseInt(
   process.env.AUTO_REVIEW_CI_FIX_BACKOFF_MS ?? `${5 * 60 * 1000}`,
   10,
 );
+const MAX_UPDATE_BRANCH_FAILURES_PER_SHA = parseInt(
+  process.env.AUTO_REVIEW_MAX_UPDATE_BRANCH_FAILURES ?? "3",
+  10,
+);
+/** update-branch は script-only で軽量なので短めの backoff (default 1 分)。 */
+const UPDATE_BRANCH_FAILURE_BACKOFF_MS = parseInt(
+  process.env.AUTO_REVIEW_UPDATE_BRANCH_BACKOFF_MS ?? `${60 * 1000}`,
+  10,
+);
+const MAX_CONFLICT_FIX_FAILURES_PER_SHA = parseInt(
+  process.env.AUTO_REVIEW_MAX_CONFLICT_FIX_FAILURES ?? "3",
+  10,
+);
+const CONFLICT_FIX_FAILURE_BACKOFF_MS = parseInt(
+  process.env.AUTO_REVIEW_CONFLICT_FIX_BACKOFF_MS ?? `${5 * 60 * 1000}`,
+  10,
+);
 
 const REVIEW_ELIG_CFG = {
   maxFailuresPerSha: MAX_REVIEW_FAILURES_PER_SHA,
@@ -98,121 +131,14 @@ const CI_FIX_ELIG_CFG = {
   maxFailuresPerSha: MAX_CI_FIX_FAILURES_PER_SHA,
   backoffMs: CI_FIX_FAILURE_BACKOFF_MS,
 };
-
-interface PR {
-  number: number;
-  headRefOid: string;
-  headRefName: string;
-  title: string;
-  isDraft: boolean;
-}
-
-async function listOpenPRs(): Promise<PR[]> {
-  const { stdout } = await execFileP("gh", [
-    "pr",
-    "list",
-    "--repo",
-    REPO,
-    "--state",
-    "open",
-    "--json",
-    "number,headRefOid,headRefName,title,isDraft",
-    "--limit",
-    "50",
-  ]);
-  return JSON.parse(stdout) as PR[];
-}
-
-interface BotComment {
-  id: number;
-  body: string;
-  createdAt: string;
-}
-
-async function getBotVerdictComments(prNumber: number): Promise<BotComment[]> {
-  const { stdout } = await execFileP("gh", [
-    "api",
-    `repos/${REPO}/issues/${prNumber}/comments`,
-    "--paginate",
-    "--jq",
-    '[.[] | select(.body | contains("AUTO_REVIEW_BODY_START")) | {id, body, createdAt: .created_at}]',
-  ]);
-  const trimmed = stdout.trim();
-  if (trimmed.length === 0) return [];
-  return JSON.parse(trimmed) as BotComment[];
-}
-
-interface CheckEntry {
-  bucket: string;
-  name: string;
-  link: string;
-}
-
-/**
- * `gh pr checks <N>` の生 entries を返す。bucket は "pass" | "fail" | "pending" | "cancel" | "skipping"。
- * 0 件返り = check 自体無し (poll 側で「未準備」扱い)。
- *
- * `gh pr checks` は check が 1 件も登録されていない PR で exit 1 + stderr
- * `no checks reported on the '<branch>' branch` を返す。workflow が未起動 or required check
- * 未定義の benign state なので `[]` に正規化して silent に呑む (warn しない)。
- */
-async function fetchPrChecks(prNumber: number): Promise<CheckEntry[]> {
-  try {
-    const { stdout } = await execFileP("gh", [
-      "pr",
-      "checks",
-      String(prNumber),
-      "--repo",
-      REPO,
-      "--json",
-      "bucket,name,link",
-    ]);
-    if (!stdout.trim()) return [];
-    return JSON.parse(stdout) as CheckEntry[];
-  } catch (err) {
-    if (isNoChecksReportedError(err)) return [];
-    throw err;
-  }
-}
-
-function isNoChecksReportedError(err: unknown): boolean {
-  if (typeof err !== "object" || err === null) return false;
-  const stderr = (err as { stderr?: unknown }).stderr;
-  return typeof stderr === "string" && /no checks reported/i.test(stderr);
-}
-
-/**
- * CI 全体 status の集計。
- *   - `"pass"`: 1 件以上あって全て pass / skipping
- *   - `"fail"`: 1 件以上 fail
- *   - `"pending"`: それ以外 (進行中 / 0 件)
- */
-function summarizeCiStatus(checks: CheckEntry[]): "pass" | "fail" | "pending" {
-  if (checks.length === 0) return "pending";
-  if (checks.some((c) => c.bucket === "fail")) return "fail";
-  if (checks.every((c) => c.bucket === "pass" || c.bucket === "skipping")) return "pass";
-  return "pending";
-}
-
-/**
- * CI checks から failing job のみを抽出し、job URL から run_id を parse して FailingCheck[] を返す。
- * link 例: https://github.com/owner/repo/actions/runs/123/job/456 → runId=123
- */
-function extractFailingChecks(checks: CheckEntry[]): FailingCheck[] {
-  const out: FailingCheck[] = [];
-  for (const c of checks) {
-    if (c.bucket !== "fail") continue;
-    const m = /\/actions\/runs\/(\d+)\//.exec(c.link);
-    const runId = m?.[1] ?? "";
-    if (!runId) continue;
-    out.push({ name: c.name, runId, jobUrl: c.link });
-  }
-  return out;
-}
-
-function isWipTitle(title: string): boolean {
-  return /^\s*\[?WIP\]?[\s:]/i.test(title) || /\bWIP:\s/i.test(title);
-}
+const UPDATE_BRANCH_ELIG_CFG = {
+  maxFailuresPerSha: MAX_UPDATE_BRANCH_FAILURES_PER_SHA,
+  backoffMs: UPDATE_BRANCH_FAILURE_BACKOFF_MS,
+};
+const CONFLICT_FIX_ELIG_CFG = {
+  maxFailuresPerSha: MAX_CONFLICT_FIX_FAILURES_PER_SHA,
+  backoffMs: CONFLICT_FIX_FAILURE_BACKOFF_MS,
+};
 
 const mutex = new StateMutex();
 let state: State = await loadState();
@@ -271,7 +197,7 @@ async function tick(): Promise<void> {
     log("[index]", `origin/main unchanged, skip`);
   }
 
-  const prs = await listOpenPRs().catch((err: unknown) => {
+  const prs = await listOpenPRs(REPO).catch((err: unknown) => {
     warn("[poll]", `gh pr list failed:`, err);
     return [] as PR[];
   });
@@ -281,6 +207,8 @@ async function tick(): Promise<void> {
   let fixEnqueued = 0;
   let ciFixEnqueued = 0;
   let mergeEnqueued = 0;
+  let updateBranchEnqueued = 0;
+  let conflictFixEnqueued = 0;
   let skipped = 0;
 
   for (const pr of prs) {
@@ -310,8 +238,74 @@ async function tick(): Promise<void> {
 
     log(
       tag,
-      `sha=${pr.headRefOid.slice(0, 7)}, branch=${pr.headRefName}, iterations=${cur.iterations}`,
+      `sha=${pr.headRefOid.slice(0, 7)}, branch=${pr.headRefName}, iterations=${cur.iterations}, mergeable=${pr.mergeable}, mergeStateStatus=${pr.mergeStateStatus}`,
     );
+
+    // update-branch mode (script-only): BEHIND かつ MERGEABLE (= conflict なしで遅れているだけ)
+    // を最優先で proactively 解消する。worktree も AI も使わないので軽量、review / fix と並行して走る
+    if (pr.mergeable === "MERGEABLE" && pr.mergeStateStatus === "BEHIND") {
+      const ubElig = updateBranchEligibility(
+        pr.headRefOid,
+        cur,
+        Date.now(),
+        UPDATE_BRANCH_ELIG_CFG,
+      );
+      if (ubElig.ok) {
+        log(
+          tag,
+          `  update-branch: BEHIND + MERGEABLE → enqueue update-branch (failures=${cur.updateBranchFailureCount ?? 0})`,
+        );
+        updateBranchEnqueued++;
+        const accepted = queue.enqueue({
+          id: `update-branch-${pr.number}-${pr.headRefOid}`,
+          prNumber: pr.number,
+          type: "update-branch",
+          run: async () => {
+            await runUpdateBranchJob({
+              prNumber: pr.number,
+              headSha: pr.headRefOid,
+              repo: REPO,
+              state,
+              updateState: update,
+            });
+          },
+        });
+        if (!accepted) log(tag, `  update-branch: dedup (already queued / running), skip`);
+      } else {
+        log(tag, `  update-branch: skip (${ubElig.reason})`);
+      }
+    }
+
+    // conflict-fix mode: CONFLICTING な PR を AI に解消させる。review verdict / CI 結果と無関係に走る
+    if (pr.mergeable === "CONFLICTING") {
+      const cfElig = conflictFixEligibility(pr.headRefOid, cur, Date.now(), CONFLICT_FIX_ELIG_CFG);
+      if (cfElig.ok) {
+        log(
+          tag,
+          `  conflict-fix: CONFLICTING → enqueue conflict-fix (failures=${cur.conflictFixFailureCount ?? 0})`,
+        );
+        conflictFixEnqueued++;
+        const accepted = queue.enqueue({
+          id: `conflict-fix-${pr.number}-${pr.headRefOid}`,
+          prNumber: pr.number,
+          type: "conflict-fix",
+          run: async () => {
+            await runConflictFixJob({
+              prNumber: pr.number,
+              headSha: pr.headRefOid,
+              repo: REPO,
+              repoRoot: REPO_ROOT,
+              branch: pr.headRefName,
+              state,
+              updateState: update,
+            });
+          },
+        });
+        if (!accepted) log(tag, `  conflict-fix: dedup (already queued / running), skip`);
+      } else {
+        log(tag, `  conflict-fix: skip (${cfElig.reason})`);
+      }
+    }
 
     // Reviewer mode
     const reviewElig = reviewEligibility(pr.headRefOid, cur, Date.now(), REVIEW_ELIG_CFG);
@@ -343,7 +337,7 @@ async function tick(): Promise<void> {
     }
 
     // Author / merge mode: 直近 verdict comment を fetch
-    const verdicts = await getBotVerdictComments(pr.number).catch((err: unknown) => {
+    const verdicts = await getBotVerdictComments(REPO, pr.number).catch((err: unknown) => {
       warn(tag, `verdict fetch failed:`, err);
       return [] as BotComment[];
     });
@@ -401,7 +395,7 @@ async function tick(): Promise<void> {
       );
       continue;
     }
-    const checks = await fetchPrChecks(pr.number).catch((err: unknown) => {
+    const checks = await fetchPrChecks(REPO, pr.number).catch((err: unknown) => {
       warn(tag, `gh pr checks failed:`, err);
       return [] as CheckEntry[];
     });
@@ -472,9 +466,16 @@ async function tick(): Promise<void> {
   }
 
   const status = queue.status();
+  const totalEnqueued =
+    reviewEnqueued +
+    fixEnqueued +
+    ciFixEnqueued +
+    mergeEnqueued +
+    updateBranchEnqueued +
+    conflictFixEnqueued;
   log(
     "[poll]",
-    `tick #${tickCount} end: enqueued=${reviewEnqueued + fixEnqueued + ciFixEnqueued + mergeEnqueued} (review=${reviewEnqueued}, fix=${fixEnqueued}, ci-fix=${ciFixEnqueued}, merge=${mergeEnqueued}), skipped=${skipped}, queue=${status.queued}, running=${status.running}`,
+    `tick #${tickCount} end: enqueued=${totalEnqueued} (review=${reviewEnqueued}, fix=${fixEnqueued}, ci-fix=${ciFixEnqueued}, merge=${mergeEnqueued}, update-branch=${updateBranchEnqueued}, conflict-fix=${conflictFixEnqueued}), skipped=${skipped}, queue=${status.queued}, running=${status.running}`,
   );
 }
 
