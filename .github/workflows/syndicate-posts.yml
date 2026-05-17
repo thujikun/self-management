@@ -37,6 +37,10 @@ on:
       - "scripts/syndicate.ts"
       - "scripts/syndicate.cli.ts"
       - ".github/workflows/syndicate-posts.yml"
+  # schedule-publish.yml が draft flip 後に `gh workflow run --ref main` で叩く経路。
+  # GITHUB_TOKEN で push しても他 workflow の `on: push` は鳴らない仕様 (例外:
+  # workflow_dispatch / repository_dispatch) のため、明示 dispatch で発火させる。
+  workflow_dispatch:
 
 # - contents: write は frontmatter writeback 用の git commit + push
 # - id-token: write は WIF (Secret Manager 取得) 用

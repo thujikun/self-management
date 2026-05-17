@@ -121,7 +121,7 @@ function IndexPage() {
                   className="landing__latest-link"
                 >
                   <time className="landing__latest-date" dateTime={post.publishedAt}>
-                    {post.publishedAt}
+                    {post.publishedAt.slice(0, 10)}
                   </time>
                   <span className="landing__latest-title">{post.title}</span>
                 </Link>
