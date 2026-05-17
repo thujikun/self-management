@@ -655,9 +655,19 @@ main {
   background: var(--surface-subtle);
 }
 
+/* warning palette が design-tokens に未整備のため、alert は inline の oklch 警告色
+   (amber 系、hue ≒ 60) で強調する。design-tokens に semantic warning が入ったら
+   `var(--text-warning)` 等に差し替える。 */
 .post-body .callout-alert {
-  border-left-color: var(--text-warning, var(--text-accent));
-  background: var(--surface-warning-subtle, var(--surface-subtle));
+  border-left-color: oklch(64% 0.16 60);
+  background: oklch(96% 0.04 70);
+}
+
+@media (prefers-color-scheme: dark) {
+  .post-body .callout-alert {
+    border-left-color: oklch(75% 0.14 60);
+    background: oklch(30% 0.04 60);
+  }
 }
 
 .post-body .callout > :first-child {
