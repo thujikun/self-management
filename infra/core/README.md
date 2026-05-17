@@ -5,6 +5,7 @@ self-management の core インフラ。
 ## 中身
 
 - BigQuery dataset `ryan` (location: `asia-northeast1`)
+  - Table `ryan.web_events` — ryantsuji.dev の client beacon (page view / engagement) を Worker `/api/track` (PR-B) 経由で streaming insert する analytics 表。`event_type` / `slug` で clustering、server-time `ingested_at` で daily partition (client skew 影響回避)、`expirationMs` 未設定 (個人スケールでは BQ free tier に十分収まる前提)
 - Service account `graph-app@ryan-self-management.iam.gserviceaccount.com`
 - IAM:
   - `graph-app` SA に `roles/bigquery.dataEditor` on `ryan` dataset
@@ -12,14 +13,15 @@ self-management の core インフラ。
   - `graph-app` SA に `roles/secretmanager.secretAccessor` on 各 Secret container
   - admin role 群 (`serviceUsageAdmin` / `projectIamAdmin` / `iam.serviceAccountAdmin` / `iam.serviceAccountKeyAdmin` / `compute.networkViewer` / `secretmanager.admin`)
 - SA key (Pulumi state で暗号化保管)
-- **Secret Manager containers** — Pulumi は container + IAM のみ管理、値は手動投入:
-  - `grafana-cloud-admin-token` — Grafana Cloud Access Policy admin token (Pulumi が読み込んで OTLP write token を派生生成)
-  - `grafana-otlp-write-token` — OTLP write 専用 token (Pulumi が grafana provider 経由で declarative 作成)
-  - `grafana-mcp-token` — Grafana Stack-scoped Service Account Token (mcp-grafana 用)
-  - `neon-database-url` — Neon Postgres connection string (`DATABASE_URL`)
-  - `xmcp-app-credentials` — X dev app の consumer key/secret + bearer token
-  - `xmcp-user-{ryantsuji,ryanaircloset}` — X user account の OAuth1 access token
-  - `cloudflare-api-token` — CF Workers deploy 用 API token (`CLOUDFLARE_API_TOKEN`)。Ryan が CF Dashboard で Workers Scripts:Edit + Workers Routes:Edit (ryantsuji.dev) の minimal scope token を発行して手動投入
+- **Secret Manager containers** — 基本は Pulumi が container + IAM のみ管理し、値は手動投入。一部 secret (`grafana-otlp-write-token` / `grafana-faro-collector-url`) は値も Pulumi が declarative に投入する (各行の "投入経路" を参照):
+  - `grafana-cloud-admin-token` — Grafana Cloud Access Policy admin token (Pulumi が読み込んで OTLP write token を派生生成)。投入経路: **手動 (`gcloud secrets versions add`)**
+  - `grafana-otlp-write-token` — OTLP write 専用 token。投入経路: **Pulumi declarative** (grafana provider 経由で発行 → SecretVersion で書き込み)
+  - `grafana-mcp-token` — Grafana Stack-scoped Service Account Token (mcp-grafana 用)。投入経路: **手動**
+  - `neon-database-url` — Neon Postgres connection string (`DATABASE_URL`)。投入経路: **手動**
+  - `xmcp-app-credentials` — X dev app の consumer key/secret + bearer token。投入経路: **手動**
+  - `xmcp-user-{ryantsuji,ryanaircloset}` — X user account の OAuth1 access token。投入経路: **手動**
+  - `cloudflare-api-token` — CF Workers deploy 用 API token (`CLOUDFLARE_API_TOKEN`)。Ryan が CF Dashboard で Workers Scripts:Edit + Workers Routes:Edit (ryantsuji.dev) の minimal scope token を発行。投入経路: **手動**
+  - `grafana-faro-collector-url` — Grafana Cloud Frontend Observability (Faro) collector URL。`infra/core/grafana-faro.ts` で Stack Admin SA + Token + 2nd `grafana.Provider` + `frontendobservability.App` を発行し、その `collectorEndpoint` output を `SecretVersion` として本 container に declarative 投入 (手動 UI 操作不要)。PR-B の ryantsuji.dev web build-time に inline で消費。投入経路: **Pulumi declarative**
 - Cloud Run job `graph-migrate` + Artifact Registry repo `self-mgmt` (graph migrate ジョブ用)
 - Grafana Cloud Stack 連携 (OTLP endpoint + write token を declarative 管理)
 - **GitHub Actions WIF** — pool `github-actions` + provider `github-actions` + SA `pulumi-ci` (long-lived key 不使用)。本 repo (thujikun/self-management) からの workflow のみ impersonate 可
@@ -42,7 +44,7 @@ gcloud secrets versions add grafana-mcp-token \
 gcloud secrets versions list neon-database-url --project=ryan-self-management
 ```
 
-`grafana-otlp-write-token` だけは Pulumi が grafana provider 経由で declarative に作成・投入するので手動操作不要。
+`grafana-otlp-write-token` と `grafana-faro-collector-url` は Pulumi が declarative に作成・投入するので手動操作不要 (前者は Cloud-level Access Policy Token 経由、後者は `infra/core/grafana-faro.ts` で Stack Admin SA + 2nd `grafana.Provider` + `frontendobservability.App` 経由)。
 
 ## 値の消費経路
 
