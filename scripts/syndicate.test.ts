@@ -219,6 +219,14 @@ describe("readAllPosts", () => {
     const posts = await readAllPosts(dir, { includeDrafts: true });
     expect(posts.map((p) => p.slug).sort()).toStrictEqual(["alpha", "beta"]);
   });
+
+  it("`_` prefix slug (test fixture) は includeDrafts でも syndication 対象から除外", async () => {
+    await writeFile(join(dir, "_fixture.ja.md"), baseFm("draft: true\n"));
+    await writeFile(join(dir, "_minimal.en.md"), baseFm());
+    await writeFile(join(dir, "real.ja.md"), baseFm());
+    const posts = await readAllPosts(dir, { includeDrafts: true });
+    expect(posts.map((p) => p.slug).sort()).toStrictEqual(["real"]);
+  });
 });
 
 describe("emitZenn", () => {
