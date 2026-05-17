@@ -40,13 +40,20 @@ export async function createReadOnlyWorktree(
   return { path, prNumber };
 }
 
-/** author mode 用: PR branch を checkout して push 可能にする worktree。origin/main の merge も試行。 */
+/**
+ * author mode 用: PR branch を checkout して push 可能にする worktree。origin/main の merge も試行。
+ *
+ * `preMergeSha` は merge 試行 **前** の HEAD (= `origin/<branch>` の SHA)。conflict-fix-job が push
+ * 検証時に baseline として使う: merge 成功 (mergeFailed=false) で HEAD が動いた状態で job 後の
+ * HEAD と比較すると「AI が何も commit してないが merge commit は積まれている」case を push 検出
+ * 失敗と誤判定するため、merge **前** の SHA を保持しておく必要がある。
+ */
 export async function createBranchWorktree(
   repoRoot: string,
   prNumber: number,
   branch: string,
   baseBranch: string = "main",
-): Promise<{ wt: Worktree; mergeFailed: boolean }> {
+): Promise<{ wt: Worktree; mergeFailed: boolean; preMergeSha: string }> {
   await mkdir(WORKTREE_BASE_DIR, { recursive: true });
   const path = join(WORKTREE_BASE_DIR, `pr-${prNumber}-fix-${Date.now()}`);
   await execFileP("git", ["-C", repoRoot, "fetch", "origin", branch, baseBranch], {
@@ -57,6 +64,10 @@ export async function createBranchWorktree(
     ["-C", repoRoot, "worktree", "add", path, "-B", branch, `origin/${branch}`],
     { timeout: 60_000 },
   );
+  // merge 前 (= origin/<branch>) の HEAD を捕捉。push 検証の baseline に使う。
+  const preMergeSha = await execFileP("git", ["-C", path, "rev-parse", "HEAD"], {
+    timeout: 30_000,
+  }).then((r) => r.stdout.trim());
   // origin/main を merge (pre-emptive)。conflict 残っても worktree は返す。
   let mergeFailed = false;
   try {
@@ -66,7 +77,7 @@ export async function createBranchWorktree(
   } catch {
     mergeFailed = true;
   }
-  return { wt: { path, prNumber }, mergeFailed };
+  return { wt: { path, prNumber }, mergeFailed, preMergeSha };
 }
 
 /** worktree を削除する (force)。失敗したら fs から rm でフォールバック。 */

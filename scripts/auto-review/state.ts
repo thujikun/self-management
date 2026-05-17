@@ -65,6 +65,39 @@ export interface PRState {
   lastFailedCiFixSha?: string;
   /** ci-fix 失敗の ISO timestamp。backoff 窓判定に使う。 */
   lastCiFixFailedAt?: string;
+  /**
+   * update-branch (script-only / no-AI、PR が BEHIND のとき走る) の per-SHA 成功記録。
+   * `gh pr update-branch` 後は新 commit が PR head に push されて SHA が変わるので、
+   * 通常は二重実行されないが、bookmark で防御的に抑止する。
+   */
+  lastUpdateBranchedSha?: string;
+  /** update-branch 成功時刻 (ISO timestamp)。 */
+  lastUpdateBranchedAt?: string;
+  /**
+   * update-branch (gh CLI 失敗 / throw) の per-SHA 失敗回数。
+   * SHA が変われば 1 から再カウント。`MAX_UPDATE_BRANCH_FAILURES_PER_SHA` 到達で skip。
+   */
+  updateBranchFailureCount?: number;
+  /** update-branch 失敗をカウントしている対象 SHA。 */
+  lastFailedUpdateBranchSha?: string;
+  /** update-branch 失敗の ISO timestamp。backoff 窓判定に使う。 */
+  lastUpdateBranchFailedAt?: string;
+  /**
+   * conflict-fix (AI-driven、PR が CONFLICTING のとき走る) の per-SHA 成功記録。
+   * 同 SHA に対する再 attempt を抑止 (新 commit が来れば SHA が変わって再 attempt 可能)。
+   */
+  lastConflictFixedSha?: string;
+  /** conflict-fix push 成功時刻 (ISO timestamp)。 */
+  lastConflictFixedAt?: string;
+  /**
+   * conflict-fix (FIX_FAILED / timeout / push 検出失敗 / throw) の per-SHA 失敗回数。
+   * SHA が変われば 1 から再カウント。`MAX_CONFLICT_FIX_FAILURES_PER_SHA` 到達で skip。
+   */
+  conflictFixFailureCount?: number;
+  /** conflict-fix 失敗をカウントしている対象 SHA。 */
+  lastFailedConflictFixSha?: string;
+  /** conflict-fix 失敗の ISO timestamp。backoff 窓判定に使う。 */
+  lastConflictFixFailedAt?: string;
 }
 
 export interface State {

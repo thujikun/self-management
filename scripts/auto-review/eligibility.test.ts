@@ -14,17 +14,29 @@ import { describe, expect, it } from "vitest";
 
 import {
   ciFixEligibility,
+  conflictFixEligibility,
   fixEligibility,
   reviewEligibility,
+  updateBranchEligibility,
   type CiFixEligibilityConfig,
+  type ConflictFixEligibilityConfig,
   type FixEligibilityConfig,
   type ReviewEligibilityConfig,
+  type UpdateBranchEligibilityConfig,
 } from "./eligibility.js";
 import type { PRState } from "./state.js";
 
 const REVIEW_CFG: ReviewEligibilityConfig = { maxFailuresPerSha: 3, backoffMs: 5 * 60 * 1000 };
 const FIX_CFG: FixEligibilityConfig = { maxFailuresPerComment: 3, backoffMs: 5 * 60 * 1000 };
 const CI_FIX_CFG: CiFixEligibilityConfig = { maxFailuresPerSha: 3, backoffMs: 5 * 60 * 1000 };
+const UPDATE_BRANCH_CFG: UpdateBranchEligibilityConfig = {
+  maxFailuresPerSha: 3,
+  backoffMs: 60 * 1000,
+};
+const CONFLICT_FIX_CFG: ConflictFixEligibilityConfig = {
+  maxFailuresPerSha: 3,
+  backoffMs: 5 * 60 * 1000,
+};
 
 const NOW = new Date("2026-05-10T08:00:00.000Z").getTime();
 
@@ -209,5 +221,139 @@ describe("ciFixEligibility", () => {
       lastCiFixFailedAt: new Date(NOW - 6 * 60 * 1000).toISOString(),
     };
     expect(ciFixEligibility("abc123", cur, NOW, CI_FIX_CFG)).toStrictEqual({ ok: true });
+  });
+});
+
+describe("updateBranchEligibility", () => {
+  it("lastUpdateBranchedSha 一致 → skip (既に同 SHA 向けに update 済)", () => {
+    const cur: PRState = { iterations: 0, lastUpdateBranchedSha: "abc123" };
+    expect(updateBranchEligibility("abc123", cur, NOW, UPDATE_BRANCH_CFG)).toStrictEqual({
+      ok: false,
+      reason: "already update-branched for this sha",
+    });
+  });
+
+  it("失敗履歴なし → enqueue 可", () => {
+    const cur: PRState = { iterations: 0 };
+    expect(updateBranchEligibility("abc123", cur, NOW, UPDATE_BRANCH_CFG)).toStrictEqual({
+      ok: true,
+    });
+  });
+
+  it("失敗 SHA が異なる (新 commit) → enqueue 可", () => {
+    const cur: PRState = {
+      iterations: 0,
+      updateBranchFailureCount: 5,
+      lastFailedUpdateBranchSha: "old_sha",
+      lastUpdateBranchFailedAt: new Date(NOW - 10_000).toISOString(),
+    };
+    expect(updateBranchEligibility("new_sha", cur, NOW, UPDATE_BRANCH_CFG)).toStrictEqual({
+      ok: true,
+    });
+  });
+
+  it("同 SHA で backoff 窓内 → skip (短め backoff)", () => {
+    const cur: PRState = {
+      iterations: 0,
+      updateBranchFailureCount: 1,
+      lastFailedUpdateBranchSha: "abc123",
+      lastUpdateBranchFailedAt: new Date(NOW - 30_000).toISOString(), // 30s 前
+    };
+    expect(updateBranchEligibility("abc123", cur, NOW, UPDATE_BRANCH_CFG)).toStrictEqual({
+      ok: false,
+      reason: "update-branch backoff: retry in 30s (failures=1/3)",
+    });
+  });
+
+  it("同 SHA で cap 到達 → skip", () => {
+    const cur: PRState = {
+      iterations: 0,
+      updateBranchFailureCount: 3,
+      lastFailedUpdateBranchSha: "abc123",
+      lastUpdateBranchFailedAt: new Date(NOW - 60 * 60 * 1000).toISOString(),
+    };
+    expect(updateBranchEligibility("abc123", cur, NOW, UPDATE_BRANCH_CFG)).toStrictEqual({
+      ok: false,
+      reason: "update-branch failure cap reached (3/3) for sha=abc123; awaiting new commit",
+    });
+  });
+
+  it("同 SHA で backoff 窓超過 (cap 未満) → enqueue 可", () => {
+    const cur: PRState = {
+      iterations: 0,
+      updateBranchFailureCount: 2,
+      lastFailedUpdateBranchSha: "abc123",
+      lastUpdateBranchFailedAt: new Date(NOW - 2 * 60 * 1000).toISOString(), // 2 分前
+    };
+    expect(updateBranchEligibility("abc123", cur, NOW, UPDATE_BRANCH_CFG)).toStrictEqual({
+      ok: true,
+    });
+  });
+});
+
+describe("conflictFixEligibility", () => {
+  it("lastConflictFixedSha 一致 → skip (既に同 SHA 向けに push 済)", () => {
+    const cur: PRState = { iterations: 0, lastConflictFixedSha: "abc123" };
+    expect(conflictFixEligibility("abc123", cur, NOW, CONFLICT_FIX_CFG)).toStrictEqual({
+      ok: false,
+      reason: "already conflict-fixed for this sha",
+    });
+  });
+
+  it("失敗履歴なし → enqueue 可", () => {
+    const cur: PRState = { iterations: 0 };
+    expect(conflictFixEligibility("abc123", cur, NOW, CONFLICT_FIX_CFG)).toStrictEqual({
+      ok: true,
+    });
+  });
+
+  it("失敗 SHA が異なる (新 commit) → enqueue 可", () => {
+    const cur: PRState = {
+      iterations: 0,
+      conflictFixFailureCount: 5,
+      lastFailedConflictFixSha: "old_sha",
+      lastConflictFixFailedAt: new Date(NOW - 10_000).toISOString(),
+    };
+    expect(conflictFixEligibility("new_sha", cur, NOW, CONFLICT_FIX_CFG)).toStrictEqual({
+      ok: true,
+    });
+  });
+
+  it("同 SHA で backoff 窓内 → skip", () => {
+    const cur: PRState = {
+      iterations: 0,
+      conflictFixFailureCount: 1,
+      lastFailedConflictFixSha: "abc123",
+      lastConflictFixFailedAt: new Date(NOW - 60_000).toISOString(),
+    };
+    expect(conflictFixEligibility("abc123", cur, NOW, CONFLICT_FIX_CFG)).toStrictEqual({
+      ok: false,
+      reason: "conflict-fix backoff: retry in 240s (failures=1/3)",
+    });
+  });
+
+  it("同 SHA で cap 到達 → skip", () => {
+    const cur: PRState = {
+      iterations: 0,
+      conflictFixFailureCount: 3,
+      lastFailedConflictFixSha: "abc123",
+      lastConflictFixFailedAt: new Date(NOW - 60 * 60 * 1000).toISOString(),
+    };
+    expect(conflictFixEligibility("abc123", cur, NOW, CONFLICT_FIX_CFG)).toStrictEqual({
+      ok: false,
+      reason: "conflict-fix failure cap reached (3/3) for sha=abc123; awaiting new commit",
+    });
+  });
+
+  it("同 SHA で backoff 窓超過 (cap 未満) → enqueue 可", () => {
+    const cur: PRState = {
+      iterations: 0,
+      conflictFixFailureCount: 2,
+      lastFailedConflictFixSha: "abc123",
+      lastConflictFixFailedAt: new Date(NOW - 6 * 60 * 1000).toISOString(),
+    };
+    expect(conflictFixEligibility("abc123", cur, NOW, CONFLICT_FIX_CFG)).toStrictEqual({
+      ok: true,
+    });
   });
 });
