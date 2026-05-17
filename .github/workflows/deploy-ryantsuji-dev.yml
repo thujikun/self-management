@@ -137,6 +137,23 @@ jobs:
         working-directory: .
         run: pnpm turbo run build --filter=@self/ryantsuji-dev-web^...
 
+      # R2 image sync: `content/images/` 配下を R2 bucket `ryantsuji-dev-images` に
+      # 同期する。`_manifest.json` で hash diff し、変更分のみ PUT する idempotent script。
+      # main push 時のみ実行 (PR は dry-run mode で diff だけ stdout 出して PUT は skip
+      # → review 用)。dry-run でも CLOUDFLARE_API_TOKEN は必要 (GET _manifest.json で
+      # bucket 認証する)。
+      - name: Sync content/images/ → R2 (${{ github.event_name == 'pull_request' && 'dry-run' || 'apply' }})
+        working-directory: .
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            pnpm exec tsx scripts/sync-r2-images.cli.ts --dry-run
+          else
+            pnpm exec tsx scripts/sync-r2-images.cli.ts
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ steps.cf-token.outputs.token }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
       # PR は dry-run (build 通すだけ、CF への upload 無し)、main は本番 deploy。
       # `VITE_FARO_COLLECTOR_URL` は build 時に vite が `import.meta.env` 経由で client
       # bundle に埋め込む (`__root.tsx` の useEffect で読まれる)。空文字なら init no-op。

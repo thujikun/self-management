@@ -61,6 +61,7 @@ beforeAll(async () => {
 const FAKE_CONTEXT = {
   env: {
     ASSETS: {} as Fetcher,
+    IMAGES: {} as R2Bucket,
     DATABASE_URL: "",
     BETTER_AUTH_SECRET: "",
     BETTER_AUTH_URL: "",
@@ -142,6 +143,7 @@ describe("/api/$ — POST /api/track (env 揃った経路)", () => {
   function envWithSa(overrides: Partial<Env> = {}): Env {
     return {
       ASSETS: {} as Fetcher,
+      IMAGES: {} as R2Bucket,
       DATABASE_URL: "",
       BETTER_AUTH_SECRET: "",
       BETTER_AUTH_URL: "",

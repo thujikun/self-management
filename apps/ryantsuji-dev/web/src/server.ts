@@ -28,6 +28,7 @@ import { Buffer } from "node:buffer";
 import { instrument, type ResolveConfigFn } from "@microlabs/otel-cf-workers";
 import { createStartHandler, defaultStreamHandler } from "@tanstack/react-start/server";
 
+import { serveImage } from "./server-images.js";
 import type { Env } from "./start.js";
 
 // CF Workers の nodejs_compat + compatibility_date >= 2024-09-23 は
@@ -57,6 +58,16 @@ const handler = createStartHandler(defaultStreamHandler);
  */
 const baseHandler: ExportedHandler<Env> = {
   async fetch(request, env, ctx): Promise<Response> {
+    // `/images/*` route は TanStack Start に届く前に R2 binding (`env.IMAGES`) から
+    // 直接 serve する。markdown 添付画像の配信を Worker route で完結させ、SSR /
+    // hydration / RSC stream の bundle に画像 file が混ざらないようにする (assets
+    // bundle 経由だと per-deploy upload 上限 / build artifact size に影響する)。
+    const url = new URL(request.url);
+    if (url.pathname.startsWith("/images/")) {
+      // R2Bucket は CF Workers runtime の abstract class 由来で nominal 型なので、
+      // serveImage が要求する structural な subset interface に明示 cast する。
+      return await serveImage(env.IMAGES as unknown as Parameters<typeof serveImage>[0], request);
+    }
     return await handler(request, { context: { env, ctx } });
   },
 };

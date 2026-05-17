@@ -72,6 +72,7 @@ vi.mock("../../server/db.js", () => ({
 // run* 系 server fn body は (env, slug) を受け取る。test では Env binding を fake する。
 const TEST_ENV = {
   ASSETS: {} as Fetcher,
+  IMAGES: {} as R2Bucket,
   DATABASE_URL: "postgresql://test",
   BETTER_AUTH_SECRET: "x".repeat(32),
   BETTER_AUTH_URL: "http://localhost:3000",

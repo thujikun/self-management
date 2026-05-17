@@ -28,4 +28,13 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
   },
+  // R2 bucket binding。post 添付画像の配信元 (`/images/*` route で `env.IMAGES.get`)。
+  // bucket 自体は `infra/ryantsuji-dev/index.ts` の Pulumi で declarative 管理、画像
+  // ファイル本体は `scripts/sync-r2-images.cli.ts` が CI deploy 直前に R2 へ sync する。
+  "r2_buckets": [
+    {
+      "binding": "IMAGES",
+      "bucket_name": "ryantsuji-dev-images",
+    },
+  ],
 }

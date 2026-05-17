@@ -18,6 +18,7 @@ import { _resetAuthCacheForTest } from "../../../server/auth.js";
 
 const TEST_ENV: Env = {
   ASSETS: {} as Fetcher,
+  IMAGES: {} as R2Bucket,
   DATABASE_URL: "postgresql://test:test@host.neon.tech/db?sslmode=require",
   BETTER_AUTH_SECRET: "x".repeat(32),
   BETTER_AUTH_URL: "http://localhost:3000",

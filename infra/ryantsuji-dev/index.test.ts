@@ -243,4 +243,28 @@ describe("infra/ryantsuji-dev stack", () => {
       environment: undefined,
     });
   });
+
+  it("ryantsuji-dev-images R2 bucket を期待どおりに宣言する", async () => {
+    await import("./index.js");
+    const r = captured["ryantsuji-dev-images"];
+    expect(r, "ryantsuji-dev-images bucket not captured").toBeDefined();
+    expect(r.type).toBe("cloudflare:index/r2Bucket:R2Bucket");
+    expect({
+      accountId: r.inputs.accountId,
+      name: r.inputs.name,
+      location: r.inputs.location,
+      storageClass: r.inputs.storageClass,
+    }).toStrictEqual({
+      accountId: TEST_ACCOUNT_ID,
+      name: "ryantsuji-dev-images",
+      location: "apac",
+      storageClass: "Standard",
+    });
+  });
+
+  it("imagesBucketName export を返す", async () => {
+    const m = await import("./index.js");
+    const name = await promiseOf(m.imagesBucketName);
+    expect(name).toBe("ryantsuji-dev-images");
+  });
 });
