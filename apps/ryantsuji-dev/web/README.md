@@ -215,11 +215,6 @@ content source は `apps/ryantsuji-dev/web/content/posts/` 配下に置き、
 - `_` prefix slug (e.g. `_minimal-fixture.en.md`) は **`/posts` 一覧から除外** される
   test fixture 用 convention。直接 URL (`/posts/_minimal-fixture`) では引続き reachable
 - frontmatter で `draft: true` を立てた variant は listing / 詳細の全経路から除外
-- `_zenn-sync-test.ja.md` は **常駐 fixture**: Zenn sync 経路の retest 専用で、Zenn 側にも
-  `zenn-sync-test` slug の下書き article が 1 件常駐する前提。`pnpm syndicate:zenn --include-drafts --publish`
-  で同じ slug を update し続ける運用 (fixture / Zenn 側 article いずれも削除しない)。
-  `syndication.zenn.id` は本来 14 桁 hex (`d416342f46f16b` 等) だが、本 fixture のみ
-  grep 容易な placeholder (`zenn-sync-test`) を意図的に採用している
 
 ### lang fallback の挙動
 
