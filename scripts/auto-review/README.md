@@ -117,7 +117,7 @@ state は `~/.cache/self-management-auto-review/state.json` に atomic write (tm
 | 1. reviewer dedup | `head_sha` | 成功 review 済 SHA は再 review skip (`lastReviewedSha`) |
 | 2. author dedup | `commentId` | 成功 fix 済 commentId は再 fix skip (`lastAddressedCommentId`) |
 | 2b. ci-fix dedup | `head_sha` | 成功 ci-fix 済 SHA は再 ci-fix skip (`lastCiFixedSha`)、新 commit を待つ |
-| 3. NO_OP marker | reviewer prompt 内 Step 4 | 投稿前に直近の自分の review body と正規化比較 → 同一なら `<!-- VERDICT:NO_OP -->` を stdout に → script は `lastReviewedSha` だけ更新して post skip |
+| 3. NO_OP marker | reviewer prompt 内 Step 3 | 投稿前に直近の自分の review body と正規化比較 → 同一なら `<!-- VERDICT:NO_OP -->` を stdout に → script は `lastReviewedSha` だけ更新して post skip |
 | 4. iteration cap (round-trip 用) | per-PR counter | **成功 review post / 成功 fix push / 成功 ci-fix push / 成功 conflict-fix push それぞれで +1** (update-branch / merge は iterations を触らない、APPROVE で 0 reset)。`MAX_ITERATIONS_PER_PR=10` (default) を超えたら `stalled: true` で当該 PR の全モード停止 (manual unblock は state.json 編集) |
 | 5. failure cap + backoff | per-SHA / per-commentId counter | **失敗 (timeout / parse failure / FIX_FAILED / push 検出失敗 / throw)** 時に SHA / commentId は bookmark せず、`reviewFailureCount` / `fixFailureCount` / `ciFixFailureCount` を per-key で +1 し `last*FailedAt` を記録。次 tick で (a) `*_FAILURE_BACKOFF_MS` (default 5 min) 未経過なら skip (b) `MAX_*_FAILURES` (default 3) 到達なら skip。新 key が来れば counter 自動 reset |
 | 6. supervisor fast-exit cap | wrapper (`loop.sh`) | tsx の起動 <`FAST_EXIT_THRESHOLD_SEC` (default 60s) での exit (env 検証 throw / dep import 失敗 / token 不正 / `pnpm install` 失敗 等) が `FAST_EXIT_MAX` (default 3) 回連続したら supervisor が `exit 1` で bail。「同 env で 2 秒待って再 spawn → 同じ throw を無限ループ」の最外周遮断 |
