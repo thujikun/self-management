@@ -4,13 +4,13 @@
  *
  * 流れ:
  *  1. `parseJSDocExports()` で全 ParsedExport を収集
- *  2. ParsedExport → product_graph_nodes 用 NodeInput を生成 (description は cortex 同型)
+ *  2. ParsedExport → product_graph_nodes 用 NodeInput を生成 (description は embedding 用に整形)
  *  3. `generateExplicitEdges()` で edge + 未解決 stub を生成
  *  4. ParseResult に統合して返す (migrate.ts orchestrator が consume)
  *
  * @graph-stack ryan-product-graph
  * @graph-domain graph
- * @graph-business 自リポジトリの @graph-* タグから product-graph (nodes + edges) を構築する parser entry。cortex 同型の textForEmbedding でセマンティック検索可能、未解決 target は external stub として graph に組み入れる
+ * @graph-business 自リポジトリの @graph-* タグから product-graph (nodes + edges) を構築する parser entry。textForEmbedding でセマンティック検索可能、未解決 target は external stub として graph に組み入れる
  * @graph-connects filesystem [reads_from] mono-repo 配下 .ts/.tsx を ts-morph で解析
  * @graph-connects bigquery [writes_to] product_graph_nodes + product_graph_edges を構築する ParseResult を生成
  */
@@ -25,7 +25,7 @@ import { parseJSDocExports, SOURCE_PATTERNS, type ParsedExport } from "./parser.
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../../../");
 
 /**
- * cortex 同型の embedding 入力: NodeType + name + business + domain + stack + path を改行で結合。
+ * embedding 入力: NodeType + name + business + domain + stack + path を改行で結合。
  *
  * @graph-connects none
  */

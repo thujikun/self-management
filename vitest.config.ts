@@ -103,7 +103,7 @@ export default defineConfig({
       // 他をごまかせるため不採用)。`perFile: true` で coverage.include の各ファイルが
       // 独立に threshold を満たす必要がある。
       //
-      // cortex 同型ルール: 「閾値を下げる代わりにテストを追加する」(下げる変更は禁止)。
+      // 閾値運用ルール: 「閾値を下げる代わりにテストを追加する」(下げる変更は禁止)。
       // 初期から 90% で開始 (Ryan ルール、2026-05-05): 最初から整えないと運用できない。
       thresholds: {
         perFile: true,

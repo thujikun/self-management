@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Ryan's personal knowledge graph — content (X / zenn / dev.to / interviews) + decisions + topics, mirrored on the cortex Product Graph pattern but scoped to a single person.",
+  "description": "Ryan's personal knowledge graph — content (X / zenn / dev.to / interviews) + decisions + topics, unified as a Product Graph scoped to a single person.",
   "packageManager": "pnpm@10.33.2",
   "engines": {
     "node": ">=24"

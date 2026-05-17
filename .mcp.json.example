@@ -5,7 +5,7 @@
     "このファイルを参考に .mcp.json をローカルで作成。",
     "",
     "個人用 MCP (xmcp = X API ラッパー) は launchd で http://127.0.0.1:8765/mcp に常駐 (~/Workspace/xmcp)。",
-    "会社用 MCP (cortex / aws / biz-graph / etc) は air-closet.ai の HTTP gateway 経由、共通 API key 必要。"
+    "会社用 MCP (auth / aws / biz-graph / etc) は air-closet.ai の HTTP gateway 経由、共通 API key 必要。"
   ],
   "mcpServers": {
     "ryan-graph": {
@@ -24,7 +24,7 @@
       "url": "http://127.0.0.1:8766/mcp",
       "_comment": "個人 X API server (@RyanAircloset, Japanese account, launchd com.user.xmcp-jp)"
     },
-    "cortex-auth": {
+    "mcp-auth": {
       "type": "http",
       "url": "https://mcp-auth.air-closet.ai/mcp",
       "_comment": "会社用認証 (API key 不要)"

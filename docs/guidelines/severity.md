@@ -1,6 +1,6 @@
 # 重要度分類・判定基準
 
-cortex の `docs/guidelines/severity.md` を self-management 用に縮小コピー。CLAUDE.md 違反は全て **Critical** に固定する。
+CLAUDE.md 違反は全て **Critical** に固定する。
 
 ## 重要度
 
