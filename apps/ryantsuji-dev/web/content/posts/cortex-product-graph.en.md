@@ -174,7 +174,7 @@ This design is one that **can't realistically be maintained when humans write co
 
 Viewed from another angle, what's going on here is that **the location of hallucination shifts**. **Where you contain hallucination is, I think, fundamental to AI harness design**.
 
-As I [wrote elsewhere](https://zenn.dev/aircloset/articles/341dffee42f454) (Japanese), when you combine AI with a graph system, "**hallucination doesn't disappear — it just changes location.**" For cpg, here's where it lands:
+As I [wrote elsewhere](/posts/agentic-graph-rag-mcp), when you combine AI with a graph system, "**hallucination doesn't disappear — it just changes location.**" For cpg, here's where it lands:
 
 - **Graph build phase**: **Zero** hallucination. Context lives in the code itself, and both the ts-morph AST pass and the BigQuery MERGE are fully deterministic. No LLM is involved.
 - **Graph query phase**: **Zero** hallucination. The MCP tools return facts straight from BQ.
