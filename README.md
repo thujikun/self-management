@@ -1,12 +1,12 @@
 # self-management
 
-Ryan の個人ナレッジ・運用基盤。cortex (会社の AI infrastructure) で確立した Product Graph パターンを、個人の content・思想・関係性に適用するモノレポ。
+Ryan の個人ナレッジ・運用基盤。個人の content・思想・engagement・関係性を Product Graph として統合するモノレポ。
 
 ## このリポジトリの目的
 
 - **個人の content・思想・engagement を1つのグラフに統合する** (X、Zenn、dev.to、インタビュー、登壇、Slack、メモ等)
 - **AI agent (Claude Code) が autonomously 個人運用できる基盤** を作る
-- **会社 cortex から独立** な個人 GCP プロジェクト (`ryan-self-management`) で運用
+- **個人 GCP プロジェクト** (`ryan-self-management`) で運用
 
 ## scope の階層
 
@@ -80,7 +80,3 @@ pnpm graph:init
 # 6. 既存 markdown を BQ に移行
 pnpm graph:build  # (将来 implementation)
 ```
-
-## 関連プロジェクト
-
-- **cortex** (会社、`~/Workspace/cortex`) — airCloset の AI infrastructure。Product Graph / MCP server / multi-agent 等のパターンの originator。本リポジトリは cortex のパターンを個人 scope に縮小した形。

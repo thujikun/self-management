@@ -1,6 +1,6 @@
 # 影響範囲分析ガイドライン
 
-cortex の `docs/guidelines/impact-analysis.md` を、self-management の ryan-graph (BQ + embedding) を SSoT とする版に置き換える。
+ryan-graph (BQ + embedding) を SSoT として影響範囲分析を行うためのガイドライン。
 
 ## 目的
 

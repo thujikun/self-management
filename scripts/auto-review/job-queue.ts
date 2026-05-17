@@ -4,8 +4,6 @@
  * - 同 id の job は dedup (キュー内 / running 中 ともに重複拒否)
  * - 同 PR の異 job (review と fix) は直列化 (片方が走ってる間はもう片方を待たせる)
  * - 別 PR は最大 maxConcurrent まで並列
- *
- * cortex の `enqueueJob` / `processQueue` / `acquireJob` を縮小コピー。
  */
 
 import { log, warn } from "./log.js";

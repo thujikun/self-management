@@ -6,8 +6,7 @@
  * - `createOtelDestination()`: pino multistream の destination として使うと、
  *   各 log line を OTel LoggerProvider 経由で OTLP へ送る。
  *
- * cortex の同名モジュールと同じ役割だが、Loki 側の attribute 命名は self-management
- * 用に簡略化 (severity / message / trace_id / span_id のみ)。
+ * Loki 側の attribute 命名は self-management 用に簡略化 (severity / message / trace_id / span_id のみ)。
  *
  * @graph-stack ryan-product-graph
  * @graph-domain infra

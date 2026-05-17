@@ -2,7 +2,7 @@
 
 このドキュメントは、self-management のコードレビューで最初に読む入口。詳細な判断基準は [guidelines/](./guidelines/) 配下に分割し、Claude による自動レビューも各ファイルを直接参照する。
 
-cortex の [docs/review-guidelines.md](https://github.com/) と同じ構造を **個人 1 人運用 + ryan-product-graph + ryantsuji-dev (個人ブログ)** にスケールダウンして適用する。
+**個人 1 人運用 + ryan-product-graph + ryantsuji-dev (個人ブログ)** という前提の下で運用する。
 
 ## レビューの進め方
 

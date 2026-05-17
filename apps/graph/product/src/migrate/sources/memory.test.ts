@@ -116,7 +116,7 @@ about user
     await writeFile(
       join(dir, "proj.md"),
       `---
-name: cortex design
+name: graph design
 description: distilled
 type: project
 ---
@@ -127,7 +127,7 @@ content
     const result = await parseMemory(dir);
     const topics = result.nodes.filter((n) => n.kind === "topics");
     expect(topics).toHaveLength(1);
-    expect(topics[0].fields.name).toBe("cortex design");
+    expect(topics[0].fields.name).toBe("graph design");
     expect(result.edges).toEqual([]);
   });
 

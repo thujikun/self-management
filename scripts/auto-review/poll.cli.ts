@@ -12,7 +12,7 @@
  * - 同 PR の review/fix/ci-fix/merge は per-PR mutex で直列化
  * - iteration cap 超過で当該 PR を stalled としてスキップ (成功 review/fix/ci-fix push で +1 ずつ)
  *
- * 各 tick / job の進捗を `[scope] message` 形式で stdout に逐次ログする (cortex 同型)。
+ * 各 tick / job の進捗を `[scope] message` 形式で stdout に逐次ログする。
  *
  * SIGINT / SIGTERM で graceful stop (in-flight job を待ってから exit)。
  */

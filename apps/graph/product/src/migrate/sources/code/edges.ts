@@ -1,8 +1,6 @@
 /**
  * `@graph-connects` から explicit edges を生成。target を name で解決、未解決は外部 stub node 化。
  *
- * cortex の `apps/graph/product/src/edge-detectors/explicit-edges.ts` を移植。
- *
  * 解決順序:
  *  1. name 完全一致 (一意 or 同 stack 優先)
  *  2. `this.method` → 同ファイル / 同ディレクトリ内のクラスメソッド
@@ -14,7 +12,7 @@
  *
  * @graph-stack ryan-product-graph
  * @graph-domain graph
- * @graph-business cortex explicit-edges 移植。@graph-connects から target 名を既存 node に名前解決し、解決できない target は external stub node を seed する。同 stack 優先で多重マッチを抑制
+ * @graph-business @graph-connects から target 名を既存 node に名前解決し、解決できない target は external stub node を seed する。同 stack 優先で多重マッチを抑制
  * @graph-connects none
  */
 
@@ -97,7 +95,7 @@ export interface ResolverNode {
 }
 
 /**
- * source file path から擬似 stack root を抽出 (cortex 同型: 先頭 3 path segment)。
+ * source file path から擬似 stack root を抽出 (先頭 3 path segment)。
  *
  * @graph-connects none
  */

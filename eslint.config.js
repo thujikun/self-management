@@ -8,7 +8,7 @@
  * - TypeScript strict + recommended-type-checked
  *
  * 機械的なテスト coverage threshold や @graph-* タグ強制は scripts/hooks/* で実施。
- * cortex のような専用 plugin は self-management の規模では不要。
+ * 専用 ESLint plugin は self-management の規模では不要。
  */
 
 import js from "@eslint/js";

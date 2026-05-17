@@ -3,7 +3,7 @@
  *
  * - reviewer mode は detached worktree (read-only review、`<head_sha>` を checkout)
  * - author mode は branch 付き worktree (commit + push を許す)
- * - cortex 同型で `~/.cache/self-management-auto-review/worktrees/` 配下に作る
+ * - `~/.cache/self-management-auto-review/worktrees/` 配下に作る
  *   (`/private/var/folders` の OS auto-clean を避けるため HOME 配下を使う)
  */
 
