@@ -51,7 +51,14 @@ export const RYANTSUJI_DEV_BASE = "https://ryantsuji.dev";
 export const DEVTO_USER = "ryantsuji";
 export const ZENN_PUBLICATION = "aircloset";
 
-export const ZENN_REPO_REMOTE = "git@github.com:thujikun/ryantsuji-dev-content.git";
+/**
+ * Zenn sync 用 remote URL の default。local 実行は SSH (`git@github.com:...`) で
+ * 鍵認証する想定。CI / 別経路は env `ZENN_REPO_REMOTE` で HTTPS+PAT 等に差し替え可能
+ * (CI workflow が `https://<token>@github.com/thujikun/ryantsuji-dev-content.git` を
+ * 注入する)。`emitZenn` がこの env を読み取って `publishToZenn` の remoteUrl に渡す。
+ */
+export const ZENN_REPO_REMOTE_DEFAULT = "git@github.com:thujikun/ryantsuji-dev-content.git";
+export const ZENN_REPO_REMOTE = process.env.ZENN_REPO_REMOTE ?? ZENN_REPO_REMOTE_DEFAULT;
 export const ZENN_REPO_LOCAL_DEFAULT = resolve(homedir(), "Workspace/ryantsuji-dev-content");
 
 /** parse + filename 由来 slug + lang。 */

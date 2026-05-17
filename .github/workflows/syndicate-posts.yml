@@ -1,0 +1,133 @@
+# ryantsuji.dev の post markdown を main push 時に Zenn / dev.to に自動同期する workflow。
+#
+# trigger: `apps/ryantsuji-dev/web/content/posts/**` / `packages/syndication/**` /
+# `scripts/syndicate*` の変更を main に push した時。
+#
+# 設計:
+# - source markdown の SoT は本 repo (self-management) の `apps/ryantsuji-dev/web/content/posts/`
+# - dev.to: API (`POST /api/articles` で新規作成、`PUT /api/articles/<id>` で更新)
+# - Zenn: 別 repo `thujikun/ryantsuji-dev-content` の `articles/<id>.md` に commit/push
+#   → Zenn の GitHub sync が拾って公開
+#
+# **frontmatter writeback**:
+#   `scripts/syndicate.ts` は新規記事に `syndication.zenn.id` (= randomBytes(7) hex) と
+#   `syndication.devto.{id,slug}` (= dev.to POST レスポンスから) を frontmatter に書き
+#   戻す。CI 経路ではこの書き戻しが必ず main repo 上で発生し、変更があれば bot user
+#   で commit + push する (= 次回 sync で同 ID が再利用される)。
+#
+# **secret 要件** (GCP Secret Manager に事前投入):
+# - `dev-to-api-key`: dev.to API key (Settings → Extensions → DEV API Keys)
+# - `ryantsuji-dev-content-deploy-key`: thujikun/ryantsuji-dev-content の
+#   Deploy Key (write 有効) の **秘密鍵全文** (Ed25519、改行 \n 込み)。
+#   workflow 側で `~/.ssh/id_ed25519` に書き出し、`git@github.com:...` URL で
+#   clone/push する
+#
+# secrets / vars (pulumi.yml / deploy-ryantsuji-dev.yml と共有):
+# - var: GCP_PROJECT_ID
+# - var: GCP_PROJECT_NUMBER
+# - var: PULUMI_CI_SA_EMAIL (WIF 用 SA、Secret Manager:Access 権限を持つ)
+name: Syndicate posts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/ryantsuji-dev/web/content/posts/**"
+      - "packages/syndication/**"
+      - "scripts/syndicate.ts"
+      - "scripts/syndicate.cli.ts"
+      - ".github/workflows/syndicate-posts.yml"
+
+# - contents: write は frontmatter writeback 用の git commit + push
+# - id-token: write は WIF (Secret Manager 取得) 用
+concurrency:
+  group: syndicate-${{ github.ref }}
+  # 同一 branch で並列 run が走ると writeback の競合が発生するため queue 化 (cancel しない)
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  syndicate:
+    name: Syndicate to Zenn + dev.to
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout (with write token)
+        uses: actions/checkout@v6
+        with:
+          # writeback commit + push のため persist-credentials: true (default) で
+          # GITHUB_TOKEN を git remote の auth として握る。
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # `git commit + git pull --rebase` で最新を取り込むため shallow ではなく
+          # 履歴を持つ (default の fetch-depth: 1 だと rebase が失敗する)。
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions/providers/github-actions
+          service_account: ${{ vars.PULUMI_CI_SA_EMAIL }}
+
+      # dev.to API key を SSoT (GCP Secret Manager `dev-to-api-key`) から取得し
+      # ::add-mask:: で log mask 化してから job env に注入。
+      - name: Fetch DEV_TO_API_KEY from Secret Manager
+        id: devto-key
+        run: |
+          token=$(gcloud secrets versions access latest \
+            --secret=dev-to-api-key \
+            --project=${{ vars.GCP_PROJECT_ID }})
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      # Zenn sync 用 SSH deploy key (ryantsuji-dev-content 書き込み権限) を取得。
+      # 秘密鍵を `~/.ssh/id_ed25519` に書いて chmod 600、github.com の host key を
+      # known_hosts に登録。これで `git@github.com:thujikun/ryantsuji-dev-content.git`
+      # 形式の URL がそのまま使える (SSH default、`ZENN_REPO_REMOTE` env は未設定で OK)。
+      - name: Setup SSH deploy key for ryantsuji-dev-content
+        run: |
+          key=$(gcloud secrets versions access latest \
+            --secret=ryantsuji-dev-content-deploy-key \
+            --project=${{ vars.GCP_PROJECT_ID }})
+          mkdir -p ~/.ssh
+          printf '%s\n' "$key" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Configure git identity (bot)
+        run: |
+          git config user.name "ryantsuji-dev syndication bot"
+          git config user.email "noreply@github.com"
+
+      # Zenn 側 repo を `$RUNNER_TEMP/ryantsuji-dev-content` に clone (= publishToZenn
+      # の `repoDir`)。SSH key 認証で git@github.com:... 経由で push する。
+      - name: Run syndication (Zenn + dev.to, include drafts)
+        env:
+          DEV_TO_API_KEY: ${{ steps.devto-key.outputs.token }}
+          RYANTSUJI_CONTENT_REPO_DIR: ${{ runner.temp }}/ryantsuji-dev-content
+        run: pnpm exec tsx scripts/syndicate.cli.ts --target all --publish --include-drafts
+
+      # syndicate が frontmatter に `syndication.zenn.id` / `syndication.devto.{id,slug}`
+      # を書き戻していたら、その diff を bot commit で main に push。`[skip ci]` で
+      # workflow の無限 loop を防ぐ (本 workflow は paths filter にも該当しないため
+      # 二重ガードだが、deploy-ryantsuji-dev workflow 等の同 paths trigger が発火
+      # しないよう明示)。
+      - name: Commit & push frontmatter writeback (if any)
+        run: |
+          if [ -z "$(git status --porcelain apps/ryantsuji-dev/web/content/posts/)" ]; then
+            echo "no frontmatter changes — skipping commit"
+            exit 0
+          fi
+          # syndicate が frontmatter を書き換えた直後で workdir は dirty。`--autostash`
+          # 無しだと rebase が abort するので明示。並列 push が同 window に着地した
+          # ケースでも safe に rebase できる。
+          git pull --rebase --autostash origin main
+          git add apps/ryantsuji-dev/web/content/posts/
+          git commit -m "chore(syndication): writeback syndication IDs [skip ci]"
+          git push origin HEAD:main
