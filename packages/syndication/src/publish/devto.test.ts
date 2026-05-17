@@ -146,18 +146,6 @@ describe("createDevtoArticle", () => {
     fetchSpy.mockRestore();
   });
 
-  it("dry-run は fetch を呼ばず擬似 id/slug を返す", async () => {
-    const result = await createDevtoArticle({
-      apiKey: "test-key",
-      article: baseArticle,
-      dryRun: true,
-    });
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(result.id).toBe(-1);
-    expect(result.slug).toBe("dry-run-slug");
-    expect(result.url).toContain("dry-run");
-  });
-
   it("201 で id + slug + url を返す + POST /api/articles へ api-key 付きで投げる", async () => {
     fetchSpy.mockResolvedValueOnce(
       okResponse({

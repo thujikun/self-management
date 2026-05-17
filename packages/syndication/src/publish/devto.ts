@@ -76,8 +76,6 @@ export async function publishToDevto(args: PublishDevtoArgs): Promise<PublishDev
 export interface CreateDevtoArgs {
   apiKey: string;
   article: DevtoArticleAttributes;
-  /** dry-run の時は POST せず、固定の dummy id / slug を返す */
-  dryRun?: boolean;
   /** retry 時の sleep injection (test 用) */
   sleepFn?: (ms: number) => Promise<void>;
 }
@@ -96,16 +94,12 @@ export interface CreateDevtoResult {
  * 場合は article body の `published: false` を渡しておく (= `meta.draft: true` から
  * 派生する DevtoArticleAttributes が自動的に false を載せる)。
  *
+ * `publishToDevto` (PUT) と違って dry-run mode は持たない: 「副作用なしで本物の id を
+ * 返す」は意味が矛盾するため。dry-run 中に create を踏みたければ呼び出し側で gate する。
+ *
  * @graph-connects none
  */
 export async function createDevtoArticle(args: CreateDevtoArgs): Promise<CreateDevtoResult> {
-  if (args.dryRun) {
-    return {
-      id: -1,
-      slug: "dry-run-slug",
-      url: "https://dev.to/articles/dry-run (dry-run)",
-    };
-  }
   const body = JSON.stringify({ article: args.article });
   const sleepFn = args.sleepFn ?? defaultSleep;
   let attempt = 0;
