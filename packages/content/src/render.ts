@@ -23,6 +23,7 @@ import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import rehypeShikiFromHighlighter from "@shikijs/rehype/core";
 import rehypeSlug from "rehype-slug";
 import rehypeStringify from "rehype-stringify";
+import remarkDirective from "remark-directive";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
@@ -62,6 +63,7 @@ import langYaml from "shiki/langs/yaml.mjs";
 
 import { parseFrontmatter, type Frontmatter } from "./frontmatter.js";
 import { estimateReadingTimeMinutes, extractHeadings, type Heading } from "./headings.js";
+import { normalizeZennMessageAlert, remarkDirectiveCallouts } from "./zenn-directives.js";
 
 /**
  * `renderMarkdown` の戻り値。view 側はこの 1 object を受け取って描画する。
@@ -148,12 +150,17 @@ function getShikiHighlighter(): Promise<HighlighterCore> {
 export async function renderMarkdown(source: string): Promise<RenderedDoc> {
   const parsed = matter(source);
   const frontmatter = parseFrontmatter(parsed.data);
-  const body = parsed.content;
+  // Zenn 互換の `:::message alert` を `:::message-alert` に rewrite してから
+  // unified に流す (remark-directive は空白区切り label を扱わないため)。
+  // 詳細は `zenn-directives.ts` の JSDoc 参照。
+  const body = normalizeZennMessageAlert(parsed.content);
 
   const highlighter = await getShikiHighlighter();
   const file = await unified()
     .use(remarkParse)
     .use(remarkGfm)
+    .use(remarkDirective)
+    .use(remarkDirectiveCallouts)
     .use(remarkRehype)
     .use(rehypeSlug)
     .use(rehypeAutolinkHeadings, { behavior: "wrap" })

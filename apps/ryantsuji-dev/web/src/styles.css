@@ -643,6 +643,31 @@ main {
   color: var(--text-secondary);
 }
 
+/* Zenn 互換 `:::message` / `:::message alert` directive — `<aside class="callout
+   callout-info|alert">` として render される (`packages/content/zenn-directives.ts` 参照)。
+   info は blockquote と差別化、alert は warning 系の色で強調。本文と縦リズムは
+   blockquote と揃える */
+.post-body .callout {
+  margin: var(--space-4) 0;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-2);
+  border-left: 3px solid var(--border-strong);
+  background: var(--surface-subtle);
+}
+
+.post-body .callout-alert {
+  border-left-color: var(--text-warning, var(--text-accent));
+  background: var(--surface-warning-subtle, var(--surface-subtle));
+}
+
+.post-body .callout > :first-child {
+  margin-top: 0;
+}
+
+.post-body .callout > :last-child {
+  margin-bottom: 0;
+}
+
 .post-body a {
   color: var(--text-accent);
 }
