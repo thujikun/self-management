@@ -51,6 +51,10 @@
      floating breakpoint。UI コンポーネントで 44rem / 16rem / 24rem の magic 値を
      直書きしないために集約。 */
   --container-content: 44rem;
+  /* post detail の外周幅。share pane (左 72px) + gap + body column を全部含める。
+     2-col grid で body 列が 1fr を埋めるので、ここを広げると本文 article も広がる。
+     64rem = 1024px → body 列 ≒ 58rem (928px) で長文 article 向けの reading 密度。 */
+  --container-post-content: 64rem;
   --container-toc: 16rem;
   --container-toc-dialog: 24rem; /* mobile TOC dialog の最大幅 (sidebar 16rem より広い) */
   --breakpoint-toc-float: 80rem; /* ≥1280px で floating TOC sidebar に切替 */
@@ -169,10 +173,25 @@ main {
   width: clamp(180px, 36vw, 320px);
   height: auto;
   /* offset-y = --space-2 (8px)、blur-radius = --space-8 (32px)。drop-shadow の
-     構造的 literal を spacing token に寄せて、リブランド時の drift 起点を消す。 */
+     構造的 literal を spacing token に寄せて、リブランド時の drift 起点を消す。
+     `transform: translateZ(0)` で compositor layer 化することで、mobile Chrome の
+     `filter: drop-shadow` + 複数 path (`<path>` 群を負 scale で反転) + `color-mix`
+     の組合せでまれに発生する vertical streak / banding を回避する。 */
   filter: drop-shadow(
     0 var(--space-2) var(--space-8) color-mix(in oklch, var(--accent-bg) 35%, transparent)
   );
+  transform: translateZ(0);
+  will-change: filter;
+}
+
+/* mobile (<48rem = 768px) では `filter: drop-shadow` を切る。デコの drop-shadow が
+   モバイル Chrome の SVG パス rasterization と相性悪く、artifact (縦ストライプ) が
+   出る端末がある。装飾なので外しても情報量を損なわない。 */
+@media (max-width: calc(48rem - 1px)) {
+  .landing__logo {
+    filter: none;
+    will-change: auto;
+  }
 }
 
 .landing__tagline {
@@ -425,9 +444,12 @@ main {
     display: block;
     position: fixed;
     top: calc(var(--space-16) + var(--space-4));
+    /* post detail の outer 幅 (`--container-post-content`) を基準に gutter を計算。
+       container-content (44rem) を使うと post-detail が 56rem に広がった分だけ
+       TOC が content と overlap する。 */
     right: max(
       var(--space-6),
-      calc((100vw - var(--container-content)) / 2 - var(--container-toc) - var(--space-6))
+      calc((100vw - var(--container-post-content)) / 2 - var(--container-toc) - var(--space-6))
     );
     width: var(--container-toc);
     max-height: calc(100vh - var(--space-24));
@@ -500,6 +522,14 @@ main {
   font-size: var(--font-size-base);
   line-height: var(--line-height-relaxed);
   color: var(--text-primary);
+}
+
+/* PC (≥80rem) では本文を 1 段下げて読みやすい密度に。EN / JA 共通。mobile / tablet
+   は base のまま (狭い画面ほど大きめが読みやすい)。 */
+@media (min-width: 80rem) {
+  .post-body {
+    font-size: var(--font-size-sm);
+  }
 }
 
 .post-body h2,
@@ -1225,16 +1255,54 @@ main {
 
 .site-footer {
   /* sticky-footer pattern: `body` の flex column 末尾に `margin-top: auto` で押し付け、
-     短い post でも viewport 底に張り付き「巨大な void」を消す。max-width は中央寄せ用。 */
+     短い post でも viewport 底に張り付き「巨大な void」を消す。max-width は中央寄せ用。
+     links 行 + copyright 行を vertical stack で並べる。 */
   max-width: var(--container-content);
   margin: auto auto var(--space-4);
   padding: var(--space-6);
   display: flex;
-  gap: var(--space-3);
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
   color: var(--text-muted);
   font-size: var(--font-size-xs);
   border-top: 1px solid var(--border-subtle);
+}
+
+.site-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: center;
+}
+
+.site-footer__copyright {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+/* mobile (<80rem) では右下 corner に TOC mobile trigger (h-12 w-12 + right-4 ≒ 64px)
+   が fixed で出ている。footer 末尾の text link (RSS / GitHub 等) と被って tap し
+   づらいので、右側に TOC trigger 1 個ぶん + 余白を確保。 */
+@media (max-width: calc(80rem - 1px)) {
+  .site-footer {
+    padding-right: calc(var(--space-12) + var(--space-6));
+  }
+}
+
+/* iPhone 幅では gap + divider が嵩んで links 行が 1 行に収まらないので、divider を
+   隠して gap を詰める。compact に 1 行へ。 */
+@media (max-width: 30rem) {
+  .site-footer {
+    padding-inline: var(--space-3);
+    padding-right: calc(var(--space-12) + var(--space-3));
+  }
+  .site-footer__links {
+    gap: var(--space-1);
+  }
+  .site-footer__links > span {
+    display: none;
+  }
 }
 
 .site-footer a {
@@ -1350,26 +1418,46 @@ main {
   color: var(--text-muted);
 }
 
-.post-share-pane__btn--rss {
-  color: color-mix(in oklch, var(--accent-bg) 80%, var(--text-secondary));
-}
-
-/* desktop: post-detail を grid 化して left pane を main の左に sticky で並べる */
+/* desktop: post-detail (= 中央 column) と share rail は視覚的に分離する。
+   - `.post-detail` は body / engagement 等の reading column そのもの。max-width は
+     `--container-post-content` cap (本文を広めに) で centered。grid を組まず、子要素は
+     natural flow で full-width。
+   - `.post-share-rail` は `.post-detail` の外側 (左 gutter) に `position: absolute`
+     で逃がす。中央 column の bounding box から完全に切り離し、本文 width を 1px も
+     奪わない。負の left offset で `.post-detail` の左辺の外に張り出す。
+   - 中の `.post-share-pane` は `position: sticky` で scroll 追従。
+   - mobile (<960px) は既存 `display: contents` rule で sticky-bottom toolbar に倒す。 */
 @media (min-width: 960px) {
   .post-detail {
-    display: grid;
-    grid-template-columns: 72px minmax(0, 1fr);
-    gap: var(--space-6);
-  }
-  .post-detail__crumbs,
-  .post-detail__header,
-  .post-body,
-  .engagement {
-    grid-column: 2;
+    position: relative;
+    /* 左右に share rail (72px) + gap 分の margin を確保し、body が viewport の中央
+       で完結する形に。post-detail 自体は share rail の bounding box を含まないので、
+       max-width を絞ることで rail が左 gutter に visible に収まる。 */
+    max-width: min(var(--container-post-content), calc(100vw - 2 * (72px + var(--space-6) * 2)));
   }
   .post-share-rail {
-    grid-column: 1;
-    grid-row: 2 / span 99;
+    position: absolute;
+    top: var(--space-32, 8rem);
+    left: calc(-1 * (72px + var(--space-6)));
+    bottom: 0;
+    width: 72px;
+  }
+  .post-share-pane {
+    position: sticky;
+    top: calc(var(--space-12) + var(--space-3));
+  }
+}
+
+@media (min-width: 80rem) {
+  /* TOC sidebar が右に 16rem 常駐するため、その分の margin を両サイドに確保。
+     post-detail は cap 内で TOC との overlap を避ける幅に絞る。viewport が狭い
+     時 (= body 列 + share rail がここに収まらない) は自然に狭まり、極端に狭く
+     なる場合は <80rem の mobile UI に倒す前提。 */
+  .post-detail {
+    max-width: min(
+      var(--container-post-content),
+      calc(100vw - 2 * (var(--container-toc) + var(--space-6) * 2))
+    );
   }
 }
 
@@ -1388,10 +1476,19 @@ main {
     justify-content: space-around;
     width: 100%;
     position: sticky;
+    /* sticky pane は full-width 中央のまま。TOC mobile fab は同 viewport の右下に
+       fixed で居るので、`<960px` で fab を share pane の上に持ち上げて vertical stack
+       にすることで overlap を解消する (share pane の幅を削ったり中途半端な margin で
+       揃えるより、視覚的にすっきりまとまる)。 */
     bottom: var(--space-2);
     top: auto;
     margin-top: var(--space-4);
     z-index: 5;
+  }
+  /* TOC mobile fab を share pane (高さ ~ 72px) の上に持ち上げる。bottom-4 (16px) +
+     share pane 高さ + 余白 ≒ 96px。 */
+  .post-toc__mobile-trigger {
+    bottom: calc(var(--space-4) + var(--space-20));
   }
   .post-share-pane__btn {
     width: auto;
@@ -1553,6 +1650,10 @@ main {
   max-width: 95vw;
   max-height: 95vh;
   color: var(--text-primary);
+  /* native `<dialog>` は `showModal()` で auto centering されるはずが UA の default
+     margin と衝突するケースがあるので `inset: 0` + `margin: auto` を明示。 */
+  inset: 0;
+  margin: auto;
 }
 
 .lightbox::backdrop {
