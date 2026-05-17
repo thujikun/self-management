@@ -36,7 +36,9 @@ export const COVERAGE_INCLUDE: readonly string[] = [
  */
 export const COVERAGE_EXCLUDE: readonly string[] = [
   "**/*.test.ts",
+  "**/*.test.tsx",
   "**/*.spec.ts",
+  "**/*.spec.tsx",
   "**/dist/**",
   "**/node_modules/**",
   // SDK ラッパー: BigQuery / Vertex AI への外部 HTTP 呼び出しが本体で、
