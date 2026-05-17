@@ -624,9 +624,13 @@ main {
 /* `<table>` の default `display: table` は intrinsic content width で展開され、
    mobile viewport より広い列を持つと parent を越えて overflow する。`display: block`
    + `overflow-x: auto` で「テーブル自体が wrap せず必要なら横スクロールできる box」
-   に倒す。touch device では指でスワイプ可。テーブル意味論 (row/column accessor)
-   は header / data row の relative 関係を `<th>` / `<td>` で保持しているので、
-   display block にしても screen reader 経路は壊れない。 */
+   に倒す。touch device では指でスワイプ可。
+   trade-off: WebKit (Safari + VoiceOver) は `<table>` に `display: block` を当てると
+   table の accessibility role が drop され、「table with N rows, M columns」のアナウンスや
+   cell-by-cell navigation (Ctrl+Opt+矢印) が効かなくなる。本 blog では table 出現頻度が
+   低く、overflow で読めなくなる方が実害が大きいので block 化を優先する。将来 table 利用が
+   増えたら remark 側で <div role="region" tabindex="0" style="overflow-x:auto"> wrap に
+   切り替え、CSS は default の display: table に戻す方針。 */
 .post-body table {
   display: block;
   max-width: 100%;
