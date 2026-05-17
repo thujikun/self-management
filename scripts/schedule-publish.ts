@@ -87,6 +87,13 @@ export function stripDraftLine(markdown: string): string {
  * 2 field だけ) ので、依存を追加せず regex で十分。複雑な YAML 形式 (multiline
  * scalar / anchor 等) を `publishedAt` / `draft` には使わない前提。
  *
+ * **対応する `publishedAt` 値の domain**:
+ * ASCII scalar (date-only / ISO 8601 datetime + TZ offset) のみ。value 内部に
+ * `'` / `"` を含むケースは想定外で、`pubMatch` の regex が成立せず `publishedAt:
+ * null` が返る (= 公開判定は false 側に倒れる = 安全側)。本 scheduler は ISO 8601
+ * 形式の `publishedAt` しか consume しないので実害は無いが、本関数を他 frontmatter
+ * field の汎用 reader として流用するのは不可。
+ *
  * @graph-connects none
  */
 export function extractMeta(markdown: string): { publishedAt: string | null; draft: boolean } {

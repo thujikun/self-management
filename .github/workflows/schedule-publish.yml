@@ -4,13 +4,22 @@
 # - `apps/ryantsuji-dev/web/content/posts/` 内の `draft: true` で `publishedAt`
 #   が現在時刻以下になった post の frontmatter から `draft:` 行を物理的に消す
 # - 削除後の diff があれば github-actions[bot] が main に push
-# - その push が既存の deploy + syndicate workflow を発火させて公開が完了する
+# - 続けて `gh workflow run --ref main` で `deploy-ryantsuji-dev.yml` と
+#   `syndicate-posts.yml` を `workflow_dispatch` 経由で発火させ、ryantsuji.dev /
+#   Zenn / dev.to に公開を伝播する
+#
+# downstream 発火を明示 dispatch にする理由:
+#   GitHub Actions の仕様で `secrets.GITHUB_TOKEN` を credential として push した
+#   event は他 workflow の `on: push` を trigger しない (`workflow_dispatch` /
+#   `repository_dispatch` のみ例外)。本 workflow は GITHUB_TOKEN で push するので、
+#   downstream は明示 dispatch でしか発火できない。
 #
 # 頻度: 15 分間隔。`publishedAt` を datetime + TZ offset (`+09:00` / `-07:00` 等)
 # で指定すれば公開時刻の最大 15 分遅延で flip される。
 #
 # permissions:
 # - `contents: write` — bot commit + push 用
+# - `actions: write` — `gh workflow run` で downstream を dispatch するため
 # - `id-token: write` — 不要 (本 workflow は GCP 等の OIDC を使わない)
 name: Schedule publish
 
@@ -21,6 +30,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: schedule-publish-${{ github.ref }}
@@ -63,7 +73,26 @@ jobs:
         if: steps.run.outputs.slugs != ''
         run: |
           git add apps/ryantsuji-dev/web/content/posts/
-          # `--allow-empty` は付けない: changed が無いのに commit 走るのは bug
-          git commit -m "chore(content): publish ${{ steps.run.outputs.slugs }}"
-          # syndicate / deploy workflow を発火させたいので [skip ci] は付けない
+          # `--allow-empty` は付けない: changed が無いのに commit 走るのは bug。
+          # subject は固定文字列にして commitlint の 100 字 header cap を踏まない
+          # (複数 slug が同 tick で flip すると slug 列挙だけで 100 字を超え得る)。
+          # slug 一覧は本文側に残して audit trail を保つ。
+          git commit \
+            -m "chore(content): publish scheduled posts" \
+            -m "slugs: ${{ steps.run.outputs.slugs }}"
+          # syndicate / deploy workflow は GITHUB_TOKEN 経由の push では発火しない
+          # ので、push 後に下の dispatch step で明示的に叩く。`[skip ci]` も付けない
+          # (将来 path filter trigger が復活した時の保険)。
           git push origin HEAD:main
+
+      # GITHUB_TOKEN で push しても downstream の `on: push` は鳴らない。明示
+      # workflow_dispatch で deploy + syndicate を発火させて公開を伝播する。
+      # `workflow_dispatch` は GITHUB_TOKEN でも発火できる例外ルール (`actions:
+      # write` 権限が要件)。
+      - name: Dispatch downstream workflows (deploy + syndicate)
+        if: steps.run.outputs.slugs != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run deploy-ryantsuji-dev.yml --ref main
+          gh workflow run syndicate-posts.yml --ref main

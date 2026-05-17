@@ -50,6 +50,10 @@ on:
       - "packages/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/deploy-ryantsuji-dev.yml"
+  # schedule-publish.yml が draft flip 後に `gh workflow run --ref main` で叩く経路。
+  # GITHUB_TOKEN で push しても他 workflow の `on: push` は鳴らない仕様 (例外:
+  # workflow_dispatch / repository_dispatch) のため、明示 dispatch で発火させる。
+  workflow_dispatch:
 
 # 同一 branch では先行 run を cancel して最新のみ deploy する。pulumi.yml と違って
 # `cancel-in-progress: true` にするのは、deploy は最新だけ反映されれば良く、途中
@@ -98,7 +102,7 @@ jobs:
       # SSoT は GCP Secret Manager `neon-database-url`。`drizzle-orm/neon-http/
       # migrator` の hash 比較で未適用分だけ atomic に流れるため、再 run も safe。
       - name: Fetch DATABASE_URL from Secret Manager
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         id: db-url
         run: |
           url=$(gcloud secrets versions access latest \
@@ -123,7 +127,7 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Apply DB migrations (drizzle migrator)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         working-directory: .
         run: pnpm --filter @self/db migrate:apply
         env:

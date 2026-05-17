@@ -149,6 +149,19 @@ describe("extractMeta", () => {
   it("frontmatter が無ければ全部 null/false", () => {
     expect(extractMeta("no frontmatter")).toStrictEqual({ publishedAt: null, draft: false });
   });
+
+  // JSDoc で対応 domain は ASCII scalar (= ISO 8601 datetime / date-only) のみと
+  // 明示している。value 内に `"` / `'` を含む input は想定外 = capture そのものが
+  // 成立せず publishedAt は null になる挙動を test 化して、将来 frontmatter の他
+  // field 抽出に流用された場合に気付けるようにする。実用上 scheduler は ISO 8601
+  // しか consume しないので実害は無い。
+  it("value 内に引用符が混ざる input は対応外 (= publishedAt は null)", () => {
+    const md = ["---", 'publishedAt: he said "hi"', "draft: true", "---"].join("\n");
+    expect(extractMeta(md)).toStrictEqual({
+      publishedAt: null,
+      draft: true,
+    });
+  });
 });
 
 describe("slugOfFilename", () => {
