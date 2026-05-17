@@ -73,6 +73,14 @@ jobs:
 
       - uses: ./.github/actions/setup
 
+      # `scripts/syndicate.ts` は `@self/content` / `@self/syndication` の dist
+      # (`dist/index.js`) を import する。setup action は `pnpm install` のみで
+      # build を回さないので、明示的に対象 workspace を build する。両 package
+      # とも `tsgo` での pure TS → ESM 変換のみで副作用なし (= test/lint 不要)。
+      - name: Build workspace packages
+        shell: bash
+        run: pnpm --filter @self/content --filter @self/syndication build
+
       - name: Authenticate to Google Cloud (WIF)
         uses: google-github-actions/auth@v2
         with:
