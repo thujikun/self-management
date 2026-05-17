@@ -189,6 +189,13 @@ describe("readAllPosts", () => {
     const posts = await readAllPosts(dir);
     expect(posts.map((p) => p.slug)).toStrictEqual(["beta"]);
   });
+
+  it("includeDrafts: true で draft も含めて返す", async () => {
+    await writeFile(join(dir, "alpha.ja.md"), baseFm("draft: true\n"));
+    await writeFile(join(dir, "beta.ja.md"), baseFm());
+    const posts = await readAllPosts(dir, { includeDrafts: true });
+    expect(posts.map((p) => p.slug).sort()).toStrictEqual(["alpha", "beta"]);
+  });
 });
 
 describe("emitZenn", () => {
