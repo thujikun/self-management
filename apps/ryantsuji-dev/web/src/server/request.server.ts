@@ -33,8 +33,7 @@ import type { Env } from "../start.js";
  */
 export function safeAcceptLanguage(): string | null {
   try {
-    const headers = getRequestHeaders() as unknown as Record<string, string | undefined>;
-    return headers["accept-language"] ?? null;
+    return getRequestHeaders().get("accept-language");
   } catch {
     return null;
   }
@@ -108,20 +107,20 @@ export function writeThemeCookie(theme: Theme): void {
 }
 
 /**
- * 現在の request の Headers をそのまま Headers object として返す。`safeAcceptLanguage`
- * と同じく runtime 外では throw する getRequestHeaders を try/catch で握りつぶし、
- * 取れなければ null を返す。
+ * 現在の request の Headers をそのまま返す。`safeAcceptLanguage` と同じく runtime 外
+ * では throw する getRequestHeaders を try/catch で握りつぶし、取れなければ null を返す。
  *
- * @graph-connects tanstack-start [calls] getRequestHeaders で全 header を取り出す
+ * TanStack Start の `getRequestHeaders` は **`Headers` instance を返す** (h3 の req
+ * headers を直接 expose)。Record として `Object.entries` で iterate すると空配列に
+ * なる (Headers は enumerable own property を持たないため) ので、必ず `Headers` API
+ * (`get` / `has` / `forEach`) 経由で読む。本関数は受けた Headers をそのまま下流に流す
+ * (mutation 用途は無いので clone 不要)。
+ *
+ * @graph-connects tanstack-start [calls] getRequestHeaders で Headers instance を取り出す
  */
 export function safeRequestHeaders(): Headers | null {
   try {
-    const raw = getRequestHeaders() as unknown as Record<string, string | undefined>;
-    const h = new Headers();
-    for (const [k, v] of Object.entries(raw)) {
-      if (typeof v === "string") h.set(k, v);
-    }
-    return h;
+    return getRequestHeaders();
   } catch {
     return null;
   }
