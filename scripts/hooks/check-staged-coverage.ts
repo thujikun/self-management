@@ -17,7 +17,7 @@
 
 import { existsSync } from "node:fs";
 
-import { candidateTestFiles, isCovered } from "./coverage-config.js";
+import { COVERAGE_THRESHOLDS, candidateTestFiles, isCovered } from "./coverage-config.js";
 
 /**
  * source file path に対する test file 存在 check の結果。
@@ -57,28 +57,28 @@ export function lookupTestFiles(
 }
 
 /**
- * test file が無い source の path 一覧 (= error 対象) と、見つかった test files の
- * 一覧 (= vitest `--related` に渡す候補) を分けて返す。
+ * test file が無い source の path 一覧 (= error 対象) と、test file が揃っている
+ * source の path 一覧 (= `vitest related <sources>` に渡す) を分けて返す。
+ *
+ * `vitest related <sources>` は source path から逆引きで test を解決するため、
+ * 検出済み test file path 自体は CLI へ渡す必要がなく、本関数も返さない。
  *
  * @graph-connects none
  */
 export function partitionLookups(lookups: readonly TestFileLookup[]): {
   missing: string[];
-  testFiles: string[];
   sources: string[];
 } {
   const missing: string[] = [];
-  const testFiles: string[] = [];
   const sources: string[] = [];
   for (const l of lookups) {
     if (l.testFile == null) {
       missing.push(l.source);
     } else {
-      testFiles.push(l.testFile);
       sources.push(l.source);
     }
   }
-  return { missing, testFiles, sources };
+  return { missing, sources };
 }
 
 /**
@@ -93,27 +93,19 @@ export function partitionLookups(lookups: readonly TestFileLookup[]): {
  * @graph-connects none
  */
 export function buildVitestArgs(sources: readonly string[]): string[] {
-  const includeArgs: string[] = [];
-  for (const s of sources) {
-    includeArgs.push(`--coverage.include=${s}`);
-  }
+  // threshold 値は `coverage-config.ts` の COVERAGE_THRESHOLDS を SSoT として
+  // 引き、`--coverage.thresholds.<key>=<value>` の CLI 形式に展開する。literal を
+  // 書くと vitest.config.ts (CI) と staged gate (pre-commit) が drift する余地が
+  // 復活するため、組立てまで SSoT 経由を貫く。
+  const thresholdArgs = Object.entries(COVERAGE_THRESHOLDS).map(
+    ([k, v]) => `--coverage.thresholds.${k}=${v}`,
+  );
+  const includeArgs = sources.map((s) => `--coverage.include=${s}`);
   // vitest v4 では `vitest related <files>` がサブコマンド形式。CLI 引数列は
   // `exec vitest related <coverage flags> <sources...>` の順で組む。`related` は
   // 与えた source を import する test file だけを走らせるので、staged scope と
   // 親和する (= cold start + 数 test だけで完結し、全 suite を流すより速い)。
-  return [
-    "exec",
-    "vitest",
-    "related",
-    "--coverage",
-    "--coverage.thresholds.perFile=true",
-    "--coverage.thresholds.lines=90",
-    "--coverage.thresholds.functions=90",
-    "--coverage.thresholds.branches=90",
-    "--coverage.thresholds.statements=90",
-    ...includeArgs,
-    ...sources,
-  ];
+  return ["exec", "vitest", "related", "--coverage", ...thresholdArgs, ...includeArgs, ...sources];
 }
 
 /**

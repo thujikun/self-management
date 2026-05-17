@@ -19,6 +19,7 @@ import {
   lookupTestFiles,
   partitionLookups,
 } from "./check-staged-coverage.js";
+import { COVERAGE_THRESHOLDS } from "./coverage-config.js";
 
 describe("lookupTestFiles", () => {
   it("coverage 対象外 (test file / db.ts / cli.ts) は skipped 行きで covered には入らない", () => {
@@ -73,26 +74,31 @@ describe("lookupTestFiles", () => {
 });
 
 describe("partitionLookups", () => {
-  it("testFile=null は missing 行き、それ以外は testFiles / sources に対応", () => {
-    const { missing, testFiles, sources } = partitionLookups([
+  it("testFile=null は missing 行き、それ以外は sources に対応", () => {
+    const { missing, sources } = partitionLookups([
       { source: "a.ts", testFile: "a.test.ts" },
       { source: "b.ts", testFile: null },
       { source: "c.ts", testFile: "c.test.ts" },
     ]);
     expect(missing).toStrictEqual(["b.ts"]);
     expect(sources).toStrictEqual(["a.ts", "c.ts"]);
-    expect(testFiles).toStrictEqual(["a.test.ts", "c.test.ts"]);
   });
 
-  it("全て missing なら sources / testFiles は空", () => {
-    const { missing, testFiles, sources } = partitionLookups([{ source: "x.ts", testFile: null }]);
+  it("全て missing なら sources は空", () => {
+    const { missing, sources } = partitionLookups([{ source: "x.ts", testFile: null }]);
     expect(missing).toStrictEqual(["x.ts"]);
     expect(sources).toStrictEqual([]);
-    expect(testFiles).toStrictEqual([]);
   });
 });
 
 describe("buildVitestArgs", () => {
+  // SSoT 一致を機械強制するため expected も COVERAGE_THRESHOLDS から導出する。
+  // literal `90` を直書きすると SSoT を上げた瞬間に「実装側 SSoT 経由 / test 側 literal」
+  // という新たな drift が生まれ、本 PR の中核 (drift 構造的に不可能) が崩れる。
+  const expectedThresholdArgs = Object.entries(COVERAGE_THRESHOLDS).map(
+    ([k, v]) => `--coverage.thresholds.${k}=${v}`,
+  );
+
   it("`vitest related` subcommand + --coverage.include + threshold + sources の引数列を組む", () => {
     const args = buildVitestArgs(["a.ts", "b.tsx"]);
     expect(args).toStrictEqual([
@@ -100,11 +106,7 @@ describe("buildVitestArgs", () => {
       "vitest",
       "related",
       "--coverage",
-      "--coverage.thresholds.perFile=true",
-      "--coverage.thresholds.lines=90",
-      "--coverage.thresholds.functions=90",
-      "--coverage.thresholds.branches=90",
-      "--coverage.thresholds.statements=90",
+      ...expectedThresholdArgs,
       "--coverage.include=a.ts",
       "--coverage.include=b.tsx",
       "a.ts",
@@ -114,8 +116,13 @@ describe("buildVitestArgs", () => {
 
   it("sources 空でも threshold + subcommand で意味的に valid な引数列", () => {
     const args = buildVitestArgs([]);
-    expect(args).toContain("--coverage.thresholds.perFile=true");
-    expect(args).toContain("related");
+    expect(args).toStrictEqual([
+      "exec",
+      "vitest",
+      "related",
+      "--coverage",
+      ...expectedThresholdArgs,
+    ]);
   });
 });
 
