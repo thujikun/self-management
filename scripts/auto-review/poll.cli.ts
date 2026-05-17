@@ -151,19 +151,34 @@ interface CheckEntry {
 /**
  * `gh pr checks <N>` の生 entries を返す。bucket は "pass" | "fail" | "pending" | "cancel" | "skipping"。
  * 0 件返り = check 自体無し (poll 側で「未準備」扱い)。
+ *
+ * `gh pr checks` は check が 1 件も登録されていない PR で exit 1 + stderr
+ * `no checks reported on the '<branch>' branch` を返す。workflow が未起動 or required check
+ * 未定義の benign state なので `[]` に正規化して silent に呑む (warn しない)。
  */
 async function fetchPrChecks(prNumber: number): Promise<CheckEntry[]> {
-  const { stdout } = await execFileP("gh", [
-    "pr",
-    "checks",
-    String(prNumber),
-    "--repo",
-    REPO,
-    "--json",
-    "bucket,name,link",
-  ]);
-  if (!stdout.trim()) return [];
-  return JSON.parse(stdout) as CheckEntry[];
+  try {
+    const { stdout } = await execFileP("gh", [
+      "pr",
+      "checks",
+      String(prNumber),
+      "--repo",
+      REPO,
+      "--json",
+      "bucket,name,link",
+    ]);
+    if (!stdout.trim()) return [];
+    return JSON.parse(stdout) as CheckEntry[];
+  } catch (err) {
+    if (isNoChecksReportedError(err)) return [];
+    throw err;
+  }
+}
+
+function isNoChecksReportedError(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const stderr = (err as { stderr?: unknown }).stderr;
+  return typeof stderr === "string" && /no checks reported/i.test(stderr);
 }
 
 /**
