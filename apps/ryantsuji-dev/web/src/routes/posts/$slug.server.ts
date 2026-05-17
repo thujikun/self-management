@@ -96,12 +96,12 @@ export interface SerializedSeriesNav {
   meta: { slug: string; title: string };
   total: number;
   currentOrder: number;
-  prev: { slug: string; title: string; order: number } | null;
-  next: { slug: string; title: string; order: number } | null;
+  prev: { slug: string; title: string } | null;
+  next: { slug: string; title: string } | null;
 }
 
 /** @graph-connects none */
-function serializeSeriesNav(
+export function serializeSeriesNav(
   nav: NonNullable<ReturnType<typeof getSeriesNav>>,
 ): SerializedSeriesNav {
   const currentOrder = nav.posts[nav.currentIndex]?.seriesOrder ?? nav.currentIndex + 1;
@@ -109,20 +109,8 @@ function serializeSeriesNav(
     meta: { slug: nav.meta.slug, title: nav.meta.title },
     total: nav.posts.length,
     currentOrder,
-    prev: nav.prev
-      ? {
-          slug: nav.prev.slug,
-          title: nav.prev.title,
-          order: nav.prev.seriesOrder ?? nav.currentIndex,
-        }
-      : null,
-    next: nav.next
-      ? {
-          slug: nav.next.slug,
-          title: nav.next.title,
-          order: nav.next.seriesOrder ?? nav.currentIndex + 2,
-        }
-      : null,
+    prev: nav.prev ? { slug: nav.prev.slug, title: nav.prev.title } : null,
+    next: nav.next ? { slug: nav.next.slug, title: nav.next.title } : null,
   };
 }
 

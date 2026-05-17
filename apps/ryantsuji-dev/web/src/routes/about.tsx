@@ -53,7 +53,7 @@ function AboutPage() {
           <h1>Ryan Tsuji / 辻</h1>
           <p className="about__tagline">
             CTO at{" "}
-            <a href="https://corp.air-closet.com/" rel="noopener noreferrer">
+            <a href="https://corp.air-closet.com/" target="_blank" rel="noopener noreferrer">
               airCloset, Inc.
             </a>
             . Building <strong>cortex</strong>, our AI-first dev platform where AI handles the
@@ -117,30 +117,34 @@ function AboutPage() {
         <h2>Elsewhere</h2>
         <ul className="about__links">
           <li>
-            <a href="https://x.com/ryantsuji" rel="noopener noreferrer">
+            <a href="https://x.com/ryantsuji" target="_blank" rel="noopener noreferrer">
               X (EN)
             </a>{" "}
             ·{" "}
-            <a href="https://x.com/RyanAircloset" rel="noopener noreferrer">
+            <a href="https://x.com/RyanAircloset" target="_blank" rel="noopener noreferrer">
               X (JP, airCloset 公式)
             </a>
           </li>
           <li>
-            <a href="https://github.com/thujikun" rel="noopener noreferrer">
+            <a href="https://github.com/thujikun" target="_blank" rel="noopener noreferrer">
               GitHub
             </a>
           </li>
           <li>
-            <a href="https://dev.to/ryantsuji" rel="noopener noreferrer">
+            <a href="https://dev.to/ryantsuji" target="_blank" rel="noopener noreferrer">
               dev.to (EN syndication)
             </a>{" "}
             ·{" "}
-            <a href="https://zenn.dev/aircloset" rel="noopener noreferrer">
+            <a href="https://zenn.dev/aircloset" target="_blank" rel="noopener noreferrer">
               Zenn (JP syndication via airCloset publication)
             </a>
           </li>
           <li>
-            <a href="https://www.linkedin.com/in/ryosuketsuji/" rel="noopener noreferrer">
+            <a
+              href="https://www.linkedin.com/in/ryosuketsuji/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               LinkedIn
             </a>
           </li>
@@ -148,7 +152,14 @@ function AboutPage() {
             Email: <a href="mailto:hello@ryantsuji.dev">hello@ryantsuji.dev</a>
           </li>
           <li>
-            Subscribe: <a href="/rss/en.xml">RSS (EN)</a> · <a href="/rss/ja.xml">RSS (JP)</a>
+            Subscribe:{" "}
+            <a href="/rss/en.xml" target="_blank" rel="noopener">
+              RSS (EN)
+            </a>{" "}
+            ·{" "}
+            <a href="/rss/ja.xml" target="_blank" rel="noopener">
+              RSS (JP)
+            </a>
           </li>
         </ul>
       </section>

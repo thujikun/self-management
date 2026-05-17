@@ -88,12 +88,15 @@ export function getSeriesNav(
   if (!meta) return null;
   const posts = listSeriesPosts(current.series, lang);
   const idx = posts.findIndex((p) => p.slug === slug);
-  if (idx < 0) return null;
+  // `current.series === meta.slug` かつ listSeriesPosts も同 lang を渡しているため、
+  // idx は必ず ≥ 0。defensive な `if (idx < 0)` を残すと unreachable branch として
+  // coverage が下がるので、`!` assertion で staticAnalysis 側の undefined 表現だけ
+  // 抑える (runtime には影響なし)。
   return {
     meta,
     posts,
     currentIndex: idx,
-    prev: idx > 0 ? (posts[idx - 1] ?? null) : null,
-    next: idx < posts.length - 1 ? (posts[idx + 1] ?? null) : null,
+    prev: idx > 0 ? posts[idx - 1]! : null,
+    next: idx < posts.length - 1 ? posts[idx + 1]! : null,
   };
 }

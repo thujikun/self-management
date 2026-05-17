@@ -243,10 +243,13 @@ export function buildPostJsonLd(input: {
     dateModified: input.updatedAt ?? input.publishedAt,
     author,
     publisher: author,
-    mainEntityOfPage: url,
+    mainEntityOfPage: { "@type": "WebPage", "@id": url },
   };
   if (image) doc.image = [image];
-  return JSON.stringify(doc);
+  // `<script type="application/ld+json">` の中身は HTML parser に対しては raw text。
+  // 値に `</script>` が混じった瞬間に script tag が早期終了し以降が HTML として
+  // render されるため、output 側で `</` だけエスケープして安全にする。
+  return JSON.stringify(doc).replace(/<\/(script)/gi, "<\\/$1");
 }
 
 /** @graph-connects tanstack-router [provides] /posts/$slug route */

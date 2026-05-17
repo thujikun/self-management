@@ -13,10 +13,13 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { Link, createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { runListSeriesPosts } from "./$slug.server.js";
+import type { Lang } from "../../server/i18n.js";
+import type { PostListItem } from "../../server/posts.js";
+import type { SeriesMeta } from "../../server/series.js";
 
 /**
  * `?lang=en|ja` で lang を override。
@@ -53,23 +56,42 @@ export const Route = createFileRoute("/series/$slug")({
   },
   head: ({ loaderData }) => {
     if (!loaderData?.meta) return {};
+    const url = `https://ryantsuji.dev/series/${loaderData.meta.slug}`;
     return {
       meta: [
         { title: `${loaderData.meta.title} — ryantsuji.dev` },
         { name: "description", content: loaderData.meta.tagline },
         { property: "og:title", content: loaderData.meta.title },
         { property: "og:description", content: loaderData.meta.tagline },
-        { property: "og:url", content: `https://ryantsuji.dev/series/${loaderData.meta.slug}` },
+        { property: "og:url", content: url },
+        { property: "og:type", content: "website" },
+        { property: "og:image", content: "https://ryantsuji.dev/og-image.png" },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:image", content: "https://ryantsuji.dev/og-image.png" },
       ],
+      links: [{ rel: "canonical", href: url }],
     };
   },
   component: SeriesHubPage,
 });
 
-/** @graph-connects none */
-function SeriesHubPage() {
-  const { meta, posts, lang } = Route.useLoaderData();
-  if (!meta) return null;
+/**
+ * 連載 hub の content body だけを pure に切り出した component。lang / meta / posts を
+ * 全部 props で受け取るので、test では route loader を介さず controlled な data で
+ * 直接 mount できる (empty posts / summary 無し / seriesOrder 未指定 fallback 等の
+ * 分岐を全部踏める)。
+ *
+ * @graph-connects react [provides] series hub body view
+ */
+export function SeriesHubBody({
+  meta,
+  posts,
+  lang,
+}: {
+  meta: SeriesMeta;
+  posts: PostListItem[];
+  lang: Lang;
+}) {
   const labelPart = lang === "ja" ? "第" : "Part";
   const labelEmpty = lang === "ja" ? "まだ記事がありません。" : "no posts yet.";
   return (
@@ -94,9 +116,9 @@ function SeriesHubPage() {
                   {lang === "ja" ? "回" : ""}
                 </span>
                 <h2>
-                  <Link to="/posts/$slug" params={{ slug: p.slug }}>
-                    {p.title}
-                  </Link>
+                  {/* hub → detail はページ遷移なので bare anchor で良い (SPA 化の
+                      メリットが薄く、test では Router context 不要にしたい)。 */}
+                  <a href={`/posts/${p.slug}`}>{p.title}</a>
                 </h2>
                 {p.summary ? <p className="series__item-summary">{p.summary}</p> : null}
                 <p className="series__item-meta">
@@ -109,4 +131,11 @@ function SeriesHubPage() {
       )}
     </main>
   );
+}
+
+/** @graph-connects none */
+function SeriesHubPage() {
+  const { meta, posts, lang } = Route.useLoaderData();
+  if (!meta) return null;
+  return <SeriesHubBody meta={meta} posts={posts} lang={lang} />;
 }

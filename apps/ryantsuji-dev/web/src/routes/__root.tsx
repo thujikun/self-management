@@ -183,19 +183,29 @@ function RootComponent() {
     );
   }, [location.pathname]);
   return (
-    <RootDocument theme={theme}>
+    <RootDocument theme={theme} lang={lang}>
       <Outlet />
     </RootDocument>
   );
 }
 
 /** @graph-connects none */
-function RootDocument({ children, theme }: { children: ReactNode; theme: Theme | null }) {
+function RootDocument({
+  children,
+  theme,
+  lang,
+}: {
+  children: ReactNode;
+  theme: Theme | null;
+  lang: Lang;
+}) {
   // `data-theme` は明示選択 (cookie) 時のみ付ける。null の時は CSS の
   // `@media (prefers-color-scheme)` に判定を委ねる。
   const htmlProps = theme ? { "data-theme": theme } : {};
+  // `<html lang>` は SEO / a11y 両面で per-request に正しい lang を返す方が良い
+  // (Accept-Language / cookie / ?lang= で確定した値をそのまま流す)。
   return (
-    <html lang="en" {...htmlProps}>
+    <html lang={lang} {...htmlProps}>
       <head>
         <HeadContent />
       </head>
