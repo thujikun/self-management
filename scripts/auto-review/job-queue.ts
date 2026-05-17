@@ -13,7 +13,7 @@ export interface Job {
   id: string;
   prNumber: number;
   /** 区別ログ用の type ラベル。 */
-  type: "review" | "fix" | "merge";
+  type: "review" | "fix" | "merge" | "update-branch" | "conflict-fix";
   /** 実行関数。throw しても queue は止めない (`console.error` でログのみ)。 */
   run: () => Promise<void>;
 }
