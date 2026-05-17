@@ -29,6 +29,7 @@ GATES_STAGED=(
   log-check
   lint
   format-check
+  coverage-staged
 )
 
 # CI でしか走らせない gate。repo 全体評価 or 実行時間が pre-commit には重い。
@@ -114,6 +115,21 @@ cmd_run() {
         pnpm exec prettier --check --ignore-unknown "${files[@]}"
       else
         pnpm exec prettier --check .
+      fi
+      ;;
+    coverage-staged)
+      # staged source file 限定の per-file 90% coverage check (pre-commit 用)。
+      # 各 staged source に対応 test file が存在するかを確認した上で、vitest を
+      # `--related <files>` + `--coverage.include=<each>` で実行する。CI 側の
+      # `test-coverage` (= 全 file 評価) より高速だが scope が staged 限定なので
+      # 互換性は完全でない (= staged で触らなかった file の coverage 回帰は
+      # CI 側で初めて落ちる)。CI と pre-commit で「coverage 対象集合」が drift
+      # しないよう、両者は `scripts/hooks/coverage-config.ts` を SSoT として参照。
+      #
+      # full mode (= CI matrix) では既に `test-coverage` gate が repo 全体を踏むので、
+      # 本 gate は staged のみ呼ぶ (full では noop)。
+      if [ "$mode" = staged ]; then
+        pnpm exec tsx scripts/hooks/check-staged-coverage.cli.ts "${files[@]}"
       fi
       ;;
     typecheck)
