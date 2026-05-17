@@ -327,7 +327,7 @@ export function PostShareRail({
   const signInHref = `/posts/${slug}`;
 
   return (
-    <>
+    <div className="post-share-rail">
       <PostSharePane
         title={title}
         lang={lang}
@@ -338,11 +338,11 @@ export function PostShareRail({
         signInHref={isAuthenticated ? undefined : signInHref}
       />
       {error ? (
-        <div role="alert" className="engagement__error">
+        <p className="comments__error" role="alert">
           {error}
-        </div>
+        </p>
       ) : null}
-    </>
+    </div>
   );
 }
 

@@ -760,6 +760,37 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
     });
   });
 
+  it("like button click → server reject → comments__error class で error が rail 内に描画される", async () => {
+    // 回帰検知: like error を `engagement__error` (= 未定義 CSS class) で描画していた時期があり、
+    // desktop grid 上で「rail の上に unstyled な素テキストが湧く」状態だった。
+    // 既存 styled class (`comments__error`) を使い、かつ rail wrapper 内に出ることを契約に乗せる。
+    mockToggleLike.mockRejectedValue(new Error("like boom"));
+    const { container, root } = await mount({
+      slug: "foo",
+      title: "foo",
+      lang: "en",
+      initialLikes: { count: 0, liked: false },
+      initialComments: [],
+    });
+    const btn = container.querySelector(".post-share-pane__btn--like") as HTMLButtonElement;
+    const { act } = await import("react");
+    await act(async () => {
+      btn.click();
+    });
+
+    const rail = container.querySelector(".post-share-rail");
+    const errorEl = rail?.querySelector(".comments__error") as HTMLElement | null;
+    expect(errorEl?.tagName).toStrictEqual("P");
+    expect(errorEl?.getAttribute("role")).toStrictEqual("alert");
+    expect(errorEl?.textContent).toStrictEqual("like boom");
+    // 旧 className が残っていない (regression guard)
+    expect(container.querySelector(".engagement__error")).toStrictEqual(null);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("comment form submit → 新しい comment が list に prepend される", async () => {
     const created = {
       id: "c-new",

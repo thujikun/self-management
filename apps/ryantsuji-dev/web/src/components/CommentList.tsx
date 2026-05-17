@@ -4,18 +4,21 @@
  * - **threading**: flat list を `parentCommentId` で 1 階層 nest。`null` parent =
  *   top-level、UUID parent = その親への reply。それ以上の深さは作らず、孫は
  *   親と同じ階層に並べる (Twitter スタイルの単純化)。
- * - **reply**: 各 comment 下に [reply] toggle → inline form。投稿時は
- *   `onReply({ parentId, body })` を呼び、結果は親 state で append される。
+ * - **reply**: 各 thread の末尾に永続的な reply form (textarea + submit) を出し、
+ *   row 横の `[reply]` ボタンはその textarea に focus を移すだけ (form の toggle
+ *   は行わない)。投稿時は `onReply({ parentId: root.id, body })` を呼び、reply
+ *   先は常に thread root として親 state に append される。
  * - **delete (soft)**: 自分の comment にのみ [delete] button。`onDelete(commentId)`
  *   を呼んで親 state から除外。
  *
- * 認証必須 (未認証 user には reply / delete button は出さない)。投稿 form は
- * EngagementSection 側に top-level 用 1 個、本 component に reply 用 inline 1 個。
- * state は親 (EngagementSection) 管理、本 component は controlled な list view。
+ * 認証必須 (未認証 user には reply / delete button + 永続 reply form を出さない)。
+ * top-level 投稿用 form は EngagementSection 側、本 component は thread 単位の
+ * 永続 reply form を持つ。state は thread ローカル (CommentThread) + 親
+ * (EngagementSection) の comments list。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business コメント threading + reply + soft delete UI。flat list を 1 階層 nest し、user 自身の comment にだけ delete を出す。reply は inline form で親 commentId を持たせて投稿
+ * @graph-business コメント threading + reply + soft delete UI。flat list を 1 階層 nest し、thread 末尾に永続 reply form を 1 個ずつ持つ。row の [reply] は textarea への focus-only hint で、submit 時は親 commentId 付きで投稿
  * @graph-connects content [calls] addComment / deleteComment server fn を props 経由
  */
 

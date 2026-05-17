@@ -1148,15 +1148,22 @@ main {
   .engagement {
     grid-column: 2;
   }
-  .post-share-pane {
+  .post-share-rail {
     grid-column: 1;
     grid-row: 2 / span 99;
   }
 }
 
 /* mobile: engagement section 内で sticky-bottom (section が viewport に入った時のみ底固定。
-   ページ全体に対する常時 fixed toolbar ではない) */
+   ページ全体に対する常時 fixed toolbar ではない)。
+   rail wrapper は `display: contents` で layout から外し、pane を `.post-detail`
+   直下に "戻して" sticky の containing block を `.post-detail` (= ページ全体相当の高さ)
+   にする。これをしないと containing block が rail (= pane と同 height) になり
+   sticky-bottom が機能しなくなる。 */
 @media (max-width: 959px) {
+  .post-share-rail {
+    display: contents;
+  }
   .post-share-pane {
     flex-direction: row;
     justify-content: space-around;
