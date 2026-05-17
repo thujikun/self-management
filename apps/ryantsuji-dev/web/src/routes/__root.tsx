@@ -20,7 +20,7 @@ import {
 } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import type { QueryClient } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { Lightbox } from "../components/Lightbox.js";
 import { LANG_COOKIE, LANG_COOKIE_MAX_AGE, SUPPORTED_LANGS, type Lang } from "../server/i18n.js";
@@ -113,9 +113,30 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootComponent,
 });
 
+/**
+ * `import.meta.env` の `VITE_FARO_COLLECTOR_URL` を string | undefined で取り出す薄い
+ * helper。test 環境では `import.meta.env` 自体は存在するが当該 key は未定義なので、
+ * 直接 access して undefined に解決させる (= 専用 mock 不要)。
+ *
+ * @graph-connects none
+ */
+function readFaroCollectorUrl(): string | undefined {
+  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+  return env?.VITE_FARO_COLLECTOR_URL;
+}
+
 /** @graph-connects none */
 function RootComponent() {
   const { theme } = Route.useLoaderData();
+  // Grafana Faro は client でしか動かない (window / document を eager 参照する) ので、
+  // SDK 自体を lazy import + useEffect 内で初期化する。collector URL が未投入なら
+  // dynamic import 自体を skip して bundle 解析対象から外す。
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = readFaroCollectorUrl();
+    if (!url) return;
+    void import("../lib/faro-client.js").then(({ initFaro }) => initFaro(url));
+  }, []);
   return (
     <RootDocument theme={theme}>
       <Outlet />

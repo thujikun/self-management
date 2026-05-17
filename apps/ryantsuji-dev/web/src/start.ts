@@ -27,6 +27,9 @@ import { createStart } from "@tanstack/react-start";
  * - `BETTER_AUTH_SECRET`: 32+ 文字ランダム (secret)
  * - `BETTER_AUTH_URL`: 公開 URL (vars でも可、現状 secret 扱い)
  * - `GITHUB_*` / `X_OAUTH2_*` / `GOOGLE_*`: OAuth credentials (secret)
+ * - `OTLP_ENDPOINT` / `OTLP_AUTH_HEADER`: Grafana Cloud OTLP write target (secret)。
+ *   設定無しなら server.ts 側で計装が no-op になる (= 未配線 stage でも runtime に
+ *   実害を出さない) — 値 SSoT は GCP Secret Manager `grafana-otlp-write-token`
  *
  * @graph-connects none
  */
@@ -41,6 +44,8 @@ export interface Env {
   X_OAUTH2_CLIENT_SECRET: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
+  OTLP_ENDPOINT?: string;
+  OTLP_AUTH_HEADER?: string;
 }
 
 /**
