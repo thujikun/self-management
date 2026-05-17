@@ -11,6 +11,8 @@ tags:
   - "mcp"
   - "typescript"
 lang: "ja"
+series: "building-ai-harness"
+seriesOrder: 1
 syndication:
   zenn:
     id: "d416342f46f16b"

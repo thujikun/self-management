@@ -13,8 +13,10 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as AccountRouteImport } from './routes/account'
+import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PostsIndexRouteImport } from './routes/posts/index'
+import { Route as SeriesSlugRouteImport } from './routes/series/$slug'
 import { Route as RssSplatRouteImport } from './routes/rss/$'
 import { Route as PostsSlugRouteImport } from './routes/posts/$slug'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
@@ -40,6 +42,11 @@ const AccountRoute = AccountRouteImport.update({
   path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AboutRoute = AboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -48,6 +55,11 @@ const IndexRoute = IndexRouteImport.update({
 const PostsIndexRoute = PostsIndexRouteImport.update({
   id: '/posts/',
   path: '/posts/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SeriesSlugRoute = SeriesSlugRouteImport.update({
+  id: '/series/$slug',
+  path: '/series/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RssSplatRoute = RssSplatRouteImport.update({
@@ -73,6 +85,7 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
   '/account': typeof AccountRoute
   '/privacy': typeof PrivacyRoute
   '/sign-in': typeof SignInRoute
@@ -80,11 +93,13 @@ export interface FileRoutesByFullPath {
   '/api/$': typeof ApiSplatRoute
   '/posts/$slug': typeof PostsSlugRoute
   '/rss/$': typeof RssSplatRoute
+  '/series/$slug': typeof SeriesSlugRoute
   '/posts/': typeof PostsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
   '/account': typeof AccountRoute
   '/privacy': typeof PrivacyRoute
   '/sign-in': typeof SignInRoute
@@ -92,12 +107,14 @@ export interface FileRoutesByTo {
   '/api/$': typeof ApiSplatRoute
   '/posts/$slug': typeof PostsSlugRoute
   '/rss/$': typeof RssSplatRoute
+  '/series/$slug': typeof SeriesSlugRoute
   '/posts': typeof PostsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
   '/account': typeof AccountRoute
   '/privacy': typeof PrivacyRoute
   '/sign-in': typeof SignInRoute
@@ -105,6 +122,7 @@ export interface FileRoutesById {
   '/api/$': typeof ApiSplatRoute
   '/posts/$slug': typeof PostsSlugRoute
   '/rss/$': typeof RssSplatRoute
+  '/series/$slug': typeof SeriesSlugRoute
   '/posts/': typeof PostsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -112,6 +130,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/about'
     | '/account'
     | '/privacy'
     | '/sign-in'
@@ -119,11 +138,13 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/posts/$slug'
     | '/rss/$'
+    | '/series/$slug'
     | '/posts/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/about'
     | '/account'
     | '/privacy'
     | '/sign-in'
@@ -131,11 +152,13 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/posts/$slug'
     | '/rss/$'
+    | '/series/$slug'
     | '/posts'
     | '/api/auth/$'
   id:
     | '__root__'
     | '/'
+    | '/about'
     | '/account'
     | '/privacy'
     | '/sign-in'
@@ -143,12 +166,14 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/posts/$slug'
     | '/rss/$'
+    | '/series/$slug'
     | '/posts/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AboutRoute: typeof AboutRoute
   AccountRoute: typeof AccountRoute
   PrivacyRoute: typeof PrivacyRoute
   SignInRoute: typeof SignInRoute
@@ -156,6 +181,7 @@ export interface RootRouteChildren {
   ApiSplatRoute: typeof ApiSplatRoute
   PostsSlugRoute: typeof PostsSlugRoute
   RssSplatRoute: typeof RssSplatRoute
+  SeriesSlugRoute: typeof SeriesSlugRoute
   PostsIndexRoute: typeof PostsIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -190,6 +216,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -202,6 +235,13 @@ declare module '@tanstack/react-router' {
       path: '/posts'
       fullPath: '/posts/'
       preLoaderRoute: typeof PostsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/series/$slug': {
+      id: '/series/$slug'
+      path: '/series/$slug'
+      fullPath: '/series/$slug'
+      preLoaderRoute: typeof SeriesSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rss/$': {
@@ -237,6 +277,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AboutRoute: AboutRoute,
   AccountRoute: AccountRoute,
   PrivacyRoute: PrivacyRoute,
   SignInRoute: SignInRoute,
@@ -244,6 +285,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSplatRoute: ApiSplatRoute,
   PostsSlugRoute: PostsSlugRoute,
   RssSplatRoute: RssSplatRoute,
+  SeriesSlugRoute: SeriesSlugRoute,
   PostsIndexRoute: PostsIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

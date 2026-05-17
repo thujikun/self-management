@@ -450,15 +450,22 @@ function SiteFooter() {
   const { lang } = Route.useLoaderData();
   // X handle は lang で切替: ja → @RyanAircloset (JP 公式), en → @ryantsuji (EN 集約)
   const xHref = lang === "ja" ? "https://x.com/RyanAircloset" : "https://x.com/ryantsuji";
+  // RSS link は当該 lang feed を指す (header の <link rel="alternate"> 側で en/jp
+  // 両方 expose しているので、UI 表示は user の見ている lang に集中させる)
+  const rssHref = `/rss/${lang}.xml`;
   return (
     <footer className="site-footer">
-      <Link to="/privacy">privacy</Link>
+      <Link to="/about">about</Link>
       <span aria-hidden="true">·</span>
-      <Link to="/terms">terms</Link>
+      <a href={rssHref}>RSS</a>
       <span aria-hidden="true">·</span>
       <a href={xHref}>X</a>
       <span aria-hidden="true">·</span>
       <a href="https://github.com/thujikun">GitHub</a>
+      <span aria-hidden="true">·</span>
+      <Link to="/privacy">privacy</Link>
+      <span aria-hidden="true">·</span>
+      <Link to="/terms">terms</Link>
     </footer>
   );
 }

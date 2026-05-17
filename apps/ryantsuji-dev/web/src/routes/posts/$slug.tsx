@@ -201,6 +201,54 @@ export function buildPostMeta(input: {
   return meta;
 }
 
+/**
+ * post 1 件分の `Article` JSON-LD structured data。Google の rich result / X /
+ * Discord 等が ingest して article 表示を強化する。`author` / `mainEntityOfPage` /
+ * `datePublished` / `dateModified` を埋める。Zenn / dev.to に syndicate されている
+ * post も canonical (= ryantsuji.dev) を mainEntityOfPage に置くことで「正典は本サイト」
+ * と検索エンジンに明示する。
+ *
+ * @graph-connects none
+ */
+export function buildPostJsonLd(input: {
+  slug: string;
+  title: string;
+  summary?: string;
+  cover?: string;
+  publishedAt: string;
+  updatedAt?: string;
+  lang: Lang;
+}): string {
+  const url = `${SITE_URL}/posts/${input.slug}${input.lang === "ja" ? "?lang=ja" : ""}`;
+  const description = input.summary ?? `${input.title} — ryantsuji.dev`;
+  const image = input.cover ? `${SITE_URL}${input.cover}` : undefined;
+  const author = {
+    "@type": "Person",
+    name: "Ryan Tsuji",
+    url: `${SITE_URL}/about`,
+    sameAs: [
+      "https://x.com/ryantsuji",
+      "https://github.com/thujikun",
+      "https://dev.to/ryantsuji",
+      "https://zenn.dev/aircloset",
+    ],
+  };
+  const doc: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: input.title,
+    description,
+    inLanguage: input.lang === "ja" ? "ja-JP" : "en-US",
+    datePublished: input.publishedAt,
+    dateModified: input.updatedAt ?? input.publishedAt,
+    author,
+    publisher: author,
+    mainEntityOfPage: url,
+  };
+  if (image) doc.image = [image];
+  return JSON.stringify(doc);
+}
+
 /** @graph-connects tanstack-router [provides] /posts/$slug route */
 export const Route = createFileRoute("/posts/$slug")({
   validateSearch: SearchSchema,
@@ -220,6 +268,7 @@ export const Route = createFileRoute("/posts/$slug")({
   },
   head: ({ loaderData, params }) => {
     if (!loaderData) return {};
+    const url = `${SITE_URL}/posts/${params.slug}${loaderData.servedLang === "ja" ? "?lang=ja" : ""}`;
     return {
       meta: buildPostMeta({
         slug: params.slug,
@@ -228,6 +277,21 @@ export const Route = createFileRoute("/posts/$slug")({
         cover: loaderData.frontmatter.cover,
         lang: loaderData.servedLang,
       }),
+      links: [{ rel: "canonical", href: url }],
+      scripts: [
+        {
+          type: "application/ld+json",
+          children: buildPostJsonLd({
+            slug: params.slug,
+            title: loaderData.frontmatter.title,
+            summary: loaderData.frontmatter.summary,
+            cover: loaderData.frontmatter.cover,
+            publishedAt: loaderData.frontmatter.publishedAt,
+            updatedAt: loaderData.frontmatter.updatedAt,
+            lang: loaderData.servedLang,
+          }),
+        },
+      ],
     };
   },
   component: PostDetail,
@@ -235,7 +299,7 @@ export const Route = createFileRoute("/posts/$slug")({
 
 /** @graph-connects none */
 function PostDetail() {
-  const { html, frontmatter, headings, readingTimeMinutes, engagement, servedLang } =
+  const { html, frontmatter, headings, readingTimeMinutes, engagement, servedLang, seriesNav } =
     Route.useLoaderData();
   const { slug } = Route.useParams();
   return (
@@ -269,6 +333,7 @@ function PostDetail() {
           ) : null}
         </p>
       </header>
+      {seriesNav ? <PostSeriesBox nav={seriesNav} lang={servedLang} /> : null}
       <PostToc headings={headings} />
       <PostBody html={html} />
       <PostShareRail
@@ -279,6 +344,55 @@ function PostDetail() {
       />
       <EngagementSection slug={slug} lang={servedLang} initialComments={engagement.comments} />
     </main>
+  );
+}
+
+/**
+ * 連載 (series) に属する post の冒頭に出す navigation box。シリーズタイトル + 現在
+ * Part 番号 + prev / next + シリーズ hub へのリンク。HN / X から個別 Part を踏んだ
+ * 読者が「Part 1 から読み直したい」を最短で叶える。
+ *
+ * @graph-connects tanstack-router [calls] /series/$slug + /posts/$slug に Link
+ */
+function PostSeriesBox({
+  nav,
+  lang,
+}: {
+  nav: NonNullable<Awaited<ReturnType<typeof runRenderPost>>["seriesNav"]>;
+  lang: Lang;
+}) {
+  const labelSeries = lang === "ja" ? "連載" : "Series";
+  const labelPart = lang === "ja" ? "第" : "Part";
+  const labelPartUnit = lang === "ja" ? "回" : "";
+  const labelHub = lang === "ja" ? "目次" : "all parts";
+  const labelPrev = lang === "ja" ? "← 前の Part" : "← previous";
+  const labelNext = lang === "ja" ? "次の Part →" : "next →";
+  return (
+    <aside className="post-series-box" aria-label={labelSeries}>
+      <span className="post-series-box__label">{labelSeries}</span>
+      <p className="post-series-box__title">
+        <Link to="/series/$slug" params={{ slug: nav.meta.slug }}>
+          {nav.meta.title}
+        </Link>{" "}
+        — {labelPart} {nav.currentOrder}
+        {labelPartUnit} / {nav.total}
+      </p>
+      <p className="post-series-box__nav">
+        {nav.prev ? (
+          <Link to="/posts/$slug" params={{ slug: nav.prev.slug }}>
+            {labelPrev}: {nav.prev.title}
+          </Link>
+        ) : null}
+        {nav.next ? (
+          <Link to="/posts/$slug" params={{ slug: nav.next.slug }}>
+            {labelNext}: {nav.next.title}
+          </Link>
+        ) : null}
+        <Link to="/series/$slug" params={{ slug: nav.meta.slug }}>
+          {labelHub}
+        </Link>
+      </p>
+    </aside>
   );
 }
 
