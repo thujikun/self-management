@@ -22,12 +22,13 @@ import { createStartHandler, defaultStreamHandler } from "@tanstack/react-start/
 
 import type { Env } from "./start.js";
 
-// gray-matter (markdown frontmatter parser) が `Buffer.from(input)` をベア参照で
-// 呼ぶため、`Buffer` global の到達性を Worker entry で保証する。CF Workers の
-// nodejs_compat + compatibility_date >= 2024-09-23 は本来 `globalThis.Buffer` を
-// 自動 expose する建前だが、bundle 経路によっては bare `Buffer` 参照が
-// `ReferenceError: Buffer is not defined` で落ちる事象が観測される (`/posts`
-// loader が render() → matter(source) を踏んだ際に発生) ため、明示的に再代入。
+// CF Workers の nodejs_compat + compatibility_date >= 2024-09-23 は
+// `globalThis.Buffer` を自動 expose する建前だが、bundle 経路によっては bare
+// `Buffer` 参照が `ReferenceError: Buffer is not defined` で落ちる事象が観測される
+// ため、Worker entry で明示的に再代入して global 到達性を保証する。現状の依存は
+// better-auth の base64 encode 経路 / TanStack の serialization 経路。markdown
+// render 系 (gray-matter) は vite plugin (`virtual:rendered-posts`) で build 時に
+// 隔離済で runtime bundle には含まれないため、ここでの Buffer 参照とは無関係。
 if (typeof globalThis.Buffer === "undefined") {
   (globalThis as { Buffer: typeof Buffer }).Buffer = Buffer;
 }
