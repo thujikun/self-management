@@ -477,22 +477,20 @@ new gcp.secretmanager.SecretIamMember("graph-cloudflare-api-token-accessor", {
 export const cloudflareApiTokenSecretId = cloudflareApiTokenSecret.id;
 
 /**
- * Syndication 用 secret container 2 つ。
+ * dev.to API token (Syndicate workflow 用)。
  *
- * `.github/workflows/syndicate-posts.yml` が WIF (pulumi-ci@ SA) で `gcloud secrets
- * versions access` する。値投入は Ryan の手動 (`gcloud secrets versions add`):
- * - `dev-to-api-key`: dev.to API key (Settings → Extensions → DEV API Keys)
- * - `ryantsuji-dev-content-pat`: thujikun/ryantsuji-dev-content への push 権限を
- *   持つ GitHub PAT (Fine-grained、Contents: Read+Write、対象 repo は
- *   ryantsuji-dev-content)
+ * 用途: `.github/workflows/syndicate-posts.yml` が main push を受けて
+ * `pnpm exec tsx scripts/syndicate.cli.ts --target devto --publish` を非対話で叩く
+ * 経路で `DEV_TO_API_KEY` env として必要。dev.to の Settings → Extensions → DEV
+ * API Keys で発行した token を `gcloud secrets versions add dev-to-api-key` で投入。
  *
- * pulumi-ci@ SA は project level の `roles/secretmanager.admin` を既に持つので
- * 追加の secretAccessor IAM bind は不要。Pulumi は container のみ管理し、cloudflare
- * / neon と同じ「container は declarative、値は manual」運用に揃える。
+ * pulumi-ci SA は project-level `roles/secretmanager.admin` を持つので、container を
+ * 宣言するだけで CI から `gcloud secrets versions access` で読み出せる (= 個別 accessor
+ * binding は不要)。
  *
  * @graph-connects secret-manager [writes_to] dev-to-api-key secret container
  */
-const devtoApiKeySecret = new gcp.secretmanager.Secret(
+const devToApiKeySecret = new gcp.secretmanager.Secret(
   "dev-to-api-key",
   {
     secretId: "dev-to-api-key",
@@ -502,20 +500,38 @@ const devtoApiKeySecret = new gcp.secretmanager.Secret(
 );
 
 /** @graph-connects none */
-export const devtoApiKeySecretId = devtoApiKeySecret.id;
+export const devToApiKeySecretId = devToApiKeySecret.id;
 
-/** @graph-connects secret-manager [writes_to] ryantsuji-dev-content-pat secret container */
-const ryantsujiDevContentPatSecret = new gcp.secretmanager.Secret(
-  "ryantsuji-dev-content-pat",
+/**
+ * `thujikun/ryantsuji-dev-content` repo への Deploy Key 秘密鍵 (Syndicate workflow 用)。
+ *
+ * 用途: Zenn sync は別 repo (`thujikun/ryantsuji-dev-content`) の `articles/<id>.md`
+ * への git push で成立する。CI workflow が secret から秘密鍵を取り出し、
+ * `~/.ssh/id_ed25519` に書いて `git@github.com:...` URL で clone/push する。
+ *
+ * Deploy Key は対象 repo の **Settings → Deploy keys** で write 有効化された Ed25519
+ * 鍵を 1 つ登録 (`syndicate-ci` title)。鍵 pair の生成手順は以下:
+ *
+ * ```bash
+ * ssh-keygen -t ed25519 -N "" -C "syndicate-ci@ryantsuji-dev" -f /tmp/key
+ * gh api -X POST repos/thujikun/ryantsuji-dev-content/keys \
+ *   -f title=syndicate-ci -f "key=$(cat /tmp/key.pub)" -F read_only=false
+ * gcloud secrets versions add ryantsuji-dev-content-deploy-key --data-file=/tmp/key
+ * ```
+ *
+ * @graph-connects secret-manager [writes_to] ryantsuji-dev-content-deploy-key secret container
+ */
+const ryantsujiDevContentDeployKeySecret = new gcp.secretmanager.Secret(
+  "ryantsuji-dev-content-deploy-key",
   {
-    secretId: "ryantsuji-dev-content-pat",
+    secretId: "ryantsuji-dev-content-deploy-key",
     replication: { auto: {} },
   },
   { dependsOn: [apiServices["secretmanager"]] },
 );
 
 /** @graph-connects none */
-export const ryantsujiDevContentPatSecretId = ryantsujiDevContentPatSecret.id;
+export const ryantsujiDevContentDeployKeySecretId = ryantsujiDevContentDeployKeySecret.id;
 
 /**
  * xmcp (X API MCP server) の OAuth credentials。

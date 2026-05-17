@@ -17,10 +17,10 @@
 #
 # **secret 要件** (GCP Secret Manager に事前投入):
 # - `dev-to-api-key`: dev.to API key (Settings → Extensions → DEV API Keys)
-# - `ryantsuji-dev-content-pat`: thujikun/ryantsuji-dev-content への push 権限を持つ
-#   GitHub PAT (Fine-grained、Contents: Read+Write、対象 repo は ryantsuji-dev-content)。
-#   `https://x-access-token:<pat>@github.com/thujikun/ryantsuji-dev-content.git`
-#   形式の HTTPS URL を `ZENN_REPO_REMOTE` env として注入する
+# - `ryantsuji-dev-content-deploy-key`: thujikun/ryantsuji-dev-content の
+#   Deploy Key (write 有効) の **秘密鍵全文** (Ed25519、改行 \n 込み)。
+#   workflow 側で `~/.ssh/id_ed25519` に書き出し、`git@github.com:...` URL で
+#   clone/push する
 #
 # secrets / vars (pulumi.yml / deploy-ryantsuji-dev.yml と共有):
 # - var: GCP_PROJECT_ID
@@ -86,20 +86,19 @@ jobs:
           echo "::add-mask::$token"
           echo "token=$token" >> "$GITHUB_OUTPUT"
 
-      # Zenn sync 用 PAT (ryantsuji-dev-content 書き込み権限) を取得。HTTPS+PAT URL
-      # を組み立てて `ZENN_REPO_REMOTE` env に流す。`scripts/syndicate.ts` は
-      # `process.env.ZENN_REPO_REMOTE` を優先するので、CI ではこれが SSH default を
-      # override する。
-      - name: Fetch ryantsuji-dev-content PAT from Secret Manager
-        id: content-pat
+      # Zenn sync 用 SSH deploy key (ryantsuji-dev-content 書き込み権限) を取得。
+      # 秘密鍵を `~/.ssh/id_ed25519` に書いて chmod 600、github.com の host key を
+      # known_hosts に登録。これで `git@github.com:thujikun/ryantsuji-dev-content.git`
+      # 形式の URL がそのまま使える (SSH default、`ZENN_REPO_REMOTE` env は未設定で OK)。
+      - name: Setup SSH deploy key for ryantsuji-dev-content
         run: |
-          pat=$(gcloud secrets versions access latest \
-            --secret=ryantsuji-dev-content-pat \
+          key=$(gcloud secrets versions access latest \
+            --secret=ryantsuji-dev-content-deploy-key \
             --project=${{ vars.GCP_PROJECT_ID }})
-          echo "::add-mask::$pat"
-          remote="https://x-access-token:${pat}@github.com/thujikun/ryantsuji-dev-content.git"
-          echo "::add-mask::$remote"
-          echo "remote=$remote" >> "$GITHUB_OUTPUT"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$key" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Configure git identity (bot)
         run: |
@@ -107,11 +106,10 @@ jobs:
           git config user.email "noreply@github.com"
 
       # Zenn 側 repo を `$RUNNER_TEMP/ryantsuji-dev-content` に clone (= publishToZenn
-      # の `repoDir`)。HTTPS+PAT URL は publishToZenn が clone 時にも使う。
+      # の `repoDir`)。SSH key 認証で git@github.com:... 経由で push する。
       - name: Run syndication (Zenn + dev.to, include drafts)
         env:
           DEV_TO_API_KEY: ${{ steps.devto-key.outputs.token }}
-          ZENN_REPO_REMOTE: ${{ steps.content-pat.outputs.remote }}
           RYANTSUJI_CONTENT_REPO_DIR: ${{ runner.temp }}/ryantsuji-dev-content
         run: pnpm exec tsx scripts/syndicate.cli.ts --target all --publish --include-drafts
 
