@@ -113,10 +113,14 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
 
+      # `--global` 必須: syndicate.ts は `$RUNNER_TEMP/ryantsuji-dev-content` に
+      # 別 repo を clone してその中で `git commit` する (Zenn 同期経路)。`--global`
+      # 無しだと self-management clone にしか identity が効かず、Zenn repo 側で
+      # `empty ident name` で commit が落ちる。
       - name: Configure git identity (bot)
         run: |
-          git config user.name "ryantsuji-dev syndication bot"
-          git config user.email "noreply@github.com"
+          git config --global user.name "ryantsuji-dev syndication bot"
+          git config --global user.email "noreply@github.com"
 
       # Zenn 側 repo を `$RUNNER_TEMP/ryantsuji-dev-content` に clone (= publishToZenn
       # の `repoDir`)。SSH key 認証で git@github.com:... 経由で push する。
