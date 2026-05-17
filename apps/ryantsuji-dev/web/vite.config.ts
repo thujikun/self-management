@@ -32,6 +32,7 @@ import viteReact from "@vitejs/plugin-react";
 import rsc from "@vitejs/plugin-rsc";
 import { resolve } from "node:path";
 
+import { localImagesPlugin } from "./vite-plugins/local-images.js";
 import { renderedPostsPlugin } from "./vite-plugins/rendered-posts.js";
 
 export default defineConfig({
@@ -49,6 +50,9 @@ export default defineConfig({
     // で expose。runtime (CF Workers) では shiki を走らせず、HTML を lookup する
     // だけで済むようにし、Error 1102 (CPU 上限) を解消する。
     renderedPostsPlugin(resolve(__dirname, "content/posts")),
+    // dev で `/images/*` を `content/images/` から serve する。prod は Worker entry
+    // (`src/server.ts`) が R2 binding 経由で同 path を serve する設計。
+    localImagesPlugin(resolve(__dirname, "content/images")),
     tanstackStart({ rsc: { enabled: true }, server: { entry: "./src/server.ts" } }),
     rsc(),
     viteReact(),

@@ -39,6 +39,14 @@ import { createStart } from "@tanstack/react-start";
  */
 export interface Env {
   ASSETS: Fetcher;
+  /**
+   * R2 bucket binding (`ryantsuji-dev-images`)。post 添付画像の配信元。`src/server.ts`
+   * の `/images/*` route handler が `env.IMAGES.get(key)` で fetch する。dev 時の
+   * vite middleware (`vite-plugins/local-images.ts`) は file system 直 read で代替する
+   * ため、Env 型としては存在しても dev runtime には bind されない (server.ts 側で
+   * `/images/*` 経路は dev では vite が intercept する前提)。
+   */
+  IMAGES: R2Bucket;
   DATABASE_URL: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;

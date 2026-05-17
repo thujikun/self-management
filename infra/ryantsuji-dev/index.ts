@@ -225,3 +225,31 @@ const workerCustomDomains = WORKER_CUSTOM_DOMAINS.map(
 
 /** @graph-connects none */
 export const workerCustomDomainIds = workerCustomDomains.map((d) => d.id);
+
+/**
+ * R2 bucket: `ryantsuji-dev-images`。post 添付画像 (markdown 内 `![](/images/...)`) の
+ * 配信元。同 worker からの binding (`IMAGES`) 経由で fetch されるため、外部からの
+ * 直接 R2 アクセス (`*.r2.dev` / custom domain) は無効化したまま運用する。
+ *
+ * **location**: `apac` (Asia Pacific) を選択。Ryan が JP 在住・Cloud Flare の edge は
+ * どの location でも世界中から fetch できるが、bucket の primary region を読み手に
+ * 近い region に置くことで cold-cache miss 時の latency を最小化する。
+ *
+ * **storageClass**: `Standard` (default)。画像は post 公開時に upload され、即時参照
+ * 想定なので IA (InfrequentAccess) の取り出し latency が立ち上がりに刺さるのは避ける。
+ *
+ * **API token に必要な scope**: `Workers R2 Storage Write` (現状の pulumi 用 CF token
+ * に未付与なら、新規 token 発行 or 既存 token に scope 追加が必要。bucket 操作後の
+ * sync は GitHub Actions の `cloudflare-api-token` 経由で REST API を叩く)。
+ *
+ * @graph-connects cloudflare [provides] R2 bucket で post 添付画像を保管し、ryantsuji-dev-web Worker の `IMAGES` binding 経由で配信
+ */
+const imagesBucket = new cloudflare.R2Bucket("ryantsuji-dev-images", {
+  accountId: cloudflareAccountId,
+  name: "ryantsuji-dev-images",
+  location: "apac",
+  storageClass: "Standard",
+});
+
+/** @graph-connects none */
+export const imagesBucketName = imagesBucket.name;

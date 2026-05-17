@@ -43,6 +43,10 @@ pulumi up
 
 これらを `apps/graph/product/scripts/init-bq.ts` 等が参照する。`pulumiCiServiceAccountEmail` / `githubWifProviderResource` は GitHub Actions workflow の `google-github-actions/auth@v2` ステップで参照する。
 
+## トピック別
+
+- [r2-images.md](./r2-images.md) — ryantsuji-dev の post 添付画像配信 (CF R2 + Worker route + CI sync)
+
 ## 関連
 
 - [DESIGN.md](../DESIGN.md) — 全体方針

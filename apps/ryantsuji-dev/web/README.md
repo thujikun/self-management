@@ -235,6 +235,15 @@ content source は `apps/ryantsuji-dev/web/content/posts/` 配下に置き、
 詳細 page の SoT は本 repo の markdown。後続 PR で **dev.to** (EN) / **Zenn** (JP) に
 syndication 投稿し、`canonical_url` を `https://ryantsuji.dev/posts/<slug>` に揃える。
 
+## 画像 (Cloudflare R2)
+
+post 添付画像 (markdown 内の `![](/images/...)`) は Cloudflare R2 bucket
+`ryantsuji-dev-images` から Worker route `/images/*` 経由で配信する。dev は
+`content/images/` を vite middleware が fs 直 read で serve、prod は CI が
+deploy 直前に R2 sync する。markdown URL は dev / prod 同一。
+
+設計と運用の詳細は [`docs/infra/r2-images.md`](../../../docs/infra/r2-images.md) を参照。
+
 ## RPC client
 
 Hono RPC の型は `src/routes/api/$.ts` から export している `ApiType`。
