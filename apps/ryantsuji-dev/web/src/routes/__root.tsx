@@ -16,11 +16,12 @@ import {
   Outlet,
   Scripts,
   createRootRouteWithContext,
+  useLocation,
   useRouter,
 } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import type { QueryClient } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { Lightbox } from "../components/Lightbox.js";
 import { LANG_COOKIE, LANG_COOKIE_MAX_AGE, SUPPORTED_LANGS, type Lang } from "../server/i18n.js";
@@ -113,9 +114,74 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootComponent,
 });
 
+/**
+ * `import.meta.env` の `VITE_FARO_COLLECTOR_URL` を string | undefined で取り出す薄い
+ * helper。env object を引数で受け取る形にし、default は `import.meta.env` を読む。
+ * test 側は env を直接渡すことで未投入 / 値あり / object 不在の各 branch を踏める
+ * (vitest 上では `import.meta.env` の property 上書きが Proxy で反映されないため、
+ * env 引数化が唯一安定して branch を assert できる構造)。
+ *
+ * @graph-connects none
+ */
+export function readFaroCollectorUrl(
+  env: Record<string, string | undefined> | undefined = (
+    import.meta as unknown as { env?: Record<string, string | undefined> }
+  ).env,
+): string | undefined {
+  return env?.VITE_FARO_COLLECTOR_URL;
+}
+
+/**
+ * Faro client init の wiring を pure に切り出し。`docAvailable` (=window 存在判定) /
+ * URL 読み出し / faro-client module の dynamic import / init 呼び出しの 3 分岐を
+ * test 側で確定的に踏めるよう、副作用を全て引数経由 (`readUrl` / `importFaro`) で
+ * inject する。`useEffect` 側はこの関数を 1 回呼ぶだけ。
+ *
+ * 戻り値は test 用に「init 経路に入ったかどうか」を返す Promise (URL 空 / SSR 時は
+ * 即座に resolve(false))。`useEffect` の void cast でも safety は崩れない。
+ *
+ * @graph-connects none
+ */
+export async function performInitFaroClient(args: {
+  docAvailable: boolean;
+  readUrl: () => string | undefined;
+  importFaro: () => Promise<{ initFaro: (url: string) => boolean }>;
+}): Promise<boolean> {
+  if (!args.docAvailable) return false;
+  const url = args.readUrl();
+  if (!url) return false;
+  const mod = await args.importFaro();
+  mod.initFaro(url);
+  return true;
+}
+
 /** @graph-connects none */
 function RootComponent() {
-  const { theme } = Route.useLoaderData();
+  const { theme, lang } = Route.useLoaderData();
+  const location = useLocation();
+  // Grafana Faro は client でしか動かない (window / document を eager 参照する) ので、
+  // SDK 自体を lazy import + useEffect 内で初期化する。collector URL が未投入なら
+  // dynamic import 自体を skip して bundle 解析対象から外す。
+  useEffect(() => {
+    void performInitFaroClient({
+      docAvailable: typeof window !== "undefined",
+      readUrl: readFaroCollectorUrl,
+      importFaro: () => import("../lib/faro-client.js"),
+    });
+  }, []);
+  // 自前 analytics: 各 route change で page_view を 1 件送る。effect の発火条件は
+  // **URL 変化のみ** (= deps は location.pathname だけ)。lang は payload には載せたい
+  // が、LangSwitcher 押下時の `router.invalidate()` で同 path に対して再 fire させ
+  // たくない (DAU / per-path pv が膨らんで集計が壊れる) ため、ref 経由で「最新値を
+  // 読むだけ」にして deps から外す。
+  const langRef = useRef(lang);
+  langRef.current = lang;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    void import("../lib/track-client.js").then(({ trackPageView }) =>
+      trackPageView({ path: location.pathname, lang: langRef.current }),
+    );
+  }, [location.pathname]);
   return (
     <RootDocument theme={theme}>
       <Outlet />

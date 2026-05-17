@@ -85,7 +85,7 @@ pnpm deploy:dry
    pnpm exec wrangler login
    ```
 
-2. **secret を登録** (11 個)
+2. **secret を登録** (12 個 + analytics 用 SA key 1 個)
 
    ```bash
    cd apps/ryantsuji-dev/web
@@ -98,10 +98,34 @@ pnpm deploy:dry
    pnpm exec wrangler secret put X_OAUTH2_CLIENT_SECRET
    pnpm exec wrangler secret put GOOGLE_CLIENT_ID
    pnpm exec wrangler secret put GOOGLE_CLIENT_SECRET
+   pnpm exec wrangler secret put OTLP_ENDPOINT             # Grafana Cloud OTLP HTTP endpoint
+   pnpm exec wrangler secret put OTLP_AUTH_HEADER          # "Basic <base64(instance:token)>"
+   # 自前 analytics 用 (BQ 書き込み権限を持つ SA の JSON key を丸ごと投入)
+   gcloud secrets versions access latest --secret=gcp-sa-graph-app-key \
+     | pnpm exec wrangler secret put GCP_SA_JSON
    ```
+
+   `GCP_SA_JSON` の SSoT は GCP Secret Manager の `gcp-sa-graph-app-key`
+   (graph-app SA の `roles/bigquery.dataEditor` 付き key)。`BQ_PROJECT_ID` /
+   `BQ_DATASET` / `BQ_TABLE` は `wrangler.jsonc:vars` 側に平文で書く非 secret
+   ID なので、初回 deploy 時に `vars` の方が揃っているか合わせて確認する
+   (空のままなら `/api/track` は fail-open で 204 を返し続ける)。
 
    secret 値は **`gcloud secrets versions access`** で個人 GCP project の secret container
    から取り出して貼る (`docs/guidelines/secrets.md` 参照、SSoT は GCP Secret Manager)。
+
+   `OTLP_ENDPOINT` / `OTLP_AUTH_HEADER` の SSoT は GCP Secret Manager の
+   `grafana-otlp-write-token` (auth header) + Grafana Cloud の OTLP HTTP endpoint URL。
+   **未投入のまま deploy しても fail-open** で、`server.ts` の OTel 計装が no-op に
+   退化するだけで request 自体は通る (preview / 初回 stage 用)。
+
+   なお **`VITE_FARO_COLLECTOR_URL` は wrangler secret ではなく build 時に CI 経由で
+   inject される** (`.github/workflows/deploy-ryantsuji-dev.yml:115-123` で
+   `gcloud secrets versions access --secret=grafana-faro-collector-url` を実行し、
+   `vite build` の env に渡す)。手動 build 時は environment variable で同等に
+   `VITE_FARO_COLLECTOR_URL=https://faro-collector-prod-xx.grafana.net/collect`
+   を export してから `pnpm build` する。空のままなら client 側の Faro init が
+   no-op になり RUM event は送られない (fail-open)。
 
 3. **dry-run でビルド成功 + binding を確認**
 
@@ -206,7 +230,8 @@ syndication 投稿し、`canonical_url` を `https://ryantsuji.dev/posts/<slug>`
 ## RPC client
 
 Hono RPC の型は `src/routes/api/$.ts` から export している `ApiType`。
-Client 側からは:
+現状 endpoint は **`GET /api/health`** (heartbeat) と **`POST /api/track`**
+(自前 analytics の beacon 受け口、fail-open で常に 204) の 2 本。Client 側からは:
 
 ```ts
 import { hc } from "hono/client";
@@ -216,6 +241,58 @@ const client = hc<ApiType>("/");
 const res = await client.api.health.$get();
 const data = await res.json();
 ```
+
+## 可観測性 (observability)
+
+server / client の両 layer から Grafana Cloud に観測 signal を流す:
+
+- **server (Cloudflare Workers)**: `@microlabs/otel-cf-workers` の `instrument()` で
+  `src/server.ts` の Worker entry を wrap。`fetch` span に加えて outbound fetch も
+  span 化し、OTLP HTTP で `OTLP_ENDPOINT` (Tempo) に送る。auth は `OTLP_AUTH_HEADER`
+  をそのまま header に流す。両 secret が未投入なら **計装そのものを skip** (fail-open)。
+- **client (RUM)**: `src/lib/faro-client.ts` の `initFaro` が `@grafana/faro-web-sdk` を
+  lazy import で初期化し、page load timing / web-vital / unhandled error / fetch tracing
+  を Faro collector に送る。`__root.tsx` の `useEffect` から 1 回だけ起動。
+  `VITE_FARO_COLLECTOR_URL` が空なら dynamic import 自体を skip して bundle 解析対象
+  からも外れる (fail-open + bundle size 影響なし)。
+
+### 自前 analytics — `/api/track` → BQ `ryan.web_events`
+
+`__root.tsx` の useEffect 内で route 変化を検知して
+`src/lib/track-client.ts:trackPageView` を呼び、`navigator.sendBeacon` (失敗時は
+`fetch keepalive`) で `POST /api/track` に JSON payload を送る。Worker 側は
+`src/routes/api/$.ts` で Hono に委譲、`src/server/bq-track.ts` が
+**SA JSON → RS256 JWT 署名 → OAuth2 access token → `tabledata.insertAll`** の経路を
+踏んで BQ table `ryan.web_events` に 1 行 streaming insert する (Pulumi で
+`infra/core/index.ts` が table / SA を declarative 作成)。
+
+- payload: `path` / `slug` / `lang` / `referrer` / `utm_*` / `viewport_w/h` /
+  `locale` / `session_id` (sessionStorage UUID、cookie 不使用、tab close で揮発)
+- server 付与: `ts` (server time) / `user_agent` (256 char truncate)
+- 必要 env:
+  - `GCP_SA_JSON` (secret、SSoT は SecretManager `gcp-sa-graph-app-key`)
+  - `BQ_PROJECT_ID` / `BQ_DATASET` / `BQ_TABLE` (`wrangler.jsonc:vars` 側、
+    現状 `ryan-self-management` / `ryan` / `web_events`)
+- fail-open: SA 未投入 / token exchange 失敗 / `insertAll` 失敗いずれも `/api/track`
+  は 204 を返し、server 側で OTel span event `track.bq.fail` を emit するのみ
+  (client request は止めない)
+- token cache: `getAccessToken` が isolate scope で 1 つ持ち、cold-start 直後の
+  並列 request では in-flight Promise を共有して OAuth 経路は 1 回に集約
+
+「BQ にデータが来ない」場合の debug 起点:
+
+1. `pnpm exec wrangler secret list` に `GCP_SA_JSON` が入っているか
+2. Tempo の span に `track.bq.fail` event が出ていないか (reason field で
+   `parse-sa-json` / `parse-input` / `build-row` / `oauth-or-insert` を区別)
+3. BQ console の `ryan.web_events` table preview に直近行が乗っているか
+
+「Tempo / Faro にデータが来ない」場合の debug 起点:
+
+1. Worker secrets に `OTLP_ENDPOINT` / `OTLP_AUTH_HEADER` が入っているか
+   (`pnpm exec wrangler secret list`)
+2. 直近 deploy 時の `VITE_FARO_COLLECTOR_URL` が build 時に注入されたか
+   (Actions log の "Fetch VITE_FARO_COLLECTOR_URL from Secret Manager" step)
+3. browser devtools network panel で `faro-collector*` への beacon が出ているか
 
 ## 注意点
 

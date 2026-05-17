@@ -27,6 +27,13 @@ import { createStart } from "@tanstack/react-start";
  * - `BETTER_AUTH_SECRET`: 32+ 文字ランダム (secret)
  * - `BETTER_AUTH_URL`: 公開 URL (vars でも可、現状 secret 扱い)
  * - `GITHUB_*` / `X_OAUTH2_*` / `GOOGLE_*`: OAuth credentials (secret)
+ * - `OTLP_ENDPOINT` / `OTLP_AUTH_HEADER`: Grafana Cloud OTLP write target (secret)。
+ *   設定無しなら server.ts 側で計装が no-op になる (= 未配線 stage でも runtime に
+ *   実害を出さない) — 値 SSoT は GCP Secret Manager `grafana-otlp-write-token`
+ * - `GCP_SA_JSON`: graph-app SA の JSON key (Worker secret)。`/api/track` から BQ
+ *   tabledata.insertAll を呼ぶための credentials — 値 SSoT は GCP Secret Manager
+ *   `gcp-sa-graph-app-key`。`wrangler secret put GCP_SA_JSON < sa.json` で投入
+ * - `BQ_PROJECT_ID` / `BQ_DATASET` / `BQ_TABLE`: BQ 書き込み先 (wrangler vars)
  *
  * @graph-connects none
  */
@@ -41,6 +48,12 @@ export interface Env {
   X_OAUTH2_CLIENT_SECRET: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
+  OTLP_ENDPOINT?: string;
+  OTLP_AUTH_HEADER?: string;
+  GCP_SA_JSON?: string;
+  BQ_PROJECT_ID?: string;
+  BQ_DATASET?: string;
+  BQ_TABLE?: string;
 }
 
 /**

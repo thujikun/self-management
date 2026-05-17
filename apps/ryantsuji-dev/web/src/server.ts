@@ -10,14 +10,22 @@
  * `(req, env, ctx) => handler.fetch(req, env, ctx)` 形なので、本 app は env binding が
  * 必須 (DATABASE_URL / OAuth credentials) のため override する。
  *
+ * **OTel 計装**: handler を `@microlabs/otel-cf-workers` の `instrument` で wrap し、
+ * 全 fetch invocation を span として OTLP 経由で Grafana Cloud Tempo に送る。endpoint
+ * は `env.OTLP_ENDPOINT` / 認証は `env.OTLP_AUTH_HEADER` (`grafana-otlp-write-token`
+ * 由来)。値が未投入の environment では exporter 経路が空に解決されるだけで handler
+ * の応答は同一 (= 計装失敗が user 体験に伝播しない fail-open 設計)。
+ *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business CF Workers fetch handler。Workers の (req, env, ctx) を TanStack Start handler の requestContext に forward することで、各 server fn / middleware から context.env で型付きの env binding を読めるようにする。本 app の env-driven config (DB / auth) の正しい注入経路
+ * @graph-business CF Workers fetch handler。Workers の (req, env, ctx) を TanStack Start handler の requestContext に forward することで、各 server fn / middleware から context.env で型付きの env binding を読めるようにする。本 app の env-driven config (DB / auth) の正しい注入経路。fetch 全 invocation を OTel span として Grafana Cloud に export
  * @graph-connects tanstack-start [calls] createStartHandler(defaultStreamHandler) で SSR handler を構築し、forward fetch で context を流す
+ * @graph-connects grafana-cloud [writes_to] OTLP 経由で fetch span を Tempo に送出 (env.OTLP_ENDPOINT)
  */
 
 import { Buffer } from "node:buffer";
 
+import { instrument, type ResolveConfigFn } from "@microlabs/otel-cf-workers";
 import { createStartHandler, defaultStreamHandler } from "@tanstack/react-start/server";
 
 import type { Env } from "./start.js";
@@ -42,13 +50,48 @@ if (typeof globalThis.Buffer === "undefined") {
 const handler = createStartHandler(defaultStreamHandler);
 
 /**
- * Workers の default fetch handler。`{ env, ctx }` を context に詰めて TanStack Start に
+ * Workers の base fetch handler。`{ env, ctx }` を context に詰めて TanStack Start に
  * forward する。`start.ts` の Register augmentation でこの shape が型保証される。
  *
  * @graph-connects tanstack-start [calls] handler.fetch(req, { context: { env, ctx } })
  */
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+const baseHandler: ExportedHandler<Env> = {
+  async fetch(request, env, ctx): Promise<Response> {
     return await handler(request, { context: { env, ctx } });
   },
 };
+
+/**
+ * OTel exporter 設定を env から組み立てる resolver。`instrument()` は per-request で
+ * 本関数を呼んで exporter を組む。`OTLP_ENDPOINT` が未投入の場合は空 URL で resolve し、
+ * exporter の POST が静かに失敗するだけで handler 応答には影響しない (fail-open)。
+ *
+ * `service.version` は wrangler.jsonc から bundle 時に拾えないため、package.json と
+ * 手動同期する固定値で出す (release tag と一致させたい時は CI から `wrangler deploy
+ * --var SERVICE_VERSION=...` で上書きする想定だが、本 PR では未対応)。
+ *
+ * @graph-connects grafana-cloud [calls] env.OTLP_ENDPOINT に Authorization header 付きで OTLP 送出
+ */
+const resolveTelemetryConfig: ResolveConfigFn = (env: Env) => {
+  const headers: Record<string, string> = {};
+  if (env.OTLP_AUTH_HEADER) headers.Authorization = env.OTLP_AUTH_HEADER;
+  return {
+    exporter: {
+      url: env.OTLP_ENDPOINT ?? "",
+      headers,
+    },
+    service: {
+      name: "ryantsuji-dev-web",
+      version: "0.1.0",
+    },
+  };
+};
+
+/**
+ * 計装済 default export。`instrument()` は wrap した object を返すので、CF Workers
+ * runtime が見る default export は OTel 経路 (incoming fetch + outgoing fetch / DO /
+ * caches.* 等の自動 span 化) を通った後 `baseHandler.fetch` に到達する。
+ *
+ * @graph-connects grafana-cloud [embeds] @microlabs/otel-cf-workers の instrument wrapper
+ */
+export default instrument(baseHandler, resolveTelemetryConfig);

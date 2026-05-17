@@ -16,6 +16,13 @@
     "enabled": true,
     "head_sampling_rate": 1,
   },
+  // 自前 analytics の BQ 書き込み先。値が public で問題ないため secret ではなく vars。
+  // `GCP_SA_JSON` (SA JSON key)、`OTLP_*` (Grafana Cloud) は `wrangler secret put` 別途。
+  "vars": {
+    "BQ_PROJECT_ID": "ryan-self-management",
+    "BQ_DATASET": "ryan",
+    "BQ_TABLE": "web_events",
+  },
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",

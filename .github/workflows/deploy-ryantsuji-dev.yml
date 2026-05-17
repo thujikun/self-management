@@ -23,6 +23,9 @@
 # 分離した時に同パターンで bind し直す用途で、本 workflow の実行 SA ではない):
 # - `cloudflare-api-token` (Workers Scripts:Edit + Workers Routes:Edit)
 # - `neon-database-url` (Neon Postgres の pooled connection string)
+# - `grafana-faro-collector-url` (Frontend Observability collector、build 時に
+#   `VITE_FARO_COLLECTOR_URL` として vite に注入。未投入なら空文字に fallback して
+#   client side RUM init が no-op で安全 skip される)
 #
 # SSoT は infra/core/index.ts で Pulumi 管理、`.envrc` でも同じ container を引いてる。
 #
@@ -104,6 +107,21 @@ jobs:
           echo "::add-mask::$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
+      # Grafana Faro collector URL を build 時の `VITE_FARO_COLLECTOR_URL` として注入。
+      # 値が未投入 (= secret container だけ存在し version 無し) の段階では access が
+      # 非 0 終了するので `|| true` で抑止し、空文字 fallback で deploy 自体は通す。
+      # client 側 init は URL 空なら no-op に倒れる設計のため、空のまま deploy しても
+      # 既存挙動と差分が出ない (= 段階導入 safe)。
+      - name: Fetch VITE_FARO_COLLECTOR_URL from Secret Manager
+        id: faro-url
+        run: |
+          url=$(gcloud secrets versions access latest \
+            --secret=grafana-faro-collector-url \
+            --project=${{ vars.GCP_PROJECT_ID }} 2>/dev/null || echo "")
+          # collector URL は public な値だが、誤投稿時の log 露出を避けるため mask 化
+          if [ -n "$url" ]; then echo "::add-mask::$url"; fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
       - name: Apply DB migrations (drizzle migrator)
         if: github.event_name == 'push'
         working-directory: .
@@ -120,7 +138,10 @@ jobs:
         run: pnpm turbo run build --filter=@self/ryantsuji-dev-web^...
 
       # PR は dry-run (build 通すだけ、CF への upload 無し)、main は本番 deploy。
+      # `VITE_FARO_COLLECTOR_URL` は build 時に vite が `import.meta.env` 経由で client
+      # bundle に埋め込む (`__root.tsx` の useEffect で読まれる)。空文字なら init no-op。
       - name: ${{ github.event_name == 'pull_request' && 'pnpm run deploy:dry' || 'pnpm run deploy' }}
         run: pnpm run ${{ github.event_name == 'pull_request' && 'deploy:dry' || 'deploy' }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ steps.cf-token.outputs.token }}
+          VITE_FARO_COLLECTOR_URL: ${{ steps.faro-url.outputs.url }}
