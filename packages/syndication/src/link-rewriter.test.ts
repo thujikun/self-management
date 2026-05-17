@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { rewriteInternalLinks } from "./link-rewriter.js";
+import { rewriteImageLinks, rewriteInternalLinks } from "./link-rewriter.js";
 
 const MAP: Record<string, string> = {
   "db-graph-mcp": "https://zenn.dev/aircloset/articles/2731787582881a",
@@ -71,5 +71,45 @@ describe("rewriteInternalLinks", () => {
     expect(out).toBe(
       "[bad](/posts/Foo) と [ok](https://zenn.dev/aircloset/articles/2731787582881a)",
     );
+  });
+});
+
+describe("rewriteImageLinks", () => {
+  const BASE = "https://ryantsuji.dev";
+
+  it("markdown image (`![alt](/images/...)`) を絶対 URL に書き換え", () => {
+    expect(rewriteImageLinks("![alt text](/images/posts/foo/bar.png)", BASE)).toBe(
+      "![alt text](https://ryantsuji.dev/images/posts/foo/bar.png)",
+    );
+  });
+
+  it("link (`[text](/images/...)`) も書き換える (image への直リンク)", () => {
+    expect(rewriteImageLinks("[click](/images/foo.png)", BASE)).toBe(
+      "[click](https://ryantsuji.dev/images/foo.png)",
+    );
+  });
+
+  it("複数 image を一括置換", () => {
+    const input = "本文\n\n![a](/images/posts/x/a.png)\n\n間\n\n![b](/images/posts/x/b.png)\n";
+    const out = rewriteImageLinks(input, BASE);
+    expect(out).toContain("https://ryantsuji.dev/images/posts/x/a.png");
+    expect(out).toContain("https://ryantsuji.dev/images/posts/x/b.png");
+    expect(out).not.toMatch(/\]\(\/images\//);
+  });
+
+  it("`/posts/` link は touch しない (rewriteInternalLinks の責務)", () => {
+    const input = "[X](/posts/foo) と ![Y](/images/posts/foo/y.png)";
+    const out = rewriteImageLinks(input, BASE);
+    expect(out).toBe("[X](/posts/foo) と ![Y](https://ryantsuji.dev/images/posts/foo/y.png)");
+  });
+
+  it("既に絶対 URL の image は touch しない", () => {
+    const input = "![ext](https://example.com/images/foo.png)";
+    expect(rewriteImageLinks(input, BASE)).toBe(input);
+  });
+
+  it("`/images` で始まらない相対 URL (例 `/assets/...`) は touch しない", () => {
+    const input = "![other](/assets/foo.png)";
+    expect(rewriteImageLinks(input, BASE)).toBe(input);
   });
 });

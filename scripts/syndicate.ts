@@ -162,6 +162,7 @@ export async function emitZenn(args: EmitZennArgs): Promise<void> {
       meta: p.meta,
       body: p.body,
       resolver,
+      canonicalHost: RYANTSUJI_DEV_BASE,
       footerMarkdown: args.footer,
     });
     const outPath = resolve(args.outDir, `${zennId}.md`);

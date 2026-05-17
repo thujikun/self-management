@@ -16,7 +16,7 @@ import type { Frontmatter } from "@self/content";
 
 import { appendFooter } from "./footer.js";
 import { buildDevtoArticle, type DevtoArticleAttributes } from "./devto-frontmatter.js";
-import { rewriteInternalLinks, type SlugResolver } from "./link-rewriter.js";
+import { rewriteImageLinks, rewriteInternalLinks, type SlugResolver } from "./link-rewriter.js";
 import { buildZennFrontmatter, stringifyZennFrontmatter } from "./zenn-frontmatter.js";
 
 /** @graph-connects none */
@@ -25,6 +25,9 @@ export interface SyndicateForZennArgs {
   body: string;
   /** 内部 link `/posts/<slug>` を Zenn 公開 URL に解決する関数 */
   resolver: SlugResolver;
+  /** ryantsuji.dev の base URL (例: `https://ryantsuji.dev`)。`/images/...` 相対 URL
+   *  を絶対化するため必要。trailing slash 無し前提。 */
+  canonicalHost: string;
   /** Zenn 末尾に付加する footer markdown (null なら footer なし) */
   footerMarkdown: string | null;
   /** Zenn 記事 emoji。default `🤖` */
@@ -40,8 +43,9 @@ export interface SyndicateForZennArgs {
  * @graph-connects content [calls] rewriteInternalLinks / appendFooter / buildZennFrontmatter / stringifyZennFrontmatter
  */
 export function syndicateForZenn(args: SyndicateForZennArgs): string {
-  const rewritten = rewriteInternalLinks(args.body, args.resolver);
-  const withFooter = appendFooter(rewritten, args.footerMarkdown);
+  const linkRewritten = rewriteInternalLinks(args.body, args.resolver);
+  const imageRewritten = rewriteImageLinks(linkRewritten, args.canonicalHost);
+  const withFooter = appendFooter(imageRewritten, args.footerMarkdown);
   const fm = buildZennFrontmatter(args.meta, {
     emoji: args.emoji,
     publicationName: args.publicationName,
@@ -73,8 +77,9 @@ export interface SyndicateForDevtoArgs {
  * @graph-connects content [calls] rewriteInternalLinks / buildDevtoArticle
  */
 export function syndicateForDevto(args: SyndicateForDevtoArgs): DevtoArticleAttributes {
-  const rewritten = rewriteInternalLinks(args.body, args.resolver);
-  return buildDevtoArticle(args.meta, rewritten, {
+  const linkRewritten = rewriteInternalLinks(args.body, args.resolver);
+  const imageRewritten = rewriteImageLinks(linkRewritten, args.canonicalHost);
+  return buildDevtoArticle(args.meta, imageRewritten, {
     canonicalHost: args.canonicalHost,
     slug: args.slug,
     coverImageUrl: args.coverImageUrl,
