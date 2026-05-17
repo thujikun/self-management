@@ -88,6 +88,7 @@ export function buildReviewPrompt(input: ReviewPromptInput): string {
     "- Nit のみ or 指摘なし → APPROVE",
     "",
     "本文に必須:",
+    `- CI checks の結果を \`gh pr checks ${input.prNumber} --repo ${input.repo}\` で取得し、\`bucket: fail\` の job があれば **Critical** として本文に列挙する (job 名 / failing step / 失敗理由を要約)`,
     "- 各指摘に **対象 file:line / 重要度 / 問題 / 修正理由 / 確認方法** を含める",
     "- 同種の指摘 (family) は 1 件にまとめ、他に N 箇所と書く",
     "- **良い点だけのコメントは出さない** (修正不要箇所には触れない)",
