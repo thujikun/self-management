@@ -58,7 +58,7 @@ env:
 | `AUTO_REVIEW_REPO` | `thujikun/self-management` | 対象 repo |
 | `AUTO_REVIEW_POLL_INTERVAL_MS` | `60000` | poll 間隔 (ms) |
 | `AUTO_REVIEW_MAX_CONCURRENT` | `6` | 並行 job 上限。複数 PR を捌くため一気に同時実行。update-branch は worktree も AI もないので gate を食わずに混在可。vitest 競合などで詰まる場合は下げる |
-| `AUTO_REVIEW_MAX_ITERATIONS` | `10` | 同 PR の round-trip cap。**成功 review post / 成功 fix push / merge retry でのみ +1** (= round-trip 1 回で +2)。APPROVE で 0 reset。超えると stalled。**失敗 (timeout / parse failure / FIX_FAILED / push 検出失敗) では +1 しない** — それらは下の `*FAILURES` / `*BACKOFF_MS` の別系統で制御する |
+| `AUTO_REVIEW_MAX_ITERATIONS` | `10` | 同 PR の round-trip cap。**成功 review post / 成功 fix push / 成功 ci-fix push / 成功 conflict-fix push それぞれで +1** (review → fix の round-trip 1 回で +2)。update-branch / merge 自体は iterations を触らない。APPROVE で 0 reset。超えると stalled。**失敗 (timeout / parse failure / FIX_FAILED / push 検出失敗) では +1 しない** — それらは下の `*FAILURES` / `*BACKOFF_MS` の別系統で制御する |
 | `AUTO_REVIEW_MAX_REVIEW_FAILURES` | `3` | 同 head_sha に対する review 失敗回数の cap。timeout / parse failure / throw が連続して cap 到達したら新 commit が来るまで skip。新 commit が push されれば SHA が変わって自動 reset |
 | `AUTO_REVIEW_REVIEW_BACKOFF_MS` | `300000` (5 分) | review 失敗後、次 retry までの最小待機時間 (ms)。一過性 Claude flake の自然回復用 |
 | `AUTO_REVIEW_MAX_FIX_FAILURES` | `3` | 同 commentId に対する fix 失敗回数の cap。新 review (= 新 commentId) が来るまで skip |
@@ -85,7 +85,7 @@ state は `~/.cache/self-management-auto-review/state.json` に atomic write (tm
 | 2. author dedup | `commentId` | 成功 fix 済 commentId は再 fix skip (`lastAddressedCommentId`) |
 | 2b. ci-fix dedup | `head_sha` | 成功 ci-fix 済 SHA は再 ci-fix skip (`lastCiFixedSha`)、新 commit を待つ |
 | 3. NO_OP marker | reviewer prompt 内 Step 4 | 投稿前に直近の自分の review body と正規化比較 → 同一なら `<!-- VERDICT:NO_OP -->` を stdout に → script は `lastReviewedSha` だけ更新して post skip |
-| 4. iteration cap (round-trip 用) | per-PR counter | **成功 review post / 成功 fix push / 成功 ci-fix push それぞれで +1** (APPROVE で 0 reset)。`MAX_ITERATIONS_PER_PR=10` (default) を超えたら `stalled: true` で当該 PR の全モード停止 (manual unblock は state.json 編集) |
+| 4. iteration cap (round-trip 用) | per-PR counter | **成功 review post / 成功 fix push / 成功 ci-fix push / 成功 conflict-fix push それぞれで +1** (update-branch / merge は iterations を触らない、APPROVE で 0 reset)。`MAX_ITERATIONS_PER_PR=10` (default) を超えたら `stalled: true` で当該 PR の全モード停止 (manual unblock は state.json 編集) |
 | 5. failure cap + backoff | per-SHA / per-commentId counter | **失敗 (timeout / parse failure / FIX_FAILED / push 検出失敗 / throw)** 時に SHA / commentId は bookmark せず、`reviewFailureCount` / `fixFailureCount` / `ciFixFailureCount` を per-key で +1 し `last*FailedAt` を記録。次 tick で (a) `*_FAILURE_BACKOFF_MS` (default 5 min) 未経過なら skip (b) `MAX_*_FAILURES` (default 3) 到達なら skip。新 key が来れば counter 自動 reset |
 | 6. supervisor fast-exit cap | wrapper (`loop.sh`) | tsx の起動 <`FAST_EXIT_THRESHOLD_SEC` (default 60s) での exit (env 検証 throw / dep import 失敗 / token 不正 / `pnpm install` 失敗 等) が `FAST_EXIT_MAX` (default 3) 回連続したら supervisor が `exit 1` で bail。「同 env で 2 秒待って再 spawn → 同じ throw を無限ループ」の最外周遮断 |
 

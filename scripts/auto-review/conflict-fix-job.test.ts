@@ -6,6 +6,7 @@
  *   - FIX_FAILED marker → 同上
  *   - push 検出失敗 → 同上
  *   - push 検出成功 → success として state 更新 + iteration++
+ *   - mergeFailed=false (race) + AI が merge commit を push → 成功扱い (preMergeSha baseline)
  *   - 同 SHA で連続失敗 → conflictFixFailureCount が積み上がる
  *   - 失敗 → 成功で failure fields クリア
  *   - worktree は finally で必ず削除
@@ -29,14 +30,11 @@ interface Harness {
 
 function makeDeps(
   stdout: string,
-  shas: { before: string; after: string; origin: string },
+  shas: { preMerge: string; after: string; origin: string },
   opts: { exitCode?: number; timedOut?: boolean; mergeFailed?: boolean } = {},
 ): { deps: ConflictFixJobDeps; harness: Harness } {
   const harness: Harness = { worktreeOps: [], fetched: [] };
   const fakeWorktree: Worktree = { path: "/tmp/fake-conflict-fix-wt", prNumber: 0 };
-  // revParse の連続呼び出しに対する response (HEAD は before → after の 2 回呼ばれる)
-  const headResponses = [shas.before, shas.after];
-  let headIdx = 0;
   const deps: ConflictFixJobDeps = {
     runClaude: async (): Promise<ClaudeRunResult> => ({
       stdout,
@@ -46,13 +44,17 @@ function makeDeps(
     }),
     createWorktree: async (_repoRoot, prNumber, _branch) => {
       harness.worktreeOps.push(`create-${prNumber}`);
-      return { wt: { ...fakeWorktree, prNumber }, mergeFailed: opts.mergeFailed ?? true };
+      return {
+        wt: { ...fakeWorktree, prNumber },
+        mergeFailed: opts.mergeFailed ?? true,
+        preMergeSha: shas.preMerge,
+      };
     },
     removeWorktree: async (_repoRoot, wt) => {
       harness.worktreeOps.push(`remove-${wt.prNumber}`);
     },
     revParse: async (_path, ref) => {
-      if (ref === "HEAD") return headResponses[Math.min(headIdx++, headResponses.length - 1)];
+      if (ref === "HEAD") return shas.after;
       return shas.origin;
     },
     fetchOriginBranch: async (_path, branch) => {
@@ -89,7 +91,7 @@ describe("runConflictFixJob", () => {
   it("timeout: 失敗記録 (sha bookmark せず、iteration 据え置き)", async () => {
     const { deps, harness } = makeDeps(
       "",
-      { before: "AAA", after: "AAA", origin: "AAA" },
+      { preMerge: "AAA", after: "AAA", origin: "AAA" },
       { timedOut: true },
     );
     const { input, getState } = makeInput({ prs: { "9": { iterations: 1 } } });
@@ -107,7 +109,7 @@ describe("runConflictFixJob", () => {
   it("exit !=0 (runtime failure): parse 試行せず record、push 検証 skip", async () => {
     const { deps, harness } = makeDeps(
       "Invalid API key",
-      { before: "AAA", after: "AAA", origin: "AAA" },
+      { preMerge: "AAA", after: "AAA", origin: "AAA" },
       { exitCode: 1 },
     );
     const { input, getState } = makeInput({ prs: { "9": { iterations: 2 } } });
@@ -136,7 +138,7 @@ describe("runConflictFixJob", () => {
   });
 
   it("push 検出失敗 (HEAD 不変): success にせず失敗記録", async () => {
-    const { deps, harness } = makeDeps("", { before: "AAA", after: "AAA", origin: "AAA" });
+    const { deps, harness } = makeDeps("", { preMerge: "AAA", after: "AAA", origin: "AAA" });
     const { input, getState } = makeInput({ prs: { "9": { iterations: 0 } } });
     await runConflictFixJob(input, deps);
     const after = getState().prs["9"];
@@ -146,7 +148,7 @@ describe("runConflictFixJob", () => {
   });
 
   it("push 検出失敗 (HEAD は動いたが origin に未反映): 同上", async () => {
-    const { deps } = makeDeps("", { before: "AAA", after: "BBB", origin: "AAA" });
+    const { deps } = makeDeps("", { preMerge: "AAA", after: "BBB", origin: "AAA" });
     const { input, getState } = makeInput({ prs: {} });
     await runConflictFixJob(input, deps);
     expect(getState().prs["9"]?.conflictFixFailureCount).toStrictEqual(1);
@@ -197,7 +199,7 @@ describe("runConflictFixJob", () => {
   });
 
   it("push 検出成功: bookmark + iteration++", async () => {
-    const { deps, harness } = makeDeps("", { before: "AAA", after: "BBB", origin: "BBB" });
+    const { deps, harness } = makeDeps("", { preMerge: "AAA", after: "BBB", origin: "BBB" });
     const { input, getState } = makeInput({ prs: { "9": { iterations: 2 } } });
     await runConflictFixJob(input, deps);
     const after = getState().prs["9"];
@@ -208,7 +210,7 @@ describe("runConflictFixJob", () => {
   });
 
   it("失敗 → 成功で failure 系 fields がクリアされる", async () => {
-    const { deps } = makeDeps("", { before: "AAA", after: "BBB", origin: "BBB" });
+    const { deps } = makeDeps("", { preMerge: "AAA", after: "BBB", origin: "BBB" });
     const { input, getState } = makeInput({
       prs: {
         "9": {
@@ -228,7 +230,7 @@ describe("runConflictFixJob", () => {
   });
 
   it("Claude spawn が throw: 失敗記録 (iteration 据え置き)、worktree は finally 削除", async () => {
-    const { deps, harness } = makeDeps("", { before: "AAA", after: "AAA", origin: "AAA" });
+    const { deps, harness } = makeDeps("", { preMerge: "AAA", after: "AAA", origin: "AAA" });
     const failingDeps: ConflictFixJobDeps = {
       ...deps,
       runClaude: async () => {
@@ -243,7 +245,7 @@ describe("runConflictFixJob", () => {
   });
 
   it("createWorktree が throw: 失敗記録 (iteration 据え置き)、worktree 削除呼び出し無し", async () => {
-    const { deps, harness } = makeDeps("", { before: "AAA", after: "AAA", origin: "AAA" });
+    const { deps, harness } = makeDeps("", { preMerge: "AAA", after: "AAA", origin: "AAA" });
     const failingDeps: ConflictFixJobDeps = {
       ...deps,
       createWorktree: async () => {
@@ -256,15 +258,38 @@ describe("runConflictFixJob", () => {
     expect(getState().prs["9"]?.conflictFixFailureCount).toStrictEqual(1);
   });
 
-  it("mergeFailed=false (poll〜worktree 作成の間に GH 側で conflict 解消されていた case): AI に渡す prompt 分岐", async () => {
-    // この test は mergeAttempted=false branch を踏むだけ。後段 (push 検出無し) は同じ。
+  it("mergeFailed=false (race) + AI が merge commit を push: preMergeSha baseline で成功扱い + iteration++", async () => {
+    // worktree 作成で auto-merge が成功し HEAD が pre-merge から動いている (preMerge=AAA → after=MMM)。
+    // AI は新規 commit を作らず merge commit を push するだけだが、preMergeSha (=AAA) と
+    // after (=MMM, origin=MMM) を比較するので "pushed" 判定される。
+    // 旧実装は baseline を merge 後 HEAD で取っていたため pushed 判定が false になり誤って failure を積んでいた。
+    const { deps, harness } = makeDeps(
+      "",
+      { preMerge: "AAA", after: "MMM", origin: "MMM" },
+      { mergeFailed: false },
+    );
+    const { input, getState } = makeInput({ prs: { "9": { iterations: 2 } } });
+    await runConflictFixJob(input, deps);
+    const after = getState().prs["9"];
+    expect(after?.lastConflictFixedSha).toStrictEqual("abc1234");
+    expect(after?.lastConflictFixedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(after?.iterations).toStrictEqual(3);
+    expect(after?.conflictFixFailureCount).toStrictEqual(undefined);
+    expect(after?.lastFailedConflictFixSha).toStrictEqual(undefined);
+    expect(harness.fetched).toStrictEqual(["feat/sample"]);
+  });
+
+  it("mergeFailed=false + push されず origin が pre-merge のまま: 失敗扱い (race の reset 経路)", async () => {
+    // mergeFailed=false でも origin が pre-merge から動かないなら push されていない。
+    // (worktree の merge commit が GH 側にまだ反映されていない場合)
     const { deps } = makeDeps(
       "",
-      { before: "AAA", after: "AAA", origin: "AAA" },
+      { preMerge: "AAA", after: "MMM", origin: "AAA" },
       { mergeFailed: false },
     );
     const { input, getState } = makeInput({ prs: {} });
     await runConflictFixJob(input, deps);
     expect(getState().prs["9"]?.conflictFixFailureCount).toStrictEqual(1);
+    expect(getState().prs["9"]?.lastConflictFixedSha).toStrictEqual(undefined);
   });
 });

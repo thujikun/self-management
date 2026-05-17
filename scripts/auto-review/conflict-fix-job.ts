@@ -53,7 +53,7 @@ export interface ConflictFixJobDeps {
     repoRoot: string,
     prNumber: number,
     branch: string,
-  ) => Promise<{ wt: Worktree; mergeFailed: boolean }>;
+  ) => Promise<{ wt: Worktree; mergeFailed: boolean; preMergeSha: string }>;
   removeWorktree: (repoRoot: string, wt: Worktree) => Promise<void>;
   revParse: (worktreePath: string, ref: string) => Promise<string>;
   fetchOriginBranch: (worktreePath: string, branch: string) => Promise<void>;
@@ -87,17 +87,16 @@ export async function runConflictFixJob(
     if (!created.mergeFailed) {
       log(
         tag,
-        `origin/main merge succeeded locally (conflict cleared by GH between poll and worktree create); AI will still verify and commit/push`,
+        `origin/main merge succeeded locally (conflict cleared by GH between poll and worktree create); AI will still verify and push`,
       );
     }
-    const beforeSha = await deps.revParse(wt.path, "HEAD").catch(() => "<unknown>");
-    log(tag, `baseline HEAD = ${beforeSha.slice(0, 7)}`);
+    log(tag, `pre-merge baseline (origin/${input.branch}) = ${created.preMergeSha.slice(0, 7)}`);
 
     const prompt = buildConflictFixPrompt({
       prNumber: input.prNumber,
       repo: input.repo,
       branch: input.branch,
-      mergeAttempted: created.mergeFailed,
+      conflictsRemaining: created.mergeFailed,
     });
     const ts = new Date().toISOString().replace(/[:.]/g, "-");
     const logFile = join(CLAUDE_LOG_DIR, `claude-conflict-fix-pr${input.prNumber}-${ts}.log`);
@@ -145,10 +144,14 @@ export async function runConflictFixJob(
       warn(tag, `fetch/rev-parse origin/${input.branch} failed:`, err);
       originSha = "<unknown>";
     }
-    const pushed = afterSha !== beforeSha && afterSha === originSha;
+    // baseline は merge 前 SHA (= origin/<branch>) を使う。
+    // mergeFailed=false で worktree 作成中に local merge commit が積まれた case で、AI が
+    // その merge commit を push しただけの「変更ゼロ commit、push のみ」が成功扱いになる必要があるため。
+    // afterSha が pre-merge から動いている + origin が afterSha に追いついていれば PUSHED とみなす。
+    const pushed = afterSha !== created.preMergeSha && afterSha === originSha;
     log(
       tag,
-      `push verification: before=${beforeSha.slice(0, 7)}, after=${afterSha.slice(0, 7)}, origin=${originSha.slice(0, 7)} → ${pushed ? "PUSHED" : "NOT PUSHED"}`,
+      `push verification: pre-merge=${created.preMergeSha.slice(0, 7)}, after=${afterSha.slice(0, 7)}, origin=${originSha.slice(0, 7)} → ${pushed ? "PUSHED" : "NOT PUSHED"}`,
     );
     if (!pushed) {
       warn(tag, `push not detected → record failure (will retry after backoff)`);
