@@ -1,7 +1,8 @@
 /**
  * `/rss/$` route の handler テスト。splat → lang 解決と Response 形式を検証する。
- * 実 post は vite glob で inline されている実 content/posts に依存 (test 環境でも
- * 同じ glob を読む) — route handler の蜂蜜程度 (薄い glue) なので integration 寄り。
+ * 実 post は `virtual:rendered-posts` (vitest config が build と同じ
+ * `renderedPostsPlugin` を組込み、test 起動時に `content/posts/` を pre-render
+ * する) から供給される — route handler の薄い glue なので integration 寄り。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
