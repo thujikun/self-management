@@ -124,7 +124,7 @@ describe("runConflictFixJob", () => {
 
   it("FIX_FAILED: 失敗記録のみ (sha bookmark せず)、push 検証 skip", async () => {
     const { deps, harness } = makeDeps("<!-- FIX_FAILED:意味的判断不可 -->\n", {
-      before: "AAA",
+      preMerge: "AAA",
       after: "AAA",
       origin: "AAA",
     });
@@ -156,7 +156,7 @@ describe("runConflictFixJob", () => {
 
   it("同 SHA で連続失敗: conflictFixFailureCount が積み上がる", async () => {
     const { deps } = makeDeps("<!-- FIX_FAILED:still bad -->\n", {
-      before: "AAA",
+      preMerge: "AAA",
       after: "AAA",
       origin: "AAA",
     });
@@ -176,7 +176,7 @@ describe("runConflictFixJob", () => {
 
   it("失敗 SHA が変わる: conflictFixFailureCount が 1 から再カウント", async () => {
     const { deps } = makeDeps("<!-- FIX_FAILED:other -->\n", {
-      before: "AAA",
+      preMerge: "AAA",
       after: "AAA",
       origin: "AAA",
     });
