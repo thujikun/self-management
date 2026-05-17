@@ -12,6 +12,9 @@
  *   pnpm tsx scripts/syndicate.cli.ts --target all                # zenn + devto 両方
  *   pnpm tsx scripts/syndicate.cli.ts --target zenn --publish     # Zenn repo に commit & push
  *   pnpm tsx scripts/syndicate.cli.ts --target devto --publish    # dev.to API PUT で更新
+ *   pnpm tsx scripts/syndicate.cli.ts --target zenn --include-drafts --slug _x --publish
+ *     # draft: true の post を含めて publish (Zenn / dev.to 側の frontmatter は
+ *     # `published: false` 評価され「下書き」状態で同期される)。連携経路テスト用
  *
  * env:
  *   DEV_TO_API_KEY              dev.to publish に必要 (`--target devto --publish`)
@@ -36,14 +39,15 @@ async function main(): Promise<void> {
   const slugIdx = args.indexOf("--slug");
   const slug = slugIdx >= 0 ? args[slugIdx + 1] : undefined;
   const publish = args.includes("--publish");
+  const includeDrafts = args.includes("--include-drafts");
   if (target !== "zenn" && target !== "devto" && target !== "all") {
     console.error(`unknown --target: ${target} (zenn | devto | all)`);
     process.exit(1);
   }
 
-  const posts = await readAllPosts();
+  const posts = await readAllPosts(undefined, { includeDrafts });
   console.log(
-    `loaded ${posts.length} posts (target=${target}${slug ? `, slug=${slug}` : ""}${publish ? ", publish" : ", dry-run"})`,
+    `loaded ${posts.length} posts (target=${target}${slug ? `, slug=${slug}` : ""}${publish ? ", publish" : ", dry-run"}${includeDrafts ? ", include-drafts" : ""})`,
   );
 
   if (target === "zenn" || target === "all") {

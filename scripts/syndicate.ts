@@ -74,9 +74,16 @@ export function parseFileName(name: string): { slug: string; lang: "ja" | "en" }
 }
 
 /**
- * `postsDir` 配下の `<slug>.<lang>.md` を全て parse する。`draft: true` は除外。
+ * `postsDir` 配下の `<slug>.<lang>.md` を全て parse する。`draft: true` は default で
+ * 除外するが、`includeDrafts: true` を指定すると drafts も含めて返す。draft 記事を
+ * Zenn / dev.to 側に「下書き状態」で同期して、連携 pipeline の挙動を本番記事に影響
+ * させずに検証する用途を想定 (`published: !meta.draft` が target frontmatter で評価
+ * され、`published: false` 扱いになる)。
  */
-export async function readAllPosts(postsDir: string = POSTS_DIR): Promise<ParsedPost[]> {
+export async function readAllPosts(
+  postsDir: string = POSTS_DIR,
+  options: { includeDrafts?: boolean } = {},
+): Promise<ParsedPost[]> {
   const files = await readdir(postsDir);
   const out: ParsedPost[] = [];
   for (const f of files) {
@@ -85,7 +92,7 @@ export async function readAllPosts(postsDir: string = POSTS_DIR): Promise<Parsed
     const raw = await readFile(resolve(postsDir, f), "utf8");
     const grayMatter = matter(raw);
     const meta = parseFrontmatter(grayMatter.data);
-    if (meta.draft) continue;
+    if (meta.draft && !options.includeDrafts) continue;
     out.push({ slug: parsed.slug, lang: parsed.lang, meta, body: grayMatter.content });
   }
   return out;
