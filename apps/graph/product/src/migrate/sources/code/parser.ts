@@ -1,18 +1,17 @@
 /**
  * `@graph-*` JSDoc tag parser (ts-morph + glob)。
  *
- * cortex の `apps/graph/product/src/parsers/jsdoc-parser.ts` を移植して、
  * self-management の monorepo 配下 `.ts/.tsx` から:
  *  - ファイル先頭 JSDoc の `@graph-stack` / `@graph-domain` / `@graph-business` / `@graph-connects`
  *  - top-level 宣言 (function / variable / class / interface / type-alias / enum /
  *    export-default / new 式の statement) の JSDoc 内同タグ
  * を抽出して `ParsedExport[]` を返す。
  *
- * v2 (cortex 同型): export-only 縛りは無し、private な const も @graph-* タグがあれば node 化。
+ * export-only 縛りは無し、private な const も @graph-* タグがあれば node 化。
  *
  * @graph-stack ryan-product-graph
  * @graph-domain graph
- * @graph-business cortex jsdoc-parser を移植したコード→グラフ変換の入口。ts-morph で AST 解析、@graph-* 含むファイルだけ chunk 単位でロードして OOM を回避
+ * @graph-business コード→グラフ変換の入口。ts-morph で AST 解析、@graph-* 含むファイルだけ chunk 単位でロードして OOM を回避
  * @graph-connects filesystem [reads_from] mono-repo 配下 .ts/.tsx を ts-morph で読み出し
  */
 
@@ -153,7 +152,7 @@ export function hasMeaningfulTags(tags: ParsedGraphTags): boolean {
 
 /**
  * ファイル先頭の JSDoc コメントから graph-* tag を抽出する (self-management 流の
- * file-level inheritance 用、cortex には無い独自処理)。
+ * file-level inheritance 用)。
  *
  * @graph-connects none
  */

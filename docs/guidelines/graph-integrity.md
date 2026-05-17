@@ -2,7 +2,7 @@
 
 ryan-product-graph は self-management のコア。コードの What だけでなく Why を構造化し、ryan-graph (BQ + embedding) による semantic search、影響範囲分析、横断的な活動 traverse を支える。**Product Graph の品質 = self-management の知識基盤の品質**。
 
-cortex の `docs/guidelines/graph-integrity.md` を、ESLint plugin ではなく `scripts/hooks/check-graph-tags.ts` ベースに置き換えて運用する。
+整合性は ESLint plugin ではなく `scripts/hooks/check-graph-tags.ts` ベースで強制する。
 
 ## `@graph-*` JSDoc タグ (必須)
 
@@ -48,7 +48,7 @@ const cache = new Map();
 
 ### 例外: type / interface / enum
 
-`type` / `interface` / `enum` 宣言は `@graph-connects` 不要 (cortex の `requireForTypes: false` と同じデフォルト)。実行時ロジックを持たないため。
+`type` / `interface` / `enum` 宣言は `@graph-connects` 不要 (デフォルト動作)。実行時ロジックを持たないため。
 
 ### 例外: `bin/` / `*.cli.ts` / `*.test.ts`
 
@@ -75,7 +75,7 @@ export const DOMAINS = new Set(["infra", "graph", "x-runtime", "content-pipeline
 
 ## エッジタイプ
 
-`@graph-connects` の `[edgeType]` には次のいずれかを使う (cortex と同じセット):
+`@graph-connects` の `[edgeType]` には次のいずれかを使う:
 
 | エッジタイプ | 意味 |
 |-------------|------|

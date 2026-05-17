@@ -2,7 +2,7 @@
  * personal-graph schema。
  *
  * Ryan の人格・content・思想・関係性 (X follow / reply / quote / DM 含む)。
- * node table は type ごとに分離 (cortex の 1-table-with-discriminator とは異なる選択、
+ * node table は type ごとに分離 (1-table-with-discriminator とは異なる選択、
  * type-specific column を REQUIRED にして schema 自己文書化)。
  * edges は polymorphic な 1 table、cross-graph (product / release) の参照も含めて全部ここに。
  *

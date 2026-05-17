@@ -25,14 +25,14 @@
 - **historical context は operations/log.md** に集約 (append-only)
 - **意思決定の why** は `decisions/<date>-<topic>.md` で残す (将来構造化予定)
 
-## cortex から借りているパターン
+## 基盤パターン
 
-このリポジトリは cortex の以下を縮小コピーしている:
+このリポジトリで採用している主な構造:
 
-| 概念 | cortex | self-management |
-|------|--------|-----------------|
-| Product Graph | code + DB + docs + infra を統合 | content + decisions + topics + relationships を統合 |
-| Multi-agent | ドメイン別エージェント | (将来) 投稿/engage/分析エージェント |
-| Context Caching | KPI チャットの月別 TTL | (将来) ナレッジ層の TTL 戦略 |
-| 「AIを信じない、仕組みで守る」 | quality gate (テスト/型/lint) | quality gate (post draft レビュー、voice 検出) |
-| 共通パターン展開 | 17 MCP servers | (将来) 個人エージェント群 |
+| 概念 | self-management での適用 |
+|------|--------------------------|
+| Product Graph | content + decisions + topics + relationships を統合 |
+| Multi-agent | (将来) 投稿/engage/分析エージェント |
+| Context Caching | (将来) ナレッジ層の TTL 戦略 |
+| 「AIを信じない、仕組みで守る」 | quality gate (post draft レビュー、voice 検出) |
+| 共通パターン展開 | (将来) 個人エージェント群 |

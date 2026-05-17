@@ -158,7 +158,7 @@ X アカウント運用の時系列ログ。新しいエントリは末尾に追
 ## 戦略 update (2026-05-04)
 - 投稿 cadence を週2本 (火・木 JST 20:00) に upgrade
 - thread を出さない平日は light daily action (likes 1-3 / inbound reply / 適切な outbound 1件 など)
-- 記事 backlog: 既存の dev.to 6本 + 今後も週1で増えていく予定 (cortex 進捗 + zenn 連動)
+- 記事 backlog: 既存の dev.to 6本 + 今後も週1で増えていく予定 (業務側 AI 基盤の進捗 + zenn 連動)
 - DB Graph を 2026-05-05 (火) JST 20:00 に投稿、Parking Pattern を 2026-05-07 (木) に押し出し
 - 全6記事を5月内に展開 + その後の新記事と絡めて継続
 
@@ -194,7 +194,7 @@ X アカウント運用の時系列ログ。新しいエントリは末尾に追
 
 ## 2026-05-04 23:50 JST - daily action: 2 件 like (low-friction signal)
 - @hwchase17 "open harnesses" post に like (id 2050470473310572849、102k followers、Composable Architecture と整合)
-- @curonianai "tool said yes, reality said no" post に like (id 2051181602667983200、関係性 signal、cortex 哲学と整合)
+- @curonianai "tool said yes, reality said no" post に like (id 2051181602667983200、関係性 signal、「AI を信じない、仕組みで守る」哲学と整合)
 - 当初 reply / quote tweet 案を draft したが Ryan 判断で却下: "そんな無理に反応するようなツイートでもない"。like で十分判定
 - @GeorgeBevis (OpalServe) は宣伝 post なので like も skip (Ryan ルール: 宣伝に like は不要)
 - 学び: substantive engagement は post 側の質に依存する。reply / quote は **本当に書きたくなる post** にだけ。like は low-friction な signal で関係性維持 OK。draft しても Ryan が却下する pattern が起きうるので、こちらから候補出す段階で「like で十分か reply 必要か」を先に判定すべき
@@ -230,7 +230,7 @@ X アカウント運用の時系列ログ。新しいエントリは末尾に追
 
 ## 残作業 (引き続き)
 - inbound 反応観察 (B/C への reply・like、3 名から follow-back、DB Graph thread 後追い反応)
-- 5/7 木 20:00 JST: Parking Pattern thread (cortex 設計思想の核、未公開記事ベースで draft 必要)
+- 5/7 木 20:00 JST: Parking Pattern thread (業務側 AI 基盤の設計思想の核、未公開記事ベースで draft 必要)
 - P2 markdown → BQ migration 着手 (apps/graph/product/src/migrate)
 
 ---

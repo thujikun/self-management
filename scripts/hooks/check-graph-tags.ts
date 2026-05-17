@@ -2,8 +2,7 @@
 /**
  * `@graph-*` JSDoc タグ整合性 guard の pure library。
  *
- * cortex の `@cortex/eslint-plugin-graph` (require-graph-business / require-graph-connects /
- * valid-graph-stack 等) を、self-management の規模に合わせて軽量な単一スクリプトで再実装。
+ * ESLint plugin の代わりに、self-management の規模に合わせた軽量な単一スクリプトで実装。
  *
  * 検証項目:
  * 1. 対象ファイル (apps/, packages/, infra/ 配下の .ts/.tsx) には **ファイル先頭 JSDoc** に
@@ -17,7 +16,7 @@
  *
  * @graph-stack core
  * @graph-domain infra
- * @graph-business cortex の eslint-plugin-graph を軽量再実装した pre-commit guard の純粋ライブラリ部。@graph-stack/@graph-domain/@graph-business をファイル先頭、@graph-connects を全トップレベル宣言に強制し、stack/domain 値の一覧との整合も検証する
+ * @graph-business `@graph-*` タグを単一スクリプトで強制する pre-commit guard の純粋ライブラリ部。@graph-stack/@graph-domain/@graph-business をファイル先頭、@graph-connects を全トップレベル宣言に強制し、stack/domain 値の一覧との整合も検証する
  * @graph-connects none
  */
 
@@ -46,7 +45,7 @@ export const DOMAINS = new Set([
 
 /**
  * 対象拡張子。.test.ts は除外。bin/ は CLI entry point として src/ 側のテスト済 lib を
- * thin wrap するだけなので tag 強制対象外 (cortex の `apps/cli/*` 例外と同精神)。
+ * thin wrap するだけなので tag 強制対象外。
  *
  * @graph-connects none
  */
@@ -134,7 +133,7 @@ export function checkDeclarationConnects(file: string, src: string, errors: File
     ) {
       continue;
     }
-    // type / interface / enum は @graph-connects 不要 (cortex の `requireForTypes` デフォルト false)
+    // type / interface / enum は @graph-connects 不要 (実行時ロジックを持たないため)
     if (/^export\s+(type|interface|enum)\s/.test(ln) || /^(type|interface|enum)\s/.test(ln))
       continue;
 
