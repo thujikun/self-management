@@ -39,8 +39,16 @@ markdown URL は prod でもそのまま動く。
 ## R2 への sync
 
 `scripts/sync-r2-images.cli.ts` が `content/images/` を R2 bucket と diff し、変更分のみ
-PUT する idempotent script。`_manifest.json` (key → sha256 hex) を bucket 上に保持し、
-それと local の sha256 を比較する。
+PUT する idempotent script。`_manifest.json` を bucket 上に保持する (schema v2:
+`{ v: 2, local: {key→sha256}, orphans: [key, ...] }`)。
+
+orphan (= local から消えたが R2 に残ったままの key) は manifest の `orphans` array に
+**累積**される。複数 sync を跨いでも観測情報が消えず、毎 deploy log で warn が出続けるので、
+人間が `wrangler r2 object delete` で物理削除 + manifest の該当 entry を手動で消すまで
+監視され続ける設計。
+
+`_manifest.json` 自体は Worker route で 404 になる (sentinel `_` prefix を `r2KeyFromPath`
+が弾く)。bucket 内部 metadata が public 配信に漏れない。
 
 CI deploy workflow (`.github/workflows/deploy-ryantsuji-dev.yml`) が **`wrangler deploy`
 の直前** に呼ぶ:

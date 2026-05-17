@@ -40,6 +40,9 @@ describe("imageKeyFromPath", () => {
     { path: "/images//etc/passwd", desc: "absolute path bypass attempt" },
     { path: "/images/../secrets", desc: "parent traversal" },
     { path: "/images/./foo", desc: "self segment" },
+    { path: "/images/_manifest.json", desc: "underscore sentinel (sync manifest)" },
+    { path: "/images/_drafts/foo.png", desc: "underscore prefix in nested dir" },
+    { path: "/images/.hidden.png", desc: "dotfile" },
     { path: "/foo/bar", desc: "non-images prefix" },
   ])("$path → null ($desc)", ({ path }) => {
     expect(imageKeyFromPath(path)).toBeNull();

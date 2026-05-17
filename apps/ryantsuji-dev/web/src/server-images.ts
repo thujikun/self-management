@@ -36,11 +36,22 @@ export function r2KeyFromPath(pathname: string): string | null {
   if (!pathname.startsWith(prefix)) return null;
   const key = pathname.slice(prefix.length);
   if (key.length === 0) return null;
-  // path traversal 防止: `..` segment / 絶対 path / `.` self segment を弾く。R2 自体
-  // は flat key store なので bypass にはならないが、`/images/../secrets` 等の意図
-  // しない解釈を排除し、dev 側 (local-images.ts) と key 規則を一致させる。
+  // path traversal 防止 + sentinel 露出防止:
+  // - `..` / `.` segment: 絶対 path や parent traversal を弾く (R2 は flat key だが
+  //   `/images/../secrets` 等の意図しない解釈を排除)
+  // - `/` 始まり: 絶対 path 形式の key は dev 側で `resolve(imagesDir, key)` を
+  //   override して dir 外に脱出するので弾く (dev/prod 規則を揃える)
+  // - `_` / `.` 始まり segment: bucket 内の sentinel object (`_manifest.json` 等) と
+  //   hidden file を配信から完全に隠す。`/images/_manifest.json` で sha256 manifest が
+  //   public に漏れるのを構造的に防ぐ
   if (key.startsWith("/")) return null;
-  if (key.split("/").some((seg) => seg === ".." || seg === ".")) return null;
+  if (
+    key
+      .split("/")
+      .some((seg) => seg === ".." || seg === "." || seg.startsWith("_") || seg.startsWith("."))
+  ) {
+    return null;
+  }
   return key;
 }
 
@@ -116,11 +127,10 @@ export async function serveImage(
   headers.set("Cache-Control", IMAGE_CACHE_CONTROL);
   // Content-Length は R2 object metadata に乗ってないことがあるので size で補う。
   headers.set("Content-Length", String(object.size));
-  // R2 が contentType を保存していない / metadata 欠落時は generic に倒す
-  // (sync 側で必ず put 時に content-type を渡す前提だが defensive に)。
+  // `writeHttpMetadata` が Content-Type を set しなかった = R2 object metadata 欠落
+  // (sync 側で必ず put 時に content-type を渡す前提だが defensive に generic で埋める)。
   if (!headers.has("Content-Type")) {
-    const fallback = object.httpMetadata?.contentType ?? "application/octet-stream";
-    headers.set("Content-Type", fallback);
+    headers.set("Content-Type", "application/octet-stream");
   }
 
   return new Response(request.method === "HEAD" ? null : object.body, {

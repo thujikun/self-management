@@ -19,12 +19,13 @@ import {
   diffManifests,
   fetchRemoteManifest,
   mimeFromExt,
+  normalizeManifest,
   putObject,
   r2ObjectUrl,
   runSync,
   walkFiles,
   type FetchLike,
-  type Manifest,
+  type ManifestV2,
 } from "./sync-r2-images.js";
 
 /**
@@ -133,34 +134,117 @@ describe("buildLocalManifest", () => {
   });
 });
 
+describe("normalizeManifest", () => {
+  it("v2 shape はそのまま", () => {
+    expect(normalizeManifest({ v: 2, local: { a: "x" }, orphans: ["old"] })).toStrictEqual({
+      v: 2,
+      local: { a: "x" },
+      orphans: ["old"],
+    });
+  });
+
+  it("v1 (flat Record) は local に展開 + orphans 空", () => {
+    expect(normalizeManifest({ a: "x", b: "y" })).toStrictEqual({
+      v: 2,
+      local: { a: "x", b: "y" },
+      orphans: [],
+    });
+  });
+
+  it("v2 で orphans が array 不在なら 空 array に正規化", () => {
+    expect(normalizeManifest({ v: 2, local: { a: "x" } })).toStrictEqual({
+      v: 2,
+      local: { a: "x" },
+      orphans: [],
+    });
+  });
+
+  it("orphans 内の非 string entry は除外", () => {
+    expect(normalizeManifest({ v: 2, local: {}, orphans: ["k1", 42, null, "k2"] })).toStrictEqual({
+      v: 2,
+      local: {},
+      orphans: ["k1", "k2"],
+    });
+  });
+
+  it("object でない値は throw", () => {
+    expect(() => normalizeManifest("oops")).toThrow(/not an object/);
+    expect(() => normalizeManifest([])).toThrow(/not an object/);
+    expect(() => normalizeManifest(null)).toThrow(/not an object/);
+  });
+});
+
 describe("diffManifests", () => {
   it("add / change / orphan を分類", () => {
-    const local: Manifest = { a: "AAA", b: "BBB-new", c: "CCC" };
-    const remote: Manifest = { b: "BBB-old", d: "DDD" };
+    const local = { a: "AAA", b: "BBB-new", c: "CCC" };
+    const remote: ManifestV2 = { v: 2, local: { b: "BBB-old", d: "DDD" }, orphans: [] };
     expect(diffManifests(local, remote)).toStrictEqual({
       toUpload: ["a", "b", "c"],
       orphans: ["d"],
     });
   });
 
-  it("完全一致は no-op", () => {
-    expect(diffManifests({ a: "X" }, { a: "X" })).toStrictEqual({ toUpload: [], orphans: [] });
+  it("完全一致 (local 同等) は toUpload 空 / orphans 空", () => {
+    const local = { a: "X" };
+    const remote: ManifestV2 = { v: 2, local: { a: "X" }, orphans: [] };
+    expect(diffManifests(local, remote)).toStrictEqual({ toUpload: [], orphans: [] });
+  });
+
+  it("過去 manifest の orphans は local 戻ってなければ持ち越す", () => {
+    const local = { a: "X" };
+    const remote: ManifestV2 = { v: 2, local: { a: "X" }, orphans: ["old/x.png"] };
+    expect(diffManifests(local, remote)).toStrictEqual({
+      toUpload: [],
+      orphans: ["old/x.png"],
+    });
+  });
+
+  it("過去 orphan が local に戻ったら drop", () => {
+    const local = { "x.png": "AAA" };
+    const remote: ManifestV2 = { v: 2, local: {}, orphans: ["x.png"] };
+    expect(diffManifests(local, remote)).toStrictEqual({
+      toUpload: ["x.png"],
+      orphans: [],
+    });
+  });
+
+  it("過去 orphan + 新規 orphan は union (sort + dedupe)", () => {
+    const local = {};
+    const remote: ManifestV2 = {
+      v: 2,
+      local: { "new/orphan.png": "Z" },
+      orphans: ["old/orphan.png", "new/orphan.png"],
+    };
+    expect(diffManifests(local, remote)).toStrictEqual({
+      toUpload: [],
+      orphans: ["new/orphan.png", "old/orphan.png"],
+    });
   });
 });
 
 describe("fetchRemoteManifest", () => {
-  it("200 で manifest JSON を返す", async () => {
+  it("200 (v1 flat) は v2 に正規化して返す", async () => {
     const { fn, requests } = fakeFetch([{ status: 200, bodyText: '{"a":"hash-a"}' }]);
     const m = await fetchRemoteManifest(fn, "acc", "buc", "tok");
-    expect(m).toStrictEqual({ a: "hash-a" });
+    expect(m).toStrictEqual({ v: 2, local: { a: "hash-a" }, orphans: [] });
     expect(requests[0]?.method).toBe("GET");
     expect(requests[0]?.auth).toBe("Bearer tok");
     expect(requests[0]?.url).toContain("_manifest.json");
   });
 
-  it("404 は空 manifest (初回 sync 想定)", async () => {
+  it("200 (v2) はそのまま", async () => {
+    const v2 = { v: 2, local: { a: "x" }, orphans: ["k"] };
+    const { fn } = fakeFetch([{ status: 200, bodyText: JSON.stringify(v2) }]);
+    expect(await fetchRemoteManifest(fn, "acc", "buc", "tok")).toStrictEqual(v2);
+  });
+
+  it("404 は空 v2 manifest (初回 sync 想定)", async () => {
     const { fn } = fakeFetch([{ status: 404, bodyText: "not found" }]);
-    expect(await fetchRemoteManifest(fn, "acc", "buc", "tok")).toStrictEqual({});
+    expect(await fetchRemoteManifest(fn, "acc", "buc", "tok")).toStrictEqual({
+      v: 2,
+      local: {},
+      orphans: [],
+    });
   });
 
   it.each([400, 500, 403])("%d は throw", async (status) => {
@@ -233,7 +317,8 @@ describe("runSync", () => {
 
   it("変更が無い場合は manifest 更新も skip", async () => {
     const localManifest = await buildLocalManifest(dir);
-    const { fn, requests } = fakeFetch([{ status: 200, bodyText: JSON.stringify(localManifest) }]);
+    const remoteV2: ManifestV2 = { v: 2, local: localManifest, orphans: [] };
+    const { fn, requests } = fakeFetch([{ status: 200, bodyText: JSON.stringify(remoteV2) }]);
     const result = await runSync({
       fetchFn: fn,
       readFile: async () => new Uint8Array(),
@@ -244,6 +329,7 @@ describe("runSync", () => {
       dryRun: false,
     });
     expect(result.uploaded).toStrictEqual([]);
+    expect(result.orphans).toStrictEqual([]);
     expect(requests).toHaveLength(1);
   });
 
@@ -262,9 +348,14 @@ describe("runSync", () => {
     expect(requests).toHaveLength(1);
   });
 
-  it("orphan を report する (manifest に残り local に無い key)", async () => {
-    const { fn } = fakeFetch([
-      { status: 200, bodyText: JSON.stringify({ "old/x.png": "deadbeef" }) },
+  it("orphan を新規観測した場合 manifest に永続化する", async () => {
+    const remote: ManifestV2 = {
+      v: 2,
+      local: { "old/x.png": "deadbeef" },
+      orphans: [],
+    };
+    const { fn, requests } = fakeFetch([
+      { status: 200, bodyText: JSON.stringify(remote) },
       { status: 200 }, // PUT a.png
       { status: 200 }, // PUT b.svg
       { status: 200 }, // PUT manifest
@@ -280,5 +371,67 @@ describe("runSync", () => {
       dryRun: false,
     });
     expect(result.orphans).toStrictEqual(["old/x.png"]);
+    // manifest PUT の body を verify
+    const manifestReq = requests.find(
+      (r) => r.url.includes("_manifest.json") && r.method === "PUT",
+    );
+    expect(manifestReq).toBeDefined();
+    const written = JSON.parse(
+      new TextDecoder().decode(manifestReq?.body as Uint8Array),
+    ) as ManifestV2;
+    expect(written.v).toBe(2);
+    expect(written.orphans).toStrictEqual(["old/x.png"]);
+  });
+
+  it("既知 orphan が persist (toUpload 0 でも manifest 更新済なら次回も orphans を返す)", async () => {
+    // 2 件の image が完全同期済 (toUpload 0) で、過去 orphan が remote に残っている
+    const localHashes = await buildLocalManifest(dir);
+    const remote: ManifestV2 = {
+      v: 2,
+      local: localHashes,
+      orphans: ["legacy/dead.png"],
+    };
+    const { fn, requests } = fakeFetch([{ status: 200, bodyText: JSON.stringify(remote) }]);
+    const result = await runSync({
+      fetchFn: fn,
+      readFile: async () => new Uint8Array(),
+      imagesDir: dir,
+      accountId: "acc",
+      bucket: "buc",
+      token: "tok",
+      dryRun: false,
+    });
+    // toUpload 0、orphans は前回観測分を持ち越し
+    expect(result.uploaded).toStrictEqual([]);
+    expect(result.orphans).toStrictEqual(["legacy/dead.png"]);
+    // remote と同 orphan list なので manifest 更新は skip (1 request のみ)
+    expect(requests).toHaveLength(1);
+  });
+
+  it("orphan list だけ変化した場合も manifest 更新する", async () => {
+    const localHashes = await buildLocalManifest(dir);
+    // remote.local が「過去にあったが今は消えた」 key を含む → newly observed orphan
+    const remote: ManifestV2 = {
+      v: 2,
+      local: { ...localHashes, "removed.png": "ZZZ" },
+      orphans: [],
+    };
+    const { fn, requests } = fakeFetch([
+      { status: 200, bodyText: JSON.stringify(remote) },
+      { status: 200 }, // PUT _manifest.json (orphan 観測 → 更新)
+    ]);
+    const result = await runSync({
+      fetchFn: fn,
+      readFile: async () => new Uint8Array(),
+      imagesDir: dir,
+      accountId: "acc",
+      bucket: "buc",
+      token: "tok",
+      dryRun: false,
+    });
+    expect(result.uploaded).toStrictEqual([]);
+    expect(result.orphans).toStrictEqual(["removed.png"]);
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.url).toContain("_manifest.json");
   });
 });

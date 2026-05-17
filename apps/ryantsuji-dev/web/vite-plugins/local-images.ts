@@ -43,7 +43,16 @@ export function imageKeyFromPath(pathname: string): string | null {
   // 絶対 path 形式の key (`/etc/passwd` 等) は `resolve(imagesDir, key)` を override
   // して dir 外に脱出するので弾く。
   if (key.startsWith("/")) return null;
-  if (key.split("/").some((seg) => seg === ".." || seg === ".")) return null;
+  // `..` / `.` segment + `_` / `.` 始まりの sentinel / hidden segment を reject。
+  // `_manifest.json` 等の sync 内部 metadata が dev でも 404 になるよう、prod
+  // (server-images.ts:r2KeyFromPath) と完全に同じ規則を踏む。
+  if (
+    key
+      .split("/")
+      .some((seg) => seg === ".." || seg === "." || seg.startsWith("_") || seg.startsWith("."))
+  ) {
+    return null;
+  }
   return key;
 }
 
@@ -189,8 +198,10 @@ export async function processImagesRequest(deps: {
 
 /**
  * `processImagesRequest` の I/O wrapper を closure として 1 つ作る。`pipeFile` は実
- * fs read stream を res に pipe する。Connect の req/res 型を ImagesMiddlewareReq/Res
- * に narrow するための structural cast を 1 か所に閉じる。
+ * fs read stream を渡された response に pipe する (closure ではなく注入された arg を
+ * 経由することで、test 側 fake res に差替えた時に意図通り fake へ pipe される)。
+ * Connect の req/res 型を ImagesMiddlewareReq/Res に narrow するための structural
+ * cast を 1 か所に閉じる。
  *
  * @graph-connects none
  */
@@ -206,8 +217,9 @@ export function makeImagesMiddleware(absDir: string): Connect.NextHandleFunction
       req: req as ImagesMiddlewareReq,
       res: res as unknown as ImagesMiddlewareRes,
       pipeFile: (filePath, response): void => {
-        createReadStream(filePath).pipe(res);
-        void response;
+        // response は ImagesMiddlewareRes (statusCode / setHeader / end のみ) だが、
+        // 実 runtime では Node.js ServerResponse なので Writable stream として pipe 可。
+        createReadStream(filePath).pipe(response as unknown as NodeJS.WritableStream);
       },
     });
   };

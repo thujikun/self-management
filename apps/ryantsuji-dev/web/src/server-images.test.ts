@@ -67,8 +67,13 @@ describe("r2KeyFromPath", () => {
     { path: "/", desc: "root" },
     { path: "/image/foo.png", desc: "singular images prefix" },
     { path: "/images/", desc: "empty key" },
+    { path: "/images//etc/passwd", desc: "absolute path bypass attempt" },
     { path: "/images/../secrets", desc: "parent traversal" },
     { path: "/images/./foo", desc: "self segment" },
+    { path: "/images/_manifest.json", desc: "underscore sentinel (sync manifest leak)" },
+    { path: "/images/_drafts/foo.png", desc: "underscore prefix in nested dir" },
+    { path: "/images/posts/_unpublished/foo.png", desc: "underscore segment mid-path" },
+    { path: "/images/.hidden.png", desc: "dotfile" },
     { path: "/posts/foo", desc: "non-images prefix" },
   ])("$path → null ($desc)", ({ path }) => {
     expect(r2KeyFromPath(path)).toBeNull();

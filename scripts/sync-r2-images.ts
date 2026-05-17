@@ -29,14 +29,60 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join, relative } from "node:path";
 
 /**
- * key → sha256 hex の manifest 形。bucket root の `_manifest.json` として保存される。
+ * Manifest v1: key → sha256 hex の Record。古い manifest を読む時の互換 shape。
  *
  * @graph-connects none
  */
-export type Manifest = Record<string, string>;
+export type ManifestV1 = Record<string, string>;
+
+/**
+ * Manifest v2: `local` (= 同期後あるべき key→hash) + `orphans` (= 過去 sync で観測
+ * したが local に存在しなくなった key の累積) を持つ。
+ *
+ * orphan を `local` から独立した array に持つことで、初回 sync で manifest を
+ * local-only に書き換えても次回 sync 以降も orphan が見えなくならない (= 観測可能性が
+ * 永続化される)。orphan の物理削除は人間が `wrangler r2 object delete` で行い、
+ * 同時に手動で `_manifest.json` から該当 entry を消す運用。
+ *
+ * @graph-connects none
+ */
+export interface ManifestV2 {
+  v: 2;
+  local: Record<string, string>;
+  orphans: string[];
+}
+
+/** @graph-connects none */
+export type Manifest = ManifestV1 | ManifestV2;
 
 /** @graph-connects none */
 export const MANIFEST_KEY = "_manifest.json";
+
+/**
+ * v1 (flat Record) / v2 (tagged object) どちらが来ても v2 shape に正規化する。`v` field
+ * が `2` ならそのまま、それ以外は v1 として扱う (= 全 entry を `local` に詰めて
+ * `orphans` を空 array に)。
+ *
+ * @graph-connects none
+ */
+export function normalizeManifest(parsed: unknown): ManifestV2 {
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("manifest is not an object");
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (obj.v === 2 && typeof obj.local === "object" && obj.local !== null) {
+    const orphans = Array.isArray(obj.orphans)
+      ? (obj.orphans.filter((v) => typeof v === "string") as string[])
+      : [];
+    return { v: 2, local: obj.local as Record<string, string>, orphans };
+  }
+  // v1 互換: flat Record として local に展開
+  const local: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v === "string") local[k] = v;
+  }
+  return { v: 2, local, orphans: [] };
+}
 
 /**
  * 拡張子 → Content-Type mapping。R2 put 時に metadata として保存する。Worker route
@@ -99,13 +145,13 @@ export async function fileSha256(absPath: string): Promise<string> {
 }
 
 /**
- * local content/images から manifest を組む。walk + sha256 を pipeline 化。
+ * local content/images から flat `{ key → sha256 }` を組む。walk + sha256 を pipeline 化。
  *
  * @graph-connects none
  */
-export async function buildLocalManifest(root: string): Promise<Manifest> {
+export async function buildLocalManifest(root: string): Promise<Record<string, string>> {
   const keys = await walkFiles(root);
-  const out: Manifest = {};
+  const out: Record<string, string> = {};
   for (const key of keys) {
     out[key] = await fileSha256(join(root, key));
   }
@@ -113,30 +159,41 @@ export async function buildLocalManifest(root: string): Promise<Manifest> {
 }
 
 /**
- * remote manifest と local manifest を diff し、PUT すべき key 集合を返す。
+ * remote manifest と local manifest を diff し、PUT すべき key 集合と「観測可能な
+ * orphans の最新 union」を返す。
  *
- * - local に存在 + remote に無い → add
- * - local に存在 + remote と hash 違う → change
- * - local に無い + remote に存在 → delete *対象ではあるが本 sync では物理削除しない*
+ * - local に存在 + remote.local に無い → add
+ * - local に存在 + remote.local と hash 違う → change
+ * - local に無い + remote.local に存在 → newly observed orphan
+ * - remote.orphans に既に居て、まだ local 戻ってない → persistent orphan
  *
- * 戻り値の `toUpload` は add + change の union。`orphans` は monitor 用 (CLI 側で
- * 警告 log する)。
+ * 戻り値の `orphans` は newly + persistent の union (両方とも local 戻ったら drop)。
+ * これを次回 manifest として書き戻すことで、複数 sync 跨いでも orphan が忘れ去られ
+ * ない (= 削除作業が完了するまで毎 sync で warn される)。
  *
  * @graph-connects none
  */
 export function diffManifests(
-  local: Manifest,
-  remote: Manifest,
+  local: Record<string, string>,
+  remote: ManifestV2,
 ): { toUpload: string[]; orphans: string[] } {
   const toUpload: string[] = [];
   for (const [key, hash] of Object.entries(local)) {
-    if (remote[key] !== hash) toUpload.push(key);
+    if (remote.local[key] !== hash) toUpload.push(key);
   }
-  const orphans: string[] = [];
-  for (const key of Object.keys(remote)) {
-    if (!(key in local)) orphans.push(key);
+  const orphanSet = new Set<string>();
+  // 過去 manifest に既に居る orphan: local に戻ってきていなければ持ち越す
+  for (const key of remote.orphans) {
+    if (!(key in local)) orphanSet.add(key);
   }
-  return { toUpload: toUpload.sort(), orphans: orphans.sort() };
+  // 新規 orphan: 前回 remote.local に居たが今回 local に居ない
+  for (const key of Object.keys(remote.local)) {
+    if (!(key in local)) orphanSet.add(key);
+  }
+  return {
+    toUpload: toUpload.sort(),
+    orphans: [...orphanSet].sort(),
+  };
 }
 
 /**
@@ -168,22 +225,19 @@ export async function fetchRemoteManifest(
   accountId: string,
   bucket: string,
   token: string,
-): Promise<Manifest> {
+): Promise<ManifestV2> {
   const res = await fetchFn(r2ObjectUrl(accountId, bucket, MANIFEST_KEY), {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (res.status === 404) return {};
+  if (res.status === 404) return { v: 2, local: {}, orphans: [] };
   if (res.status < 200 || res.status >= 300) {
     throw new Error(`manifest fetch failed: ${res.status} ${await res.text()}`);
   }
   const buf = await res.arrayBuffer();
   const text = new TextDecoder().decode(new Uint8Array(buf));
   const parsed: unknown = JSON.parse(text);
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    throw new Error("manifest is not an object");
-  }
-  return parsed as Manifest;
+  return normalizeManifest(parsed);
 }
 
 /**
@@ -252,10 +306,15 @@ export async function runSync(deps: {
     );
   }
 
-  // manifest は変更が 1 件でも発生した場合だけ更新 (= 完全 no-op の時は PUT を
-  // skip して無駄な request を減らす)。
-  if (toUpload.length > 0) {
-    const manifestBody = new TextEncoder().encode(JSON.stringify(local, null, 2));
+  // 状態に変化があった (= toUpload 1 件以上 / orphan list 変化) 場合のみ manifest 更新。
+  // orphan の追加・解消も manifest 書き戻し対象に含めることで、bucket 上の orphan
+  // 観測結果が永続化される (次回 sync でも `orphans` が見える)。
+  const remoteOrphanSet = new Set(remote.orphans);
+  const orphansChanged =
+    orphans.length !== remote.orphans.length || orphans.some((o) => !remoteOrphanSet.has(o));
+  if (toUpload.length > 0 || orphansChanged) {
+    const next: ManifestV2 = { v: 2, local, orphans };
+    const manifestBody = new TextEncoder().encode(JSON.stringify(next, null, 2));
     await putObject(
       deps.fetchFn,
       deps.accountId,
