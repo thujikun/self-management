@@ -2,9 +2,12 @@
  * claude.ts の pure parser / builder の test。spawn 部分は mock せず別建ての integration 領域。
  */
 
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import { buildBotCommentBody, parseReviewOutput } from "./claude.js";
+import { SHARED_TURBO_CACHE_DIR, buildBotCommentBody, parseReviewOutput } from "./claude.js";
 
 describe("parseReviewOutput", () => {
   it("REQUEST_CHANGES の通常レビューを抽出", () => {
@@ -80,6 +83,14 @@ describe("buildBotCommentBody", () => {
         "<!-- AUTO_REVIEW_BODY_END -->",
         "<!-- VERDICT:APPROVE -->",
       ].join("\n"),
+    );
+  });
+});
+
+describe("SHARED_TURBO_CACHE_DIR", () => {
+  it("HOME 配下の self-management-auto-review/turbo-cache を指す", () => {
+    expect(SHARED_TURBO_CACHE_DIR).toStrictEqual(
+      join(homedir(), ".cache", "self-management-auto-review", "turbo-cache"),
     );
   });
 });
