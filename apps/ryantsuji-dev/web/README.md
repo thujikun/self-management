@@ -98,10 +98,25 @@ pnpm deploy:dry
    pnpm exec wrangler secret put X_OAUTH2_CLIENT_SECRET
    pnpm exec wrangler secret put GOOGLE_CLIENT_ID
    pnpm exec wrangler secret put GOOGLE_CLIENT_SECRET
+   pnpm exec wrangler secret put OTLP_ENDPOINT             # Grafana Cloud OTLP HTTP endpoint
+   pnpm exec wrangler secret put OTLP_AUTH_HEADER          # "Basic <base64(instance:token)>"
    ```
 
    secret 値は **`gcloud secrets versions access`** で個人 GCP project の secret container
    から取り出して貼る (`docs/guidelines/secrets.md` 参照、SSoT は GCP Secret Manager)。
+
+   `OTLP_ENDPOINT` / `OTLP_AUTH_HEADER` の SSoT は GCP Secret Manager の
+   `grafana-otlp-write-token` (auth header) + Grafana Cloud の OTLP HTTP endpoint URL。
+   **未投入のまま deploy しても fail-open** で、`server.ts` の OTel 計装が no-op に
+   退化するだけで request 自体は通る (preview / 初回 stage 用)。
+
+   なお **`VITE_FARO_COLLECTOR_URL` は wrangler secret ではなく build 時に CI 経由で
+   inject される** (`.github/workflows/deploy-ryantsuji-dev.yml:115-123` で
+   `gcloud secrets versions access --secret=grafana-faro-collector-url` を実行し、
+   `vite build` の env に渡す)。手動 build 時は environment variable で同等に
+   `VITE_FARO_COLLECTOR_URL=https://faro-collector-prod-xx.grafana.net/collect`
+   を export してから `pnpm build` する。空のままなら client 側の Faro init が
+   no-op になり RUM event は送られない (fail-open)。
 
 3. **dry-run でビルド成功 + binding を確認**
 
@@ -216,6 +231,28 @@ const client = hc<ApiType>("/");
 const res = await client.api.health.$get();
 const data = await res.json();
 ```
+
+## 可観測性 (observability)
+
+server / client の両 layer から Grafana Cloud に観測 signal を流す:
+
+- **server (Cloudflare Workers)**: `@microlabs/otel-cf-workers` の `instrument()` で
+  `src/server.ts` の Worker entry を wrap。`fetch` span に加えて outbound fetch も
+  span 化し、OTLP HTTP で `OTLP_ENDPOINT` (Tempo) に送る。auth は `OTLP_AUTH_HEADER`
+  をそのまま header に流す。両 secret が未投入なら **計装そのものを skip** (fail-open)。
+- **client (RUM)**: `src/lib/faro-client.ts` の `initFaro` が `@grafana/faro-web-sdk` を
+  lazy import で初期化し、page load timing / web-vital / unhandled error / fetch tracing
+  を Faro collector に送る。`__root.tsx` の `useEffect` から 1 回だけ起動。
+  `VITE_FARO_COLLECTOR_URL` が空なら dynamic import 自体を skip して bundle 解析対象
+  からも外れる (fail-open + bundle size 影響なし)。
+
+「Tempo / Faro にデータが来ない」場合の debug 起点:
+
+1. Worker secrets に `OTLP_ENDPOINT` / `OTLP_AUTH_HEADER` が入っているか
+   (`pnpm exec wrangler secret list`)
+2. 直近 deploy 時の `VITE_FARO_COLLECTOR_URL` が build 時に注入されたか
+   (Actions log の "Fetch VITE_FARO_COLLECTOR_URL from Secret Manager" step)
+3. browser devtools network panel で `faro-collector*` への beacon が出ているか
 
 ## 注意点
 
