@@ -140,7 +140,7 @@ function AboutPage() {
             </a>
           </li>
           <li>
-            <a href="https://www.linkedin.com/in/ryan-tsuji/" rel="noopener noreferrer">
+            <a href="https://www.linkedin.com/in/ryosuketsuji/" rel="noopener noreferrer">
               LinkedIn
             </a>
           </li>
