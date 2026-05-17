@@ -38,6 +38,8 @@ pulumi up
 - `graphServiceAccountKey` (secret): `apps/graph/` がローカル開発で使う JSON key
 - `pulumiCiServiceAccountEmail`: GitHub Actions Pulumi runner SA のメールアドレス (`google-github-actions/auth@v2` の `service_account` に指定)
 - `githubWifProviderResource`: WIF provider のリソース名 (`google-github-actions/auth@v2` の `workload_identity_provider` に指定)
+- `webEventsTableId`: `ryan.web_events` table ID (consumer は PR-B / PR-C — Worker `/api/track` + BQ writer)
+- `grafanaFaroCollectorUrlSecretId`: Grafana Faro collector URL secret container の ID (consumer は PR-B — ryantsuji.dev web の Faro init を build-time inline で起動)
 
 これらを `apps/graph/product/scripts/init-bq.ts` 等が参照する。`pulumiCiServiceAccountEmail` / `githubWifProviderResource` は GitHub Actions workflow の `google-github-actions/auth@v2` ステップで参照する。
 

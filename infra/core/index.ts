@@ -17,6 +17,8 @@ import * as gcp from "@pulumi/gcp";
 import * as grafana from "@pulumiverse/grafana";
 import * as pulumi from "@pulumi/pulumi";
 
+import { provisionGrafanaFaro } from "./grafana-faro";
+
 /** @graph-connects none */
 const gcpConfig = new pulumi.Config("gcp");
 /** @graph-connects none */
@@ -803,3 +805,120 @@ export const grafanaStackId = grafanaStack.id;
 
 /** @graph-connects none */
 export const grafanaOtlpTokenSecretId = otlpTokenSecret.id;
+
+/**
+ * `ryan.web_events` table — ryantsuji.dev の client-side beacon を流す analytics 表。
+ *
+ * page view / engagement event を Worker `/api/track` 経由で本 table に streaming
+ * insert する。GA / Plausible 等の第三者 tracker は不採用 (privacy policy 整合性 +
+ * 自前 SQL での join 自由度のため)。
+ *
+ * 設計:
+ * - `slug` / `lang` / `event_type` は post / event の axis
+ * - `session_id` は client 生成 UUID v4 (localStorage、IP 非保存で cookie banner 不要)
+ * - `referrer` / `utm_*` は流入分析、`viewport_w` / `locale` は端末分析
+ * - `ts` は client 側 ISO 8601、`ingested_at` を BQ default で書いて lag 追跡
+ * - partition は `ingested_at` (server-time、`CURRENT_TIMESTAMP` default) で daily。
+ *   client 側の `ts` を partition field にすると、時計ずれや悪意ある client の skew
+ *   (`ts=2099-...` 等) で遥か未来 / 過去の partition が作られ partition pruning が
+ *   崩れる / storage cost が膨らむため不採用。analytics は `ts` 普通の column として
+ *   read (`SELECT ... FROM ryan.web_events WHERE DATE(ingested_at) = ...`)。
+ *
+ * @graph-stack ryantsuji-dev
+ * @graph-domain publishing
+ * @graph-connects bigquery [writes_to] web_events table を作成、graph-app SA が streaming insert する
+ */
+const webEventsTable = new gcp.bigquery.Table(
+  "web-events",
+  {
+    datasetId: ryanDataset.datasetId,
+    tableId: "web_events",
+    deletionProtection: false,
+    description:
+      "ryantsuji.dev client-side beacon events (page view / engagement)。" +
+      "Worker /api/track が streaming insert で append。第三者 tracker 不採用。",
+    // partition は server-time の ingested_at で daily。client 側 ts を field にすると
+    // 時計 skew で partition pruning が崩れるため。
+    timePartitioning: { type: "DAY", field: "ingested_at" },
+    clusterings: ["event_type", "slug"],
+    schema: pulumi.jsonStringify([
+      {
+        name: "ts",
+        type: "TIMESTAMP",
+        mode: "REQUIRED",
+        description: "client 側 event 時刻 (ISO 8601)",
+      },
+      {
+        name: "ingested_at",
+        type: "TIMESTAMP",
+        mode: "REQUIRED",
+        defaultValueExpression: "CURRENT_TIMESTAMP",
+        description: "BQ insert 時刻 (lag = ingested_at - ts)",
+      },
+      {
+        name: "event_type",
+        type: "STRING",
+        mode: "REQUIRED",
+        description: "page_view / engagement 等",
+      },
+      { name: "slug", type: "STRING", mode: "NULLABLE" },
+      { name: "lang", type: "STRING", mode: "NULLABLE" },
+      {
+        name: "path",
+        type: "STRING",
+        mode: "NULLABLE",
+        description: "URL pathname (slug 以外も含む)",
+      },
+      { name: "referrer", type: "STRING", mode: "NULLABLE" },
+      { name: "utm_source", type: "STRING", mode: "NULLABLE" },
+      { name: "utm_medium", type: "STRING", mode: "NULLABLE" },
+      { name: "utm_campaign", type: "STRING", mode: "NULLABLE" },
+      { name: "viewport_w", type: "INT64", mode: "NULLABLE" },
+      { name: "viewport_h", type: "INT64", mode: "NULLABLE" },
+      { name: "locale", type: "STRING", mode: "NULLABLE", description: "navigator.language" },
+      {
+        name: "session_id",
+        type: "STRING",
+        mode: "NULLABLE",
+        description: "client 生成 UUID v4 (localStorage、cookie 不使用)",
+      },
+      {
+        name: "user_agent",
+        type: "STRING",
+        mode: "NULLABLE",
+        description: "raw UA (PII 含まないので保存)",
+      },
+    ]),
+  },
+  { dependsOn: [bigqueryApi] },
+);
+
+/** @graph-connects none */
+export const webEventsTableId = webEventsTable.tableId;
+
+/**
+ * Grafana Cloud Frontend Observability (Faro) を end-to-end Pulumi で provision。
+ * Stack SA + 2nd provider + Faro App + SecretVersion を `grafana-faro.ts` に分離した
+ * のは行数 cap 維持目的のみ。collector URL は本 pipeline 内で Faro App output から
+ * SecretVersion に書き込まれるため、UI 操作 / `gcloud secrets versions add` は不要。
+ *
+ * 消費経路: ryantsuji.dev web の deploy workflow が `gcloud secrets versions access
+ * grafana-faro-collector-url` で取り出し、`VITE_FARO_COLLECTOR_URL` build env として
+ * vite に渡す → client bundle に inline → `__root.tsx` の Faro init で参照。
+ *
+ * @graph-connects grafana-cloud [embeds] provisionGrafanaFaro で Stack SA + Faro App を作成
+ * @graph-connects secret-manager [embeds] provisionGrafanaFaro で collector URL SecretVersion を発行
+ */
+const grafanaFaro = provisionGrafanaFaro({
+  cloudProvider: grafanaProvider,
+  stackSlug: grafanaStackSlug,
+  stackUrl: grafanaStack.url,
+  stackId: grafanaStack.id,
+  graphSaEmail: graphSa.email,
+  secretmanagerApi: apiServices["secretmanager"]!,
+});
+
+/** @graph-connects none */
+export const grafanaFaroCollectorUrlSecretId = grafanaFaro.collectorUrlSecretId;
+/** @graph-connects none */
+export const grafanaFaroCollectorEndpoint = pulumi.secret(grafanaFaro.collectorEndpoint);
