@@ -6,8 +6,10 @@
     <string>com.user.xmcp-jp</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/zsh</string>
-        <string>-i</string>
+        <string>/opt/homebrew/bin/direnv</string>
+        <string>exec</string>
+        <string>/Users/ryan/Workspace/self-management</string>
+        <string>/bin/bash</string>
         <string>-c</string>
         <string>cd /Users/ryan/Workspace/self-management/apps/xmcp &amp;&amp; source .venv/bin/activate &amp;&amp; X_ACCOUNT=ryanaircloset MCP_PORT=8766 exec python server.py</string>
     </array>
