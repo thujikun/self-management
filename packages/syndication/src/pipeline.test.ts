@@ -36,6 +36,7 @@ describe("syndicateForZenn", () => {
       body: "前回の [Other](/posts/other-post) を参照。\n",
       resolver,
       canonicalHost: "https://ryantsuji.dev",
+      enUrl: null,
       footerMarkdown: "---\n採用中。",
       emoji: "📊",
       publicationName: "aircloset",
@@ -58,6 +59,7 @@ describe("syndicateForZenn", () => {
       body: "本文。",
       resolver,
       canonicalHost: "https://ryantsuji.dev",
+      enUrl: null,
       footerMarkdown: null,
     });
     expect(out).not.toContain("採用中");
@@ -70,6 +72,7 @@ describe("syndicateForZenn", () => {
       body: "x",
       resolver,
       canonicalHost: "https://ryantsuji.dev",
+      enUrl: null,
       footerMarkdown: null,
       publicationName: null,
     });
@@ -82,10 +85,43 @@ describe("syndicateForZenn", () => {
       body: "![alt](/images/posts/db-graph-mcp/a.png)\n",
       resolver,
       canonicalHost: "https://ryantsuji.dev",
+      enUrl: null,
       footerMarkdown: null,
     });
     expect(out).toContain("![alt](https://ryantsuji.dev/images/posts/db-graph-mcp/a.png)");
     expect(out).not.toMatch(/\]\(\/images\//);
+  });
+
+  it("enUrl が指定された場合 :::message header を body 冒頭に prepend する", () => {
+    const out = syndicateForZenn({
+      meta,
+      body: "みなさまこんにちは！\n\n本文。",
+      resolver,
+      canonicalHost: "https://ryantsuji.dev",
+      enUrl: "https://ryantsuji.dev/posts/db-graph?lang=en",
+      footerMarkdown: null,
+    });
+    // header が frontmatter の直後、本文より前に出る
+    const bodyStart = out.indexOf(":::message");
+    const greetingPos = out.indexOf("みなさまこんにちは");
+    expect(bodyStart).toBeGreaterThan(0);
+    expect(greetingPos).toBeGreaterThan(bodyStart);
+    expect(out).toContain(
+      "[English Version is here](https://ryantsuji.dev/posts/db-graph?lang=en)",
+    );
+  });
+
+  it("enUrl=null では :::message header を inject しない", () => {
+    const out = syndicateForZenn({
+      meta,
+      body: "本文。",
+      resolver,
+      canonicalHost: "https://ryantsuji.dev",
+      enUrl: null,
+      footerMarkdown: null,
+    });
+    expect(out).not.toContain(":::message");
+    expect(out).not.toContain("English Version is here");
   });
 });
 
