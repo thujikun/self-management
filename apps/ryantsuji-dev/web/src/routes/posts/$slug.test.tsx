@@ -29,6 +29,7 @@ import * as authClient from "../../lib/auth-client.js";
 
 import {
   EngagementSection,
+  PostShareRail,
   buildPostMeta,
   dispatchCommentSubmit,
   dispatchLikeClick,
@@ -221,7 +222,7 @@ describe("/posts/$slug — engagement (SSR、未認証)", () => {
     expect(html).toMatch(/post-share-pane/);
   });
 
-  it("未認証で like button が sign-in CTA fallback + comment 投稿 CTA も出る", async () => {
+  it("未認証で like button が sign-in CTA fallback + comment textarea + sign-in submit ボタンも出る", async () => {
     mockLoadEngagement.mockResolvedValue({
       viewCount: "0",
       likes: { count: 7, liked: false },
@@ -230,7 +231,10 @@ describe("/posts/$slug — engagement (SSR、未認証)", () => {
     const html = await ssrAt("/posts/_minimal-fixture");
     // PostSharePane の like button は未認証時 sign-in に置換される (Link)
     expect(html).toMatch(/post-share-pane__btn--signin/);
-    expect(html).toMatch(/sign in to like \/ comment/);
+    // textarea は常時出す (未認証でも書ける、投稿時に sign-in 求める)
+    expect(html).toMatch(/<textarea[^>]*id="comment-body"/);
+    expect(html).toMatch(/sign in to post/);
+    expect(html).toMatch(/comments__submit--signin/);
   });
 
   it("既存 comments を新着順で render (mock 順序通り)", async () => {
@@ -265,15 +269,17 @@ describe("/posts/$slug — engagement (SSR、未認証)", () => {
     expect(html.indexOf("Alice")).toBeLessThan(html.indexOf("Bob"));
   });
 
-  it("comments 0 件 → 空 placeholder を出し、form は出さない (未認証なので)", async () => {
+  it("comments 0 件 → 空 placeholder + form は未認証でも常時出す", async () => {
     mockLoadEngagement.mockResolvedValue({
       viewCount: "0",
       likes: { count: 0, liked: false },
       comments: [],
     });
     const html = await ssrAt("/posts/_minimal-fixture");
-    expect(html).toMatch(/まだコメントはありません/);
-    expect(html).not.toMatch(/<form class="comments__form"/);
+    // default lang は en なので英語 placeholder
+    expect(html).toMatch(/no comments yet/);
+    // form は未認証でも textarea を出すため常時表示
+    expect(html).toMatch(/<form class="comments__form"/);
   });
 });
 
@@ -683,10 +689,18 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
   });
 
   /**
-   * `EngagementSection` を実 DOM に mount し、Promise queue を flush するための helper。
-   * client-only test なので Link は使わない branch (= 認証済み) を踏む。
+   * `PostShareRail` + `EngagementSection` を実 DOM に mount し、Promise queue を
+   * flush するための helper。両 component が share/like + comments の DOM を同時
+   * 提供することで、share pane を `.post-detail` 直下に lift した後でも既存 test
+   * 群が「like ボタンも comment form も同 container 内に存在する」前提で網羅できる。
    */
-  async function mount(props: Parameters<typeof EngagementSection>[0]): Promise<{
+  async function mount(props: {
+    slug: string;
+    title: string;
+    lang: Parameters<typeof EngagementSection>[0]["lang"];
+    initialLikes: { count: number; liked: boolean };
+    initialComments: Parameters<typeof EngagementSection>[0]["initialComments"];
+  }): Promise<{
     root: ReturnType<typeof import("react-dom/client").createRoot>;
     container: HTMLElement;
   }> {
@@ -696,7 +710,23 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
     document.body.appendChild(container);
     const root = createRoot(container);
     await act(async () => {
-      root.render(createElement(EngagementSection, props));
+      root.render(
+        createElement(
+          "div",
+          null,
+          createElement(PostShareRail, {
+            slug: props.slug,
+            title: props.title,
+            lang: props.lang,
+            initialLikes: props.initialLikes,
+          }),
+          createElement(EngagementSection, {
+            slug: props.slug,
+            lang: props.lang,
+            initialComments: props.initialComments,
+          }),
+        ),
+      );
     });
     return { root, container };
   }
@@ -977,7 +1007,13 @@ describe("EngagementSection — render branches", () => {
   });
 
   function renderEngagement(
-    props: Parameters<typeof EngagementSection>[0],
+    props: {
+      slug: string;
+      title: string;
+      lang: Parameters<typeof EngagementSection>[0]["lang"];
+      initialLikes: { count: number; liked: boolean };
+      initialComments: Parameters<typeof EngagementSection>[0]["initialComments"];
+    },
     session: { user: { id: string; email: string; name: string; image: string | null } } | null,
   ): string {
     useSessionSpy.mockReturnValue({
@@ -986,10 +1022,26 @@ describe("EngagementSection — render branches", () => {
       error: null,
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof authClient.useSession>);
-    // Link は router context が無いと throw するので、route render 上での integration は SSR
-    // テストに任せ、ここでは createElement で直接 render することで Link を使う branch を踏む。
-    // 未認証 branch のみ Link を render するので、認証済み branch のみここで踏む。
-    return renderToString(createElement(EngagementSection, props));
+    // PostShareRail と EngagementSection を 1 つの fragment にまとめて SSR する。
+    // share pane を `.post-detail` 直下に lift した後でも、既存 test 群は like / comment
+    // の DOM を同一 HTML 内で expect できる構造を保つ。
+    return renderToString(
+      createElement(
+        "div",
+        null,
+        createElement(PostShareRail, {
+          slug: props.slug,
+          title: props.title,
+          lang: props.lang,
+          initialLikes: props.initialLikes,
+        }),
+        createElement(EngagementSection, {
+          slug: props.slug,
+          lang: props.lang,
+          initialComments: props.initialComments,
+        }),
+      ),
+    );
   }
 
   it("認証済み + comments 0 件 → form + empty placeholder + sign-in CTA は出ない", () => {
@@ -1006,7 +1058,7 @@ describe("EngagementSection — render branches", () => {
       },
     );
     expect(html).toMatch(/<form class="comments__form"/);
-    expect(html).toMatch(/まだコメントはありません/);
+    expect(html).toMatch(/no comments yet/);
     expect(html).not.toMatch(/sign in to like/);
     // 認証済みなので like button は disabled でない (PostSharePane の like button)
     expect(html).not.toMatch(/<button[^>]*post-share-pane__btn--like[^>]*disabled/);
