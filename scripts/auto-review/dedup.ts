@@ -1,7 +1,7 @@
 /**
  * レビュー本文の正規化 + SHA-256 hash。NO_OP 判定で「前回投稿と本質的に同じか」を比較する。
  *
- * cortex の `scripts/auto-review/review-dedup.mjs` 同型ロジック:
+ * 正規化ロジック:
  *   - VERDICT / BODY START/END マーカー除去
  *   - イテレーション表記 (「N 回目」「Round N」「第 N 回」「Iteration N」「イテレーション N」) 除去
  *   - 6 桁以上の連続数字を `<ID>` に

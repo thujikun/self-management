@@ -1,6 +1,6 @@
 # テスト品質
 
-cortex の `docs/guidelines/testing.md` を、self-management の vitest 構成 (90% per-file threshold + ts-morph cold-start に備えた `testTimeout: 15000`) に合わせて適用する。
+self-management の vitest 構成 (90% per-file threshold + ts-morph cold-start に備えた `testTimeout: 15000`) を前提とするテスト品質ルール。
 
 ## 基本原則
 

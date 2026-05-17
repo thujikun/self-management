@@ -2,7 +2,7 @@
 
 self-management の polling 型 PR 自動レビュー bot。`pnpm auto-review` で常駐起動し、`thujikun/self-management` の open PR を 60 秒ごとに走査して、新しい head_sha と新しい REQUEST_CHANGES marker comment を見つけたら Claude Code CLI で対応する。
 
-cortex の `scripts/auto-review/` (webhook 駆動の本格 bot) を **polling 型 + 個人 1 人運用前提**に縮小コピーした構成。
+**polling 型 + 個人 1 人運用前提** の構成 (webhook トンネルを建てない簡素版)。
 
 ## モード
 
@@ -175,7 +175,7 @@ bot は worktree cwd で `claude -p ... --dangerously-skip-permissions` を spaw
 - 信頼できない PR (例: fork からの contribution) には適用しない (将来 fork に拡張する場合は worktree を別 user / sandbox 化する必要あり)
 - `~/.claude/`, `~/.gitconfig`, `~/.ssh/` 等の sensitive ファイルが Claude session の context に含まれる前提で運用すること
 
-cortex の auto-review も同 pattern (個人運用 + `--dangerously-skip-permissions`)。
+同パターンは個人運用 + `--dangerously-skip-permissions` 前提の auto-review bot で広く採られている。
 
 ## トラブルシュート
 
@@ -192,4 +192,3 @@ cortex の auto-review も同 pattern (個人運用 + `--dangerously-skip-permis
 ## 関連
 
 - [docs/review-guidelines.md](../../docs/review-guidelines.md) — レビュー判定基準
-- [cortex/scripts/auto-review/](https://github.com/) — 元の cortex 実装 (webhook 駆動の本格版)

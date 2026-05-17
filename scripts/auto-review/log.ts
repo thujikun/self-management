@@ -3,8 +3,7 @@
  *
  * - bot 起動時間からの経過秒も併記し、長時間かかる job (claude -p / graph:build) の
  *   どこで時間が消費されたか視覚的に追えるようにする
- * - cortex の auto-review が console.log の prefix で同型のロギングをしているのに合わせ、
- *   解析・grep しやすい固定フォーマットを保つ
+ * - prefix を固定したフォーマットで揃え、解析・grep しやすい構造を保つ
  *
  * scope 命名規則:
  *   "[poll]"           — tick lifecycle

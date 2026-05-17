@@ -1,6 +1,6 @@
 # セキュリティ
 
-cortex の `docs/guidelines/security.md` を、self-management の secret 管理 (Pulumi config / Secret Manager / `.envrc` / `.config/gcp-sa.json`) と CF / Neon / Upstash 連携を前提に書き換える。
+self-management の secret 管理 (Pulumi config / Secret Manager / `.envrc` / `.config/gcp-sa.json`) と CF / Neon / Upstash 連携を前提とするセキュリティルール。
 
 ## チェック観点
 

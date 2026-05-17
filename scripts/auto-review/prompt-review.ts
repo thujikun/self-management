@@ -1,8 +1,8 @@
 /**
  * reviewer モードで claude -p に渡すレビュープロンプトを組み立てる pure function。
  *
- * docs/review-guidelines.md の判定軸 + cortex の REVIEW_PERSPECTIVES の 6 観点
- * (Graph / Arch / Security / Test / Doc / Impact) を self-management 用に縮小。
+ * docs/review-guidelines.md の判定軸を 6 観点
+ * (Graph / Arch / Security / Test / Doc / Impact) に整理して self-management 用に適用。
  *
  * 出力フォーマットを厳格に固定:
  *   <!-- AUTO_REVIEW_BODY_START -->

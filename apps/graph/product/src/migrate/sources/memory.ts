@@ -5,7 +5,7 @@
  * frontmatter の `type` で振り分け:
  * - "user"      → user_role / user_philosophy 系。decisions として登録 (Ryan の自己定義)
  * - "feedback"  → feedback_x_* 系。decisions として登録 (運用方針)
- * - "project"   → cortex_design 系。topics として登録 (思想テーマ)
+ * - "project"   → design 系。topics として登録 (思想テーマ)
  * - "reference" → x_account_strategy など。skip (本体が strategy doc 側で登録済)
  *
  * external_id = file basename (拡張子なし)、source = "memory"

@@ -1,12 +1,12 @@
 /**
- * product-graph schema (cortex-product-graph 同型)。
+ * product-graph schema。
  *
  * self-management 自身の technical structure を統合。
  * code (Function/Module/Class) + db (BQ Table/Column/Schema) + docs + infra (Stack/CronSchedule/PubSubTopic) + Domain。
  *
  * @graph-stack ryan-product-graph
  * @graph-domain graph
- * @graph-business self-management mono-repo 自身の技術構造 (関数・モジュール・テーブル・ドキュメント・インフラ・ドメイン) を 1 graph に統合する schema 定義。cortex の product-graph と同型 (1-table-with-discriminator)
+ * @graph-business self-management mono-repo 自身の技術構造 (関数・モジュール・テーブル・ドキュメント・インフラ・ドメイン) を 1 graph に統合する schema 定義。1-table-with-discriminator pattern
  * @graph-connects bigquery [writes_to] product_graph_nodes / product_graph_edges 2 テーブルを定義
  */
 
@@ -19,7 +19,7 @@ import {
 } from "../shared.js";
 
 /**
- * product-graph 内の node 種別。1 table + discriminator pattern (cortex 同型)。
+ * product-graph 内の node 種別。1 table + discriminator pattern。
  * 新 type を追加する場合はこの list に足す。
  *
  * @graph-connects none
@@ -30,7 +30,7 @@ export const PRODUCT_NODE_TYPES = [
   "Module",
   "Class",
 
-  // boundary nodes (cortex 同型)
+  // boundary nodes
   "ApiEndpoint",
   "Page",
   "FirestoreCollection",
