@@ -39,7 +39,7 @@ MCPのツール呼び出しは、結局のところJSON-RPC over HTTPです。AI
 
 それだけならまだしも、行数が一定を超えると**そもそもエラーで返ってこない**こともあります。MCPのレスポンスサイズ上限に引っかかって失敗するパターンです。
 
-![素直に実装するとコンテキストが膨らむ](https://static.zenn.studio/user-upload/fddd2b2c562f-20260501.png)
+![素直に実装するとコンテキストが膨らむ](/images/posts/mcp-parking-pattern/fddd2b2c562f-20260501.png)
 
 社内でMCPを増やしていた当初、この「ちょっとしたミスマッチ」がツール体験を確実に悪くしていました。
 
@@ -56,7 +56,7 @@ MCPのツール呼び出しは、結局のところJSON-RPC over HTTPです。AI
 | リクエスト | 大きいファイル / ソースコード | GitHubやDriveなどのオブジェクトストア |
 | レスポンス | 大きい一覧データ / クエリ結果 | Spreadsheet / GCS / BigQuery |
 
-![退避パターン](https://static.zenn.studio/user-upload/f7a4e261e122-20260501.png)
+![退避パターン](/images/posts/mcp-parking-pattern/f7a4e261e122-20260501.png)
 
 エアークローゼットでの実例を2つ紹介します。
 
@@ -165,7 +165,7 @@ sql_query_database({
 
 なぜかというと、**MCP自体の認証**（誰が使っているのかを特定する）と、**Workspaceアプリへの認可**（Spreadsheet / Drive / Gmail / Calendarに対する操作権限）を、**同じOAuthフローで一石二鳥に取得できる**からです。MCPのログインさえ済んでしまえば、退避先に書き込むための権限は追加で何も要求する必要がない。
 
-![Google Workspace OAuthで一石二鳥](https://static.zenn.studio/user-upload/8e441f4d82c4-20260501.png)
+![Google Workspace OAuthで一石二鳥](/images/posts/mcp-parking-pattern/8e441f4d82c4-20260501.png)
 
 これによって、
 

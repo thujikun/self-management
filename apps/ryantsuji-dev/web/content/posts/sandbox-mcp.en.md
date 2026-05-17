@@ -90,7 +90,7 @@ A non-engineer just says "build this" to Claude Code, and:
 — all of this completes within a single chat session with the AI.
 The builder is only responsible for **functionality**. **Security, data isolation, domain & SSL, authentication** are all handled by the Sandbox MCP platform by default.
 
-![System Overview](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/xv3llcbuytnfvmog7bxr.png)
+![System Overview](/images/posts/sandbox-mcp/xv3llcbuytnfvmog7bxr.png)
 
 ### Scale
 
@@ -193,7 +193,7 @@ If `requirements.txt` is missing, `flask` + `gunicorn` get added automatically. 
 
 Deployment uses `gcloud run deploy --source`, with Cloud Build handling the image build. App authors **can** write a `Dockerfile`, but they don't have to. No Dockerfile gets the standard, with one customizes — friendly to both non-engineers and engineers.
 
-![Deploy Flow](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/vy5mw049o12upk2mldy0.png)
+![Deploy Flow](/images/posts/sandbox-mcp/vy5mw049o12upk2mldy0.png)
 
 ## Database — Transparent Fallback Between localStorage and Firestore
 
@@ -288,7 +288,7 @@ Normally, publishing a new subdomain requires:
 
 Sandbox MCP skips all of this with a **Cloudflare Edge Router Worker**.
 
-![URL Routing](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/l06g6wirc5z4xsgqtoz9.png)
+![URL Routing](/images/posts/sandbox-mcp/l06g6wirc5z4xsgqtoz9.png)
 
 DNS is fixed as `*.example.com` **wildcard** + Cloudflare proxy, with Universal SSL automatically covering every subdomain. The Cloudflare Worker receives all `*.example.com/*` traffic and routes by subdomain.
 
@@ -394,7 +394,7 @@ That covered the "convenient to build" side. Now the **"safe to publish"** side.
 
 As I noted at the start, exposing AI-generated code in front of users is risky. So Sandbox MCP layers four independent safety mechanisms that **don't depend on the app's own implementation**.
 
-![Security Layers](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/p111zuy4cxhyinp13byt.png)
+![Security Layers](/images/posts/sandbox-mcp/p111zuy4cxhyinp13byt.png)
 
 ### ① Public-Facing Gate — Self-Hosted OAuth on the Cloudflare Worker
 

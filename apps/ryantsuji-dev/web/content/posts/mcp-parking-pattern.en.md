@@ -38,7 +38,7 @@ A single tool call can easily consume tens of thousands of tokens, putting the C
 
 It's worse than just inefficiency: above a certain row count, **the response simply fails to come back at all** because it exceeds MCP's payload size limit.
 
-![Naive implementation bloats the context](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/bgsnxmhtggzp1mryc5l6.png)
+![Naive implementation bloats the context](/images/posts/mcp-parking-pattern/bgsnxmhtggzp1mryc5l6.png)
 
 When we were ramping up our internal MCP fleet, this little mismatch was reliably making the tool experience worse.
 
@@ -55,7 +55,7 @@ Both the request side and the response side benefit from the same idea.
 | Request | Large files / source code | GitHub, Drive, or any object store |
 | Response | Large list data / query results | Spreadsheet / GCS / BigQuery |
 
-![The parking pattern](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/y6781jcptumie8fs413y.png)
+![The parking pattern](/images/posts/mcp-parking-pattern/y6781jcptumie8fs413y.png)
 
 Two examples from airCloset.
 
@@ -167,7 +167,7 @@ The reason is that you get two things from a single OAuth flow — **two birds w
 1. **Authentication for MCP itself** — figuring out who's using the tool
 2. **Authorization for Workspace apps** — scoped access to Spreadsheet / Drive / Gmail / Calendar
 
-![Two birds with one stone](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/zdefw7gcv24d3y6doi6y.png)
+![Two birds with one stone](/images/posts/mcp-parking-pattern/zdefw7gcv24d3y6doi6y.png)
 
 Once the user has logged into the MCP, you don't have to ask for any additional permissions to write to the park location. Which means you can:
 

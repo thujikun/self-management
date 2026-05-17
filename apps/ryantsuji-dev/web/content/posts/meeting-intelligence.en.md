@@ -57,20 +57,20 @@ We built a system that automates four things:
 
 In Google Calendar's event editor, click the "AI Fassy Meet" button added by our Chrome extension.
 
-![Chrome extension button in Google Calendar](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/kymrlq5fa5z5bx41fkbo.png)
+![Chrome extension button in Google Calendar](/images/posts/meeting-intelligence/kymrlq5fa5z5bx41fkbo.png)
 
 
 *The "AI Fassy Meet" button appears next to Google Meet's native video conferencing option*
 
 Select the Slack channel where notifications should be sent. Previously selected channels appear at the top, followed by your most active channels.
 
-![Slack channel selection dialog](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/9xsm3lzazvw8pnu87jx0.png)
+![Slack channel selection dialog](/images/posts/meeting-intelligence/9xsm3lzazvw8pnu87jx0.png)
 *Channel search and selection dialog, sorted by selection history and activity*
 
 Click "Create Meet" and the Meet URL is automatically set on the Calendar event.
 
 
-![Setting Meet URL](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/dfs0rfdcxgoxfes3or3e.png)
+![Setting Meet URL](/images/posts/meeting-intelligence/dfs0rfdcxgoxfes3or3e.png)
 *The Meet URL is set on the event with recording, transcription, and notes all enabled by default. The "Use Gemini to create meeting notes" shown on screen is Google Meet's native feature — our system additionally integrates Gemini 3 Flash for independent transcription and screen share analysis*
 
 **Recording, transcription, and meeting notes are all ON by default.** Users don't need to think about settings at all.
@@ -86,7 +86,7 @@ Just have your meeting normally. Recording and transcription run automatically i
 When the meeting ends, an instant notification appears in the designated Slack channel.
 
 
-![Slack meeting ended notification](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/3jfoejww8nqd1ff0ss3e.png)
+![Slack meeting ended notification](/images/posts/meeting-intelligence/3jfoejww8nqd1ff0ss3e.png)
 
 A few minutes later, a follow-up notification arrives in the thread with links to the recording and transcript. Channel members can view them immediately.
 
@@ -95,7 +95,7 @@ A few minutes later, a follow-up notification arrives in the thread with links t
 In the same thread, mention the Bot to ask about the meeting content.
 
 
-![Full thread flow — end notification → artifact notification → RAG search → answer](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/s39j5jorq2ka5uggkhe1.png)
+![Full thread flow — end notification → artifact notification → RAG search → answer](/images/posts/meeting-intelligence/s39j5jorq2ka5uggkhe1.png)
 *Full thread flow: ①Meeting ended notification → ②Recording and transcript links → ③User asks "Give me a summary of this meeting" → ④Bot responds with a structured summary*
 
 The Bot searches past meeting transcripts, summarizes the relevant parts, and responds with source links. Screen-shared slides and code are also searchable.
@@ -107,7 +107,7 @@ Now let's dive into the technical implementation.
 ## Architecture Overview
 
 
-![System Overview](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/m244hghef2xv24tgaj2u.png)
+![System Overview](/images/posts/meeting-intelligence/m244hghef2xv24tgaj2u.png)
 
 The system consists of four components:
 
@@ -144,7 +144,7 @@ Creating a new Google Meet Space via API takes 1–2 seconds for a response. Mak
 The idea is simple: **pre-create Meet Spaces via API and return them instantly on request**. Replenish in the background when consumed.
 
 
-![LIFO Cache](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/ws3xf9dmh10z7n2fqgu3.png)
+![LIFO Cache](/images/posts/meeting-intelligence/ws3xf9dmh10z7n2fqgu3.png)
 
 ```typescript
 class MeetSpaceCache {
@@ -393,7 +393,7 @@ With this mechanism, **even if you create a Meet today for a meeting next month,
 From meeting end to Slack notification to vector data generation for RAG search — everything starts from receiving a Pub/Sub message.
 
 
-![Event Pipeline](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/vxt2h19edh6x4l8alqa0.png)
+![Event Pipeline](/images/posts/meeting-intelligence/vxt2h19edh6x4l8alqa0.png)
 
 ### Event Router: Dispatching to Three Handlers
 
@@ -517,7 +517,7 @@ This lets users access recordings and transcripts directly from the Calendar eve
 "Who gets access?" is the most delicate design point. Too narrow and it's useless; too broad and it's a security risk.
 
 
-![Permission Model](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/ll8zx1n4uhkaq3had67f.png)
+![Permission Model](/images/posts/meeting-intelligence/ll8zx1n4uhkaq3had67f.png)
 
 ### Layer 1: Slack Channel Members
 
@@ -579,7 +579,7 @@ Common security rules apply across all three layers:
 
 This was the most exciting part to build.
 
-![RAG Pipeline](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/58to5z9rbwk0a9xscill.png)
+![RAG Pipeline](/images/posts/meeting-intelligence/58to5z9rbwk0a9xscill.png)
 
 ### Three Content Sources
 
