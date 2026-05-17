@@ -911,6 +911,7 @@ export const webEventsTableId = webEventsTable.tableId;
  */
 const grafanaFaro = provisionGrafanaFaro({
   cloudProvider: grafanaProvider,
+  cloudAccessPolicyToken: grafanaAdminTokenSecret.secretData,
   stackSlug: grafanaStackSlug,
   stackUrl: grafanaStack.url,
   stackId: grafanaStack.id,

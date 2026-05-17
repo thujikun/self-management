@@ -28,6 +28,28 @@ import * as pulumi from "@pulumi/pulumi";
  */
 export interface ProvisionFaroArgs {
   cloudProvider: grafana.Provider;
+  /**
+   * Cloud-level Access Policy Token (= `grafana-cloud-admin-token` の値)。
+   * `frontendObservability.App` resource は Stack instance API ではなく **Frontend
+   * Observability management API** を叩くため、`auth` (Stack SA token) とは別に
+   * `cloud_access_policy_token` + `frontend_o11y_api_access_token` の 2 つを provider
+   * config に詰める必要がある (両方とも同じ admin CAP token を流用)。
+   *
+   * 前提となる Cloud Access Policy の必須条件:
+   * - **region は stack 自身と同じ** (stack が `prod-ap-northeast-0` なら policy も
+   *   そこで作る。`us` 等 別 region の token は FO API で
+   *   `request not authorized for stack` で弾かれる)。Cloud Portal UI では「Realms に
+   *   stack を直接指定すると stack region に自動配置」「`all stacks` (org realm) を
+   *   選ぶと org default region (= `us`)」という挙動。
+   * - scopes:
+   *   - `accesspolicies:{read,write,delete}` (Pulumi が OTLP write policy を管理する用)
+   *   - `stacks:read`
+   *   - `stack-service-accounts:write` (Pulumi が Stack 内 Admin SA を作る用)
+   *   - `frontend-observability:{read,write,delete}` (Faro App provisioning 用、provider
+   *     docs では `apps:*` 表記だが Cloud Portal scope picker 上の label は
+   *     `frontend-observability:*`)
+   */
+  cloudAccessPolicyToken: pulumi.Output<string>;
   stackSlug: string;
   stackUrl: pulumi.Output<string>;
   stackId: pulumi.Output<string>;
@@ -79,10 +101,17 @@ export function provisionGrafanaFaro(args: ProvisionFaroArgs): ProvisionFaroOutp
     { provider: args.cloudProvider },
   );
 
-  // Stack instance API 用 2nd provider。`url` は stack base URL、`auth` は SA token。
+  // Stack-scope の 2nd provider。リソース毎に provider 内部で使う auth 経路が異なる:
+  //   - Stack instance API (e.g. Grafana dashboards)            → `auth` (Stack SA token)
+  //   - Frontend Observability management API (Faro App CRUD)    → `frontendO11yApiAccessToken`
+  //   - Cloud Portal API 経由の stack 情報 lookup (FO 内部で使う) → `cloudAccessPolicyToken`
+  // FO App は 3 経路全部を踏むため 3 つとも設定する必要がある (provider が field
+  // を見て使い分ける)。後ろ 2 つは同じ Cloud-level admin CAP token を流用してよい。
   const stackProvider = new grafana.Provider("grafana-stack", {
     url: args.stackUrl,
     auth: stackPulumiToken.key,
+    cloudAccessPolicyToken: args.cloudAccessPolicyToken,
+    frontendO11yApiAccessToken: args.cloudAccessPolicyToken,
   });
 
   // Faro App を declarative に作成。`allowedOrigins` で CORS fence (custom domain +
