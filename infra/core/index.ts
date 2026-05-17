@@ -17,6 +17,8 @@ import * as gcp from "@pulumi/gcp";
 import * as grafana from "@pulumiverse/grafana";
 import * as pulumi from "@pulumi/pulumi";
 
+import { provisionGrafanaFaro } from "./grafana-faro.js";
+
 /** @graph-connects none */
 const gcpConfig = new pulumi.Config("gcp");
 /** @graph-connects none */
@@ -895,34 +897,28 @@ const webEventsTable = new gcp.bigquery.Table(
 export const webEventsTableId = webEventsTable.tableId;
 
 /**
- * Grafana Cloud Frontend Observability (Faro) の collector URL を保管する Secret。
+ * Grafana Cloud Frontend Observability (Faro) を end-to-end Pulumi で provision。
+ * Stack SA + 2nd provider + Faro App + SecretVersion を `grafana-faro.ts` に分離した
+ * のは行数 cap 維持目的のみ。collector URL は本 pipeline 内で Faro App output から
+ * SecretVersion に書き込まれるため、UI 操作 / `gcloud secrets versions add` は不要。
  *
- * Faro App の作成は Grafana Cloud UI から手動で行い、生成された collector URL
- * (例: `https://faro-collector-prod-us-central-0.grafana.net/collect/<appId>`) を
- * `gcloud secrets versions add grafana-faro-collector-url --data-file=-` で投入する。
- * Pulumi は container と graph-app SA への accessor 権限のみ管理。
+ * 消費経路: ryantsuji.dev web の deploy workflow が `gcloud secrets versions access
+ * grafana-faro-collector-url` で取り出し、`VITE_FARO_COLLECTOR_URL` build env として
+ * vite に渡す → client bundle に inline → `__root.tsx` の Faro init で参照。
  *
- * 消費経路: ryantsuji.dev web の client bundle に build-time に inline (URL は
- * public で OK、Faro の collector はパス自体が App ID として識別子)。wrangler
- * `[vars]` 経由で Worker に注入し、`__root.tsx` の Faro init で参照。
- *
- * @graph-connects secret-manager [writes_to] grafana-faro-collector-url secret container
+ * @graph-connects grafana-cloud [embeds] provisionGrafanaFaro で Stack SA + Faro App を作成
+ * @graph-connects secret-manager [embeds] provisionGrafanaFaro で collector URL SecretVersion を発行
  */
-const grafanaFaroCollectorUrlSecret = new gcp.secretmanager.Secret(
-  "grafana-faro-collector-url",
-  {
-    secretId: "grafana-faro-collector-url",
-    replication: { auto: {} },
-  },
-  { dependsOn: [apiServices["secretmanager"]] },
-);
-
-/** @graph-connects iam [writes_to] graph-app SA に Faro collector URL secret の read 権限 */
-new gcp.secretmanager.SecretIamMember("graph-faro-collector-url-accessor", {
-  secretId: grafanaFaroCollectorUrlSecret.id,
-  role: "roles/secretmanager.secretAccessor",
-  member: pulumi.interpolate`serviceAccount:${graphSa.email}`,
+const grafanaFaro = provisionGrafanaFaro({
+  cloudProvider: grafanaProvider,
+  stackSlug: grafanaStackSlug,
+  stackUrl: grafanaStack.url,
+  stackId: grafanaStack.id,
+  graphSaEmail: graphSa.email,
+  secretmanagerApi: apiServices["secretmanager"]!,
 });
 
 /** @graph-connects none */
-export const grafanaFaroCollectorUrlSecretId = grafanaFaroCollectorUrlSecret.id;
+export const grafanaFaroCollectorUrlSecretId = grafanaFaro.collectorUrlSecretId;
+/** @graph-connects none */
+export const grafanaFaroCollectorEndpoint = pulumi.secret(grafanaFaro.collectorEndpoint);
