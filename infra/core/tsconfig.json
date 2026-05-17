@@ -11,5 +11,5 @@
     "verbatimModuleSyntax": false,
     "isolatedModules": false
   },
-  "include": ["index.ts"]
+  "include": ["index.ts", "grafana-faro.ts"]
 }
