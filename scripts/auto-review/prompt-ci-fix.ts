@@ -2,7 +2,18 @@
  * ci-fix モードで claude -p に渡す prompt を組み立てる pure function。
  *
  * 文脈: bot 自身の APPROVE comment が posting 済 + CI に failed job がある状態。
- * Claude は失敗 job log を取得して根本原因を診断 → 修正 → 6 gate green → commit & push。
+ * Claude は失敗 job log を取得して根本原因を診断 → 修正 → commit & push。
+ *
+ * ローカルでの 6 gate 一括実行は agent 側ではやらない方針 (prompt-fix.ts と同じ):
+ * - pre-commit hook が staged file 単位の gate (lint / format / coverage-staged /
+ *   secrets / no-ignore / line-count / graph-tags / log-check) を強制実行する
+ * - typecheck / full build / full test は push 後の CI が pre-merge で踏む
+ * - 失敗が直らなければ ci-fix-job が同 SHA を最大 3 回 retry (`ciFixFailureCount` cap)
+ *
+ * ただし「CI が落ちている特定の gate」だけは agent が手元で再現 / 検証してから
+ * push したい場面が多いので、Step 4 で **そこだけ focused に走らせる** よう促す
+ * (= `pnpm test:coverage` で全 test を再走するのではなく、failing test だけ
+ * `vitest run <file>` で個別検証)。
  *
  * 出力フォーマットは prompt-fix.ts と同じく:
  *   - 成功: 普通に commit + push して終了 (stdout に marker 不要)
@@ -59,21 +70,18 @@ export function buildCiFixPrompt(input: CiFixPromptInput): string {
     "   - 修正対象は **CI 失敗の原因箇所のみ**。スコープ拡大しない",
     "   - 不可解な失敗で AI 判断では分からない場合は無理に「とりあえず修正」しない。診断結果を FIX_FAILED で報告し人間に委ねる",
     "",
-    "4. **ローカル 6 gate 全 green を確認** (順次実行、1 つでも fail なら fix し直す):",
-    "```bash",
-    "pnpm check:all && pnpm log:check",
-    "pnpm typecheck",
-    "pnpm lint",
-    "pnpm format:check",
-    "pnpm build",
-    "pnpm test:coverage",
-    "```",
-    "なお `infra/*` 配下の Pulumi preview は repo 内のローカル 6 gate に含まれない。Pulumi 失敗は GH Actions log を読んで diagnostic、`infra/core` / `infra/ryantsuji-dev` の各ディレクトリでローカル `pulumi preview` を実行できるなら回す。secret 不足など bot ローカルで再現不可能な失敗は FIX_FAILED 妥当。",
+    "4. **failing gate を focused に検証** (= ローカル 6 gate を全部回すのは禁止、時間の浪費):",
+    "   - CI が落ちた gate **だけ** を repo root で個別実行して直ったことを確認する",
+    "   - test fail なら failing test path だけ vitest に渡す (例: `pnpm exec vitest run apps/foo/src/bar.test.ts`)、`pnpm test:coverage` での全 test 再走は不要",
+    "   - typecheck fail なら該当 workspace の `pnpm --filter <workspace> typecheck`、root 全体は不要",
+    "   - lint fail なら `pnpm lint <file>` or `pnpm lint --fix <file>` で focused 修正",
+    "   - infra (pulumi / cf) 失敗は `infra/core` / `infra/ryantsuji-dev` のディレクトリでローカル `pulumi preview` を回せるなら回す。secret 不足など bot ローカルで再現不可能なら FIX_FAILED 妥当",
     "",
     "5. **commit**: Conventional Commits 形式 (`fix:` / `chore:` / `refactor:` 等、type 小文字 / subject 末尾ピリオドなし)。",
     `   ヘッダーは 100 字以内。本文に「pr #${input.prNumber} ci fix」と書き、修正内容を箇条書きで残す。`,
+    "   commit 時に pre-commit hook が staged file 単位の gate を強制実行する。`--no-verify` で bypass しない。残りの typecheck / 全 test / build は次の CI run が pre-merge で踏むので agent 側で全部回す必要はない。",
     "",
-    `6. **push**: \`git push origin ${input.branch}\` で PR branch に push。`,
+    `6. **push**: \`git push origin ${input.branch}\` で PR branch に push。CI が再度落ちた場合 ci-fix-job が同 SHA を最大 3 回 retry する (cap で必ず止まる)。`,
     "",
     "7. **報告 comment**: `gh pr comment` で簡潔に CI 修正の対応報告 (200 文字以内、各 failing check の原因と対処を要約)。",
     `   コマンド例: \`gh pr comment ${input.prNumber} --repo ${input.repo} --body-file -\` に stdin で本文を流す。`,
@@ -88,6 +96,6 @@ export function buildCiFixPrompt(input: CiFixPromptInput): string {
     "",
     "# 失敗時の挙動",
     "",
-    "- 診断はしたが AI 判断では fix できない / 失敗が一過性で repo の変更で直らない / 6 gate を green にできない場合、push せず終了。stdout に `<!-- FIX_FAILED:<理由> -->` を 1 行残す。呼び出し側 (ci-fix-job.ts) は当該 SHA の `ciFixFailureCount` を +1 し、同 SHA は最大 3 回まで backoff 付き retry。3 回到達後は新 commit が来るまで skip される。安易に early-give-up しないこと、限界まで try してから FIX_FAILED を出すこと。",
+    "- 診断はしたが AI 判断では fix できない / 失敗が一過性で repo の変更で直らない / focused 検証で gate が green にできない場合、push せず終了。stdout に `<!-- FIX_FAILED:<理由> -->` を 1 行残す。呼び出し側 (ci-fix-job.ts) は当該 SHA の `ciFixFailureCount` を +1 し、同 SHA は最大 3 回まで backoff 付き retry。3 回到達後は新 commit が来るまで skip される。安易に early-give-up しないこと、限界まで try してから FIX_FAILED を出すこと。",
   ].join("\n");
 }
