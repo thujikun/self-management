@@ -126,7 +126,10 @@ jobs:
             echo "no frontmatter changes — skipping commit"
             exit 0
           fi
-          git pull --rebase origin main
+          # syndicate が frontmatter を書き換えた直後で workdir は dirty。`--autostash`
+          # 無しだと rebase が abort するので明示。並列 push が同 window に着地した
+          # ケースでも safe に rebase できる。
+          git pull --rebase --autostash origin main
           git add apps/ryantsuji-dev/web/content/posts/
           git commit -m "chore(syndication): writeback syndication IDs [skip ci]"
           git push origin HEAD:main

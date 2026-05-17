@@ -477,6 +477,47 @@ new gcp.secretmanager.SecretIamMember("graph-cloudflare-api-token-accessor", {
 export const cloudflareApiTokenSecretId = cloudflareApiTokenSecret.id;
 
 /**
+ * Syndication 用 secret container 2 つ。
+ *
+ * `.github/workflows/syndicate-posts.yml` が WIF (pulumi-ci@ SA) で `gcloud secrets
+ * versions access` する。値投入は Ryan の手動 (`gcloud secrets versions add`):
+ * - `dev-to-api-key`: dev.to API key (Settings → Extensions → DEV API Keys)
+ * - `ryantsuji-dev-content-pat`: thujikun/ryantsuji-dev-content への push 権限を
+ *   持つ GitHub PAT (Fine-grained、Contents: Read+Write、対象 repo は
+ *   ryantsuji-dev-content)
+ *
+ * pulumi-ci@ SA は project level の `roles/secretmanager.admin` を既に持つので
+ * 追加の secretAccessor IAM bind は不要。Pulumi は container のみ管理し、cloudflare
+ * / neon と同じ「container は declarative、値は manual」運用に揃える。
+ *
+ * @graph-connects secret-manager [writes_to] dev-to-api-key secret container
+ */
+const devtoApiKeySecret = new gcp.secretmanager.Secret(
+  "dev-to-api-key",
+  {
+    secretId: "dev-to-api-key",
+    replication: { auto: {} },
+  },
+  { dependsOn: [apiServices["secretmanager"]] },
+);
+
+/** @graph-connects none */
+export const devtoApiKeySecretId = devtoApiKeySecret.id;
+
+/** @graph-connects secret-manager [writes_to] ryantsuji-dev-content-pat secret container */
+const ryantsujiDevContentPatSecret = new gcp.secretmanager.Secret(
+  "ryantsuji-dev-content-pat",
+  {
+    secretId: "ryantsuji-dev-content-pat",
+    replication: { auto: {} },
+  },
+  { dependsOn: [apiServices["secretmanager"]] },
+);
+
+/** @graph-connects none */
+export const ryantsujiDevContentPatSecretId = ryantsujiDevContentPatSecret.id;
+
+/**
  * xmcp (X API MCP server) の OAuth credentials。
  *
  * 構成:
