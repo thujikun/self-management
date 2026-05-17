@@ -34,6 +34,7 @@ import {
 } from "../../server/engagement.js";
 import { pickLang, type Lang } from "../../server/i18n.js";
 import { getRenderedPost } from "../../server/posts.js";
+import { getSeriesNav } from "../../server/series.js";
 import {
   safeAcceptLanguage,
   safeCookieLang,
@@ -58,6 +59,7 @@ export async function runRenderPost(
   Pick<RenderedDoc, "html" | "frontmatter" | "headings" | "readingTimeMinutes"> & {
     servedLang: Lang;
     availableLangs: Lang[];
+    seriesNav: SerializedSeriesNav | null;
   }
 > {
   const cookieLang = safeCookieLang();
@@ -71,6 +73,7 @@ export async function runRenderPost(
   }
   const result = getRenderedPost(slug, lang);
   if (!result) throw notFound();
+  const nav = getSeriesNav(slug, result.servedLang);
   return {
     html: result.rendered.html,
     frontmatter: result.rendered.frontmatter,
@@ -78,6 +81,36 @@ export async function runRenderPost(
     readingTimeMinutes: result.rendered.readingTimeMinutes,
     servedLang: result.servedLang,
     availableLangs: result.availableLangs,
+    seriesNav: nav ? serializeSeriesNav(nav) : null,
+  };
+}
+
+/**
+ * route loader data として client に流す series nav の serializable shape。post
+ * 全 frontmatter を載せると無駄に重いので、表示に必要な (title / slug / order) だけ
+ * pick して slim down する。
+ *
+ * @graph-connects none
+ */
+export interface SerializedSeriesNav {
+  meta: { slug: string; title: string };
+  total: number;
+  currentOrder: number;
+  prev: { slug: string; title: string } | null;
+  next: { slug: string; title: string } | null;
+}
+
+/** @graph-connects none */
+export function serializeSeriesNav(
+  nav: NonNullable<ReturnType<typeof getSeriesNav>>,
+): SerializedSeriesNav {
+  const currentOrder = nav.posts[nav.currentIndex]?.seriesOrder ?? nav.currentIndex + 1;
+  return {
+    meta: { slug: nav.meta.slug, title: nav.meta.title },
+    total: nav.posts.length,
+    currentOrder,
+    prev: nav.prev ? { slug: nav.prev.slug, title: nav.prev.title } : null,
+    next: nav.next ? { slug: nav.next.slug, title: nav.next.title } : null,
   };
 }
 

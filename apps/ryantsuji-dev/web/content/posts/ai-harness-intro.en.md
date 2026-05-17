@@ -10,6 +10,8 @@ tags:
   - "graphrag"
   - "webdev"
 lang: "en"
+series: "building-ai-harness"
+seriesOrder: 1
 syndication:
   devto:
     id: 3655760
