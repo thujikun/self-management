@@ -37,4 +37,18 @@ describe("/privacy", () => {
     expect(html).toMatch(/Retention/);
     expect(html).toMatch(/← back to home/);
   });
+
+  it("自前 analytics (BigQuery / /api/track / session UUID) を doc 内で明示している", async () => {
+    const router = getRouter({
+      history: createMemoryHistory({ initialEntries: ["/privacy"] }),
+    });
+    await router.load();
+    const html = renderToString(<RouterProvider router={router} />);
+    expect(html).toMatch(/\/api\/track/);
+    expect(html).toMatch(/BigQuery/);
+    expect(html).toMatch(/web_events/);
+    expect(html).toMatch(/sessionStorage/);
+    expect(html).toMatch(/utm_\*/);
+    expect(html).toMatch(/256 characters/);
+  });
 });

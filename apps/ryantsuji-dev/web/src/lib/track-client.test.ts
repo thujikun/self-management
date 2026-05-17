@@ -36,18 +36,27 @@ afterEach(() => {
 describe("getOrCreateSessionId", () => {
   it("初回は新 UUID を生成、2 回目は同じ値を返す", () => {
     const id1 = getOrCreateSessionId();
-    const id2 = getOrCreateSessionId();
-    expect(id1).toBeDefined();
-    expect(id1).toBe(id2);
     expect(id1).toMatch(/^[0-9a-f-]{36}$/);
+    expect(getOrCreateSessionId()).toBe(id1);
+    expect(window.sessionStorage.getItem("rt:session_id")).toBe(id1);
   });
 
   it("sessionStorage 例外 (private mode 等) は undefined fallback", () => {
     const setItem = vi.spyOn(window.sessionStorage, "setItem").mockImplementation(() => {
       throw new Error("private mode");
     });
-    expect(getOrCreateSessionId()).toBeUndefined();
+    expect(getOrCreateSessionId()).toStrictEqual(undefined);
     setItem.mockRestore();
+  });
+
+  it("SSR (window undef) は undefined を返す early-return", () => {
+    const original = globalThis.window;
+    (globalThis as unknown as { window: unknown }).window = undefined;
+    try {
+      expect(getOrCreateSessionId()).toStrictEqual(undefined);
+    } finally {
+      (globalThis as unknown as { window: typeof original }).window = original;
+    }
   });
 });
 
@@ -109,13 +118,120 @@ describe("sendTrackBeacon", () => {
 });
 
 describe("trackPageView", () => {
-  it("payload に path / referrer / locale / session_id を詰める", () => {
+  it("payload に path / slug / lang / viewport / locale / session_id を詰める", async () => {
     const beacon = vi.fn((_url: string | URL, _data?: BodyInit | null) => true);
     (navigator as unknown as { sendBeacon: typeof navigator.sendBeacon }).sendBeacon =
       beacon as unknown as typeof navigator.sendBeacon;
+    Object.defineProperty(window, "innerWidth", { value: 1280, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: 720, configurable: true });
+    Object.defineProperty(navigator, "language", { value: "en-US", configurable: true });
+    Object.defineProperty(document, "referrer", {
+      value: "https://ref.test/x",
+      configurable: true,
+    });
+
     trackPageView({ path: "/posts/hello", slug: "hello", lang: "en" });
     expect(beacon).toHaveBeenCalledOnce();
-    const blob = beacon.mock.calls[0]![1] as Blob;
-    expect(blob).toBeInstanceOf(Blob);
+    const [url, data] = beacon.mock.calls[0]!;
+    expect(String(url)).toBe("/api/track");
+    const json = JSON.parse(await (data as Blob).text()) as Record<string, unknown>;
+    // session_id は UUID で生成される (regex 確認後、固定値に置換して toStrictEqual)
+    expect(json.session_id).toMatch(/^[0-9a-f-]{36}$/);
+    json.session_id = "<uuid>";
+    expect(json).toStrictEqual({
+      event_type: "page_view",
+      path: "/posts/hello",
+      slug: "hello",
+      lang: "en",
+      referrer: "https://ref.test/x",
+      viewport_w: 1280,
+      viewport_h: 720,
+      locale: "en-US",
+      session_id: "<uuid>",
+    });
+  });
+
+  it("document.referrer が空文字なら payload.referrer は undefined (省略される)", async () => {
+    const beacon = vi.fn((_url: string | URL, _data?: BodyInit | null) => true);
+    (navigator as unknown as { sendBeacon: typeof navigator.sendBeacon }).sendBeacon =
+      beacon as unknown as typeof navigator.sendBeacon;
+    Object.defineProperty(document, "referrer", { value: "", configurable: true });
+    Object.defineProperty(window, "innerWidth", { value: 1024, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+    Object.defineProperty(navigator, "language", { value: "ja-JP", configurable: true });
+    trackPageView({ path: "/" });
+    const [, data] = beacon.mock.calls[0]!;
+    const json = JSON.parse(await (data as Blob).text()) as Record<string, unknown>;
+    expect(json.session_id).toMatch(/^[0-9a-f-]{36}$/);
+    json.session_id = "<uuid>";
+    // JSON.stringify は undefined を omit するので、referrer / slug / lang など unset
+    // field は payload に現れない。これで「empty 文字列 → undefined → 省略」の動作を固定
+    expect(json).toStrictEqual({
+      event_type: "page_view",
+      path: "/",
+      viewport_w: 1024,
+      viewport_h: 768,
+      locale: "ja-JP",
+      session_id: "<uuid>",
+    });
+  });
+
+  it("SSR (window undef) は no-op で beacon を呼ばない", () => {
+    // happy-dom 上で window を一時的に delete して SSR shape を再現する
+    const original = globalThis.window;
+    (globalThis as unknown as { window: unknown }).window = undefined;
+    try {
+      // window unset の状態で early return 経路 (戻り値 void、副作用なし)
+      trackPageView({ path: "/" });
+    } finally {
+      (globalThis as unknown as { window: typeof original }).window = original;
+    }
+  });
+});
+
+describe("sendTrackBeacon — 全 path 失敗 / SSR", () => {
+  it("sendBeacon throw + fetch も throw → false で silent fail", () => {
+    const beacon = vi.fn(() => {
+      throw new Error("beacon boom");
+    });
+    (navigator as unknown as { sendBeacon: typeof navigator.sendBeacon }).sendBeacon =
+      beacon as unknown as typeof navigator.sendBeacon;
+    const fetchSpy = vi.fn(() => {
+      throw new Error("fetch boom");
+    });
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    expect(sendTrackBeacon({ event_type: "page_view" })).toBe(false);
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
+  it("sendBeacon false + fetch が rejected Promise を返しても caller には true (silent .catch で潰す)", async () => {
+    const beacon = vi.fn(() => false);
+    (navigator as unknown as { sendBeacon: typeof navigator.sendBeacon }).sendBeacon =
+      beacon as unknown as typeof navigator.sendBeacon;
+    const fetchSpy = vi.fn((_url: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.reject(new Error("net down")),
+    );
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    expect(sendTrackBeacon({ event_type: "page_view" })).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    // fetch().catch arrow が走るまで待つ (microtask flush)
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  it("navigator unset (SSR) は false を返して何も呼ばない", () => {
+    const original = globalThis.navigator;
+    (globalThis as unknown as { navigator: unknown }).navigator = undefined;
+    try {
+      expect(sendTrackBeacon({ event_type: "page_view" })).toBe(false);
+    } finally {
+      (globalThis as unknown as { navigator: typeof original }).navigator = original;
+    }
+  });
+
+  it("sendBeacon 不在 / fetch も不在で false", () => {
+    (navigator as unknown as { sendBeacon: undefined }).sendBeacon = undefined;
+    (globalThis as unknown as { fetch: undefined }).fetch = undefined;
+    expect(sendTrackBeacon({ event_type: "page_view" })).toBe(false);
   });
 });

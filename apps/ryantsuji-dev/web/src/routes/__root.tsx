@@ -21,7 +21,7 @@ import {
 } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import type { QueryClient } from "@tanstack/react-query";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { Lightbox } from "../components/Lightbox.js";
 import { LANG_COOKIE, LANG_COOKIE_MAX_AGE, SUPPORTED_LANGS, type Lang } from "../server/i18n.js";
@@ -169,15 +169,19 @@ function RootComponent() {
       importFaro: () => import("../lib/faro-client.js"),
     });
   }, []);
-  // 自前 analytics: 各 route change で page_view を 1 件送る。SPA navigation 経由でも
-  // 撃つので useLocation を依存に取る。client-only beacon は track-client 側で
-  // window guard 済 (= SSR は no-op)。
+  // 自前 analytics: 各 route change で page_view を 1 件送る。effect の発火条件は
+  // **URL 変化のみ** (= deps は location.pathname だけ)。lang は payload には載せたい
+  // が、LangSwitcher 押下時の `router.invalidate()` で同 path に対して再 fire させ
+  // たくない (DAU / per-path pv が膨らんで集計が壊れる) ため、ref 経由で「最新値を
+  // 読むだけ」にして deps から外す。
+  const langRef = useRef(lang);
+  langRef.current = lang;
   useEffect(() => {
     if (typeof window === "undefined") return;
     void import("../lib/track-client.js").then(({ trackPageView }) =>
-      trackPageView({ path: location.pathname, lang }),
+      trackPageView({ path: location.pathname, lang: langRef.current }),
     );
-  }, [location.pathname, lang]);
+  }, [location.pathname]);
   return (
     <RootDocument theme={theme}>
       <Outlet />

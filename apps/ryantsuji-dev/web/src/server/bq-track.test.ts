@@ -64,10 +64,16 @@ describe("buildTrackRow", () => {
   });
 
   it("allowlist 内は ts + event_type で row を返す", () => {
-    const row = buildTrackRow({ event_type: "page_view" }, null);
-    expect(row).not.toBeNull();
-    expect(row!.event_type).toBe("page_view");
-    expect(new Date(row!.ts).getTime()).not.toBeNaN();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-17T01:23:45.000Z"));
+    try {
+      expect(buildTrackRow({ event_type: "page_view" }, null)).toStrictEqual({
+        ts: "2026-05-17T01:23:45.000Z",
+        event_type: "page_view",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("文字列 field は 512 文字に truncate", () => {
@@ -83,15 +89,27 @@ describe("buildTrackRow", () => {
   });
 
   it("viewport_w / viewport_h は範囲外を弾く", () => {
-    expect(
-      buildTrackRow({ event_type: "page_view", viewport_w: -1 }, null)!.viewport_w,
-    ).toBeUndefined();
-    expect(
-      buildTrackRow({ event_type: "page_view", viewport_w: 99999 }, null)!.viewport_w,
-    ).toBeUndefined();
-    expect(buildTrackRow({ event_type: "page_view", viewport_w: 1920.7 }, null)!.viewport_w).toBe(
-      1920,
-    );
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-17T00:00:00.000Z"));
+    try {
+      // 負値 / 上限超は row 自体は返るが viewport_w field 自体は追加されない
+      expect(buildTrackRow({ event_type: "page_view", viewport_w: -1 }, null)).toStrictEqual({
+        ts: "2026-05-17T00:00:00.000Z",
+        event_type: "page_view",
+      });
+      expect(buildTrackRow({ event_type: "page_view", viewport_w: 99999 }, null)).toStrictEqual({
+        ts: "2026-05-17T00:00:00.000Z",
+        event_type: "page_view",
+      });
+      // 正常値は floor して採用
+      expect(buildTrackRow({ event_type: "page_view", viewport_w: 1920.7 }, null)).toStrictEqual({
+        ts: "2026-05-17T00:00:00.000Z",
+        event_type: "page_view",
+        viewport_w: 1920,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("非 object input は null", () => {
@@ -194,6 +212,31 @@ describe("getAccessToken token cache", () => {
     const t2 = await getAccessToken(sa, fetchMock as unknown as typeof fetch, now);
     expect(t1).toBe("t1");
     expect(t2).toBe("t1");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("並行 cache miss は in-flight Promise を共有して OAuth 1 回に集約", async () => {
+    // resolve を手動で操れる deferred を作って、cache miss が並行する状況を再現する
+    let resolveOauth: (res: Response) => void = () => undefined;
+    const oauthResponse = new Promise<Response>((r) => {
+      resolveOauth = r;
+    });
+    const fetchMock = vi.fn(() => oauthResponse);
+    const now = () => 1_700_000_000_000;
+    const calls = await Promise.all([
+      Promise.resolve().then(() => getAccessToken(sa, fetchMock as unknown as typeof fetch, now)),
+      Promise.resolve().then(() => getAccessToken(sa, fetchMock as unknown as typeof fetch, now)),
+      Promise.resolve().then(() => getAccessToken(sa, fetchMock as unknown as typeof fetch, now)),
+      Promise.resolve().then(() => {
+        resolveOauth(
+          new Response(JSON.stringify({ access_token: "shared-token", expires_in: 3600 }), {
+            status: 200,
+          }),
+        );
+        return getAccessToken(sa, fetchMock as unknown as typeof fetch, now);
+      }),
+    ]);
+    expect(calls).toStrictEqual(["shared-token", "shared-token", "shared-token", "shared-token"]);
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 

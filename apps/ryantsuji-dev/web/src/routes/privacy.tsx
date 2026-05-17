@@ -32,7 +32,7 @@ function PrivacyPage() {
     <main className="legal">
       <header className="legal__header">
         <h1>Privacy Policy</h1>
-        <p className="meta">Last updated: 2026-05-14</p>
+        <p className="meta">Last updated: 2026-05-17</p>
       </header>
 
       <section>
@@ -55,12 +55,26 @@ function PrivacyPage() {
             likes. Stored under your authenticated account.
           </li>
           <li>
-            <strong>Page view counts</strong> (per post, aggregate, anonymous). No per-visitor
-            tracking.
+            <strong>Page view counts</strong> (per post, aggregate). Stored in our database to
+            display engagement totals.
           </li>
           <li>
-            <strong>Network metadata</strong> (IP, user agent) is processed transiently by
-            Cloudflare for routing and DDoS protection, and is not persisted to our database.
+            <strong>Per-page view metadata</strong>: path, referrer, <code>utm_*</code> query
+            parameters, viewport size (width/height), browser locale, and a user-agent string
+            truncated to 256 characters. Sent on every page navigation to our own analytics endpoint
+            (<code>/api/track</code>) and stored in our BigQuery dataset.
+          </li>
+          <li>
+            <strong>Anonymous session identifier</strong>: a random UUID generated in your browser
+            and kept only in <code>sessionStorage</code>. It is discarded when you close the browser
+            tab. No cookies are set for tracking, and the UUID is not linked to your authenticated
+            account or to your IP address.
+          </li>
+          <li>
+            <strong>Network metadata</strong> (IP, raw user agent) is processed transiently by
+            Cloudflare for routing and DDoS protection. The IP is not persisted to our database; the
+            user agent is captured server-side from the request header and stored truncated (≤ 256
+            chars) alongside the page view metadata above.
           </li>
         </ul>
       </section>
@@ -78,6 +92,11 @@ function PrivacyPage() {
             counts.
           </li>
           <li>
+            <strong>Google BigQuery</strong> (asia-northeast1 region, our own project) — page view
+            metadata described above (table <code>ryan.web_events</code>). Used only by us for
+            first-party analytics on the blog; not exposed to or shared with any external tooling.
+          </li>
+          <li>
             <strong>Cloudflare Workers</strong> — request handling and edge cache. No persistent
             user data stored here.
           </li>
@@ -91,8 +110,10 @@ function PrivacyPage() {
       <section>
         <h2>Sharing</h2>
         <p>
-          No data is shared with marketing, advertising, or analytics third parties. There is no
-          tracking script on this site beyond the OAuth callback flow.
+          No data is shared with marketing, advertising, or third-party analytics SaaS. Analytics is
+          self-hosted on our own BigQuery dataset, not sent to Google Analytics, Plausible, Fathom,
+          or any equivalent external service. The only third parties involved in this site are the
+          infrastructure providers listed under &quot;Where data lives&quot; above.
         </p>
       </section>
 

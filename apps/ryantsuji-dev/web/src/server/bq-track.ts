@@ -17,7 +17,7 @@
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business 自前 RUM/analytics の BQ 書き込み経路。GCP SA JSON を Worker secret として持ち、Web Crypto で RS256 JWT 署名 → OAuth2 token 交換 → tabledata.insertAll で 1 行 streaming insert。token は isolate scope で 50min cache。失敗時も client には 204 を返し RUM が user 体験に伝播しない fail-open
+ * @graph-business 自前 RUM/analytics の BQ 書き込み経路。GCP SA JSON を Worker secret として持ち、Web Crypto で RS256 JWT 署名 → OAuth2 token 交換 → tabledata.insertAll で 1 行 streaming insert。token は isolate scope で 50min cache、cold-start 直後に並行 cache miss が来ても in-flight Promise を共有して OAuth 経路は 1 回に集約 (thundering-herd 抑止)。失敗時も client には 204 を返し RUM が user 体験に伝播しない fail-open
  * @graph-connects bigquery [writes_to] ryan.web_events table に streaming insert (tabledata.insertAll REST)
  * @graph-connects iam [calls] graph-app SA で OAuth2 token を取得 (https://oauth2.googleapis.com/token)
  */
@@ -247,9 +247,22 @@ export async function exchangeJwtForToken(
 let cachedToken: { token: string; expiresAtMs: number } | null = null;
 
 /**
- * cache を見て fresh ならそれを返し、無ければ OAuth 経路を踏んで新 token を cache する。
+ * 並行する cache miss を集約する in-flight promise。cold-start 直後に同 isolate で
+ * 並列に来る N 個の `/api/track` が同時に OAuth 経路を踏むと N 本の token 交換
+ * request が走るが、本 ref を共有することで「miss → exchange → cache fill」を
+ * 1 回に圧縮する (thundering herd 抑止)。
  *
- * @graph-connects iam [calls] exchangeJwtForToken (cache miss 時のみ)
+ * test 用に `_resetTokenCacheForTest` 内で同時に null クリアする。
+ *
+ * @graph-connects none
+ */
+let inFlightExchange: Promise<{ accessToken: string; expiresInSec: number }> | null = null;
+
+/**
+ * cache を見て fresh ならそれを返し、無ければ OAuth 経路を踏んで新 token を cache する。
+ * cache miss が並行した場合は in-flight Promise を共有して OAuth 経路を 1 回に集約する。
+ *
+ * @graph-connects iam [calls] exchangeJwtForToken (cache miss 時のみ、並行時は共有)
  */
 export async function getAccessToken(
   sa: SaCredentials,
@@ -259,17 +272,23 @@ export async function getAccessToken(
   if (cachedToken && cachedToken.expiresAtMs > nowMs() + 60_000) {
     return cachedToken.token;
   }
-  const { accessToken, expiresInSec } = await exchangeJwtForToken(sa, fetchImpl);
-  cachedToken = {
-    token: accessToken,
-    expiresAtMs: nowMs() + expiresInSec * 1000,
-  };
-  return accessToken;
+  inFlightExchange ??= exchangeJwtForToken(sa, fetchImpl);
+  try {
+    const { accessToken, expiresInSec } = await inFlightExchange;
+    cachedToken = {
+      token: accessToken,
+      expiresAtMs: nowMs() + expiresInSec * 1000,
+    };
+    return accessToken;
+  } finally {
+    inFlightExchange = null;
+  }
 }
 
 /** @graph-connects none */
 export function _resetTokenCacheForTest(): void {
   cachedToken = null;
+  inFlightExchange = null;
 }
 
 /**
