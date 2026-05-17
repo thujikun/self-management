@@ -13,6 +13,10 @@ tags:
 lang: "en"
 series: "building-ai-harness"
 seriesOrder: 2
+syndication:
+  devto:
+    id: 3687754
+    slug: "the-heart-of-the-ai-harness-a-knowledge-graph-of-the-ai-by-the-ai-for-the-ai-series-part-2-4a59-temp-slug-9510240"
 ---
 
 
