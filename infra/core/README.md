@@ -14,7 +14,7 @@ self-management の core インフラ。
   - admin role 群 (`serviceUsageAdmin` / `projectIamAdmin` / `iam.serviceAccountAdmin` / `iam.serviceAccountKeyAdmin` / `compute.networkViewer` / `secretmanager.admin`)
 - SA key (Pulumi state で暗号化保管)
 - **Secret Manager containers** — 基本は Pulumi が container + IAM のみ管理し、値は手動投入。一部 secret (`grafana-otlp-write-token` / `grafana-faro-collector-url`) は値も Pulumi が declarative に投入する (各行の "投入経路" を参照):
-  - `grafana-cloud-admin-token` — Grafana Cloud Access Policy admin token (Pulumi が読み込んで OTLP write token を派生生成)。投入経路: **手動 (`gcloud secrets versions add`)**
+  - `grafana-cloud-admin-token` — Grafana Cloud Access Policy admin token (Pulumi が読み込んで OTLP write token / Faro App を派生生成)。投入経路: **手動 (`gcloud secrets versions add`)**。**policy 作成時の region と scope 要件は [`docs/infra/grafana-cloud-setup.md`](../../docs/infra/grafana-cloud-setup.md) 参照** (誤ると FO App provisioning が `request not authorized for stack` で落ちる)
   - `grafana-otlp-write-token` — OTLP write 専用 token。投入経路: **Pulumi declarative** (grafana provider 経由で発行 → SecretVersion で書き込み)
   - `grafana-mcp-token` — Grafana Stack-scoped Service Account Token (mcp-grafana 用)。投入経路: **手動**
   - `neon-database-url` — Neon Postgres connection string (`DATABASE_URL`)。投入経路: **手動**
@@ -44,7 +44,7 @@ gcloud secrets versions add grafana-mcp-token \
 gcloud secrets versions list neon-database-url --project=ryan-self-management
 ```
 
-`grafana-otlp-write-token` と `grafana-faro-collector-url` は Pulumi が declarative に作成・投入するので手動操作不要 (前者は Cloud-level Access Policy Token 経由、後者は `infra/core/grafana-faro.ts` で Stack Admin SA + 2nd `grafana.Provider` + `frontendobservability.App` 経由)。
+`grafana-otlp-write-token` と `grafana-faro-collector-url` は Pulumi が declarative に作成・投入するので手動操作不要 (前者は Cloud-level Access Policy Token 経由、後者は `infra/core/grafana-faro.ts` で Stack Admin SA + 2nd `grafana.Provider` + `frontendobservability.App` 経由)。`grafana-cloud-admin-token` の policy 設計詳細 (region / scope) は [`docs/infra/grafana-cloud-setup.md`](../../docs/infra/grafana-cloud-setup.md) を参照。
 
 ## 値の消費経路
 

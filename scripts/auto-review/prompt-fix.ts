@@ -2,7 +2,20 @@
  * author モードで claude -p に渡す fix プロンプトを組み立てる pure function。
  *
  * worktree には PR branch が checkout 済 + origin/main は merge 試行済 (conflict 残置可能)。
- * Claude は conflict 解消 → review 指摘対応 → 6 gate green 確認 → commit & push を実行する。
+ * Claude は conflict 解消 → review 指摘対応 → commit & push を実行する。
+ *
+ * ローカルでの 6 gate 実行 (`pnpm typecheck` / `lint` / `test:coverage` 等) は agent
+ * 側ではやらない方針:
+ * - pre-commit hook (`.husky/pre-commit` + `scripts/hooks/gates.sh`) が staged file
+ *   単位で lint / format-check / coverage-staged / secrets / no-ignore / line-count /
+ *   graph-tags / log-check を強制実行するため、commit 段階で漏れる gate は typecheck
+ *   と full build / full test だけ。その 2 つは push 後の CI が pre-merge で踏むので
+ *   double 実行は冗長
+ * - 特に `pnpm test:coverage` の所要時間 (monorepo full build + 1500+ test) が
+ *   review→fix→review ループ全体のボトルネックになっていた
+ *
+ * push 後 CI が failure を返した場合は ci-fix-job が拾うので、fix-job 側は
+ * 「review 指摘 + conflict のみ対応 → 即 commit → 即 push」に責務を絞る。
  */
 
 export interface FixPromptInput {
@@ -45,22 +58,13 @@ export function buildFixPrompt(input: FixPromptInput): string {
     "   - testing.md 準拠 (per-file 90% coverage / `toStrictEqual` `toMatchInlineSnapshot` 推奨)",
     "   - 弱い matcher (`toBeDefined` / `toBeTruthy` / `toContain` / `toBe(true|false)` 等) は使わない",
     "",
-    "4. **ローカル 6 gate 全 green を確認** (順次実行、1 つでも fail なら fix し直す):",
-    "```bash",
-    "pnpm check:all && pnpm log:check",
-    "pnpm typecheck",
-    "pnpm lint",
-    "pnpm format:check",
-    "pnpm build",
-    "pnpm test:coverage",
-    "```",
-    "",
-    "5. **commit**: Conventional Commits 形式 (`fix:` / `chore:` / `refactor:` 等、type 小文字 / subject 末尾ピリオドなし)。",
+    "4. **commit**: Conventional Commits 形式 (`fix:` / `chore:` / `refactor:` 等、type 小文字 / subject 末尾ピリオドなし)。",
     `   ヘッダーは 100 字以内。本文に「pr #${input.prNumber} review 対応」と書き、各指摘への対処を箇条書きで残す。`,
+    "   commit 時に pre-commit hook が staged file 単位の gate (lint / format / coverage-staged / secrets / no-ignore / line-count / graph-tags / log-check) を強制実行する。落ちたら hook の出力に従って fix → 再 commit。`--no-verify` で bypass しない。",
     "",
-    `6. **push**: \`git push origin ${input.branch}\` で PR branch に push。`,
+    `5. **push**: \`git push origin ${input.branch}\` で PR branch に push。typecheck / 全 test / build は push 後の CI が pre-merge で踏むので、agent 側で事前実行しない (= ローカル full gate 不要)。CI で failure が出たら ci-fix-job が次 tick で拾うので fix-job 側は責任範囲を「review 指摘 + conflict のみ」に絞る。`,
     "",
-    "7. **報告 comment**: `gh pr comment <PR>` で簡潔に対応報告 (200 文字以内、各指摘の処理内容を要約)。",
+    "6. **報告 comment**: `gh pr comment <PR>` で簡潔に対応報告 (200 文字以内、各指摘の処理内容を要約)。",
     `   コマンド例: \`gh pr comment ${input.prNumber} --repo ${input.repo} --body-file -\` に stdin で本文を流す。`,
     "",
     "# 絶対遵守ルール (CLAUDE.md)",
@@ -74,7 +78,7 @@ export function buildFixPrompt(input: FixPromptInput): string {
     "",
     "# 失敗時の挙動",
     "",
-    "- conflict 解消できない / 6 gate を green にできない場合、push せず終了。次の人間判断に委ねる。",
+    "- conflict 解消できない / pre-commit hook が green にならない場合、push せず終了。次の人間判断に委ねる。",
     "- その場合は stdout に `<!-- FIX_FAILED:<理由> -->` を 1 行残す。呼び出し側 (fix-job.ts) は当該 commentId を bookmark + iteration counter を +1 進めて、同 commentId の永久 retry を遮断する (= MAX_ITERATIONS_PER_PR cap で必ず止まる)。再試行が必要な場合は Ryan が手動で state.json の `lastAddressedCommentId` を消す方針なので、**安易に early-give-up しないこと** (限界まで try してから FIX_FAILED を出す)。",
   ].join("\n");
 }

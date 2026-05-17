@@ -122,7 +122,10 @@ pnpm deploy:dry
    なお **`VITE_FARO_COLLECTOR_URL` は wrangler secret ではなく build 時に CI 経由で
    inject される** (`.github/workflows/deploy-ryantsuji-dev.yml:115-123` で
    `gcloud secrets versions access --secret=grafana-faro-collector-url` を実行し、
-   `vite build` の env に渡す)。手動 build 時は environment variable で同等に
+   `vite build` の env に渡す)。secret 値は `infra/core/grafana-faro.ts` の
+   `provisionGrafanaFaro` pipeline が Faro App 作成と同時に SecretVersion で
+   declarative に投入するため、UI 操作 / `gcloud secrets versions add` は不要。
+   手動 build 時は environment variable で同等に
    `VITE_FARO_COLLECTOR_URL=https://faro-collector-prod-xx.grafana.net/collect`
    を export してから `pnpm build` する。空のままなら client 側の Faro init が
    no-op になり RUM event は送られない (fail-open)。
