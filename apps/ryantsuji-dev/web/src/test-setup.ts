@@ -40,6 +40,23 @@ export const TEST_FAKE_ENV = {
   GOOGLE_CLIENT_SECRET: "google",
 } as const;
 
+/**
+ * happy-dom は `navigator.sendBeacon` を polyfill しない (Node 自体も持たない) ので、
+ * `lib/track-client.ts` の page_view beacon が必ず fetch fallback 経路に流れて
+ * `http://localhost:3000/api/track` を本物の network connect しに行き、ECONNREFUSED
+ * で unhandled rejection が出る。test ではこれを no-op true に stub して fetch
+ * フォールバックを抑止する。`track-client.test.ts` 側は test 内で本物の stub を
+ * `originalSendBeacon` として捕まえ直して mock を per-case に注入し直すため、
+ * 本 stub が test の網羅性を奪うことはない。
+ */
+if (typeof navigator !== "undefined") {
+  Object.defineProperty(navigator, "sendBeacon", {
+    value: () => true,
+    configurable: true,
+    writable: true,
+  });
+}
+
 vi.mock("@tanstack/react-start", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-start")>();
   type Validator = (data: unknown) => unknown;

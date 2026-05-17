@@ -9,11 +9,12 @@
  * - Google Workspace 受信メール一式の DNS record (MX × 5 + SPF + DKIM + workspace
  *   domain verification TXT)。Workspace Admin Console の案内に従い dashboard で追加した
  *   record を `pulumi import` で取り込み declarative 管理に統合
+ * - Cloudflare Workers custom domain binding × 2 (`ryantsuji.dev` apex + `www`
+ *   subdomain → Worker `ryantsuji-dev-web`)。`apps/ryantsuji-dev/web/wrangler.jsonc`
+ *   の `routes[].custom_domain: true` で wrangler が作成した binding を `pulumi import`
+ *   で declarative 管理に取り込み
  *
  * 後で追加する予定:
- * - `cloudflare.WorkerCustomDomain` で `ryantsuji.dev` と Worker `ryantsuji-dev-web` を紐付け
- *   → `apps/ryantsuji-dev/web` を 1 度 wrangler deploy した後に追加
- * - 必要なら `www` → apex CNAME 等の追加 DNS record
  * - DMARC TXT (`_dmarc` に `p=none` で監視開始 → 後で `p=quarantine` 昇格)
  *
  * @graph-stack ryantsuji-dev
@@ -21,6 +22,7 @@
  * @graph-business 個人ブログ ryantsuji.dev の Cloudflare 基盤を Pulumi で集約管理する。CF Registrar で取得済の zone を起点に、DNS と Workers custom domain を declarative にコード化し、ryan-product-graph と同じ Pulumi-only 運用に乗せる
  * @graph-connects cloudflare-zone [reads_from] CF Registrar 経由で取得済の `ryantsuji.dev` zone を lookup して zone ID を後段に渡す
  * @graph-connects google-workspace [reads_from] Workspace Admin Console で発行した DKIM 公開鍵 / domain verification token / SPF include / MX target を DNS record として apex に publish し、Workspace の受信メール経路と送信認証 (SPF/DKIM) を成立させる
+ * @graph-connects ryantsuji-dev-web [routes_to] Workers custom domain binding 経由で `ryantsuji.dev` / `www.ryantsuji.dev` への request を `ryantsuji-dev-web` Worker に routing する
  */
 
 import * as cloudflare from "@pulumi/cloudflare";
@@ -30,6 +32,8 @@ import * as pulumi from "@pulumi/pulumi";
 const config = new pulumi.Config("ryantsuji-dev");
 /** @graph-connects none */
 const zoneName = config.require("zoneName");
+/** @graph-connects none */
+const cloudflareAccountId = config.require("cloudflareAccountId");
 
 /**
  * CF Registrar 経由で取得済の zone を lookup する。
@@ -179,3 +183,45 @@ const googleWorkspaceVerification = new cloudflare.DnsRecord("google-workspace-v
 
 /** @graph-connects none */
 export const googleWorkspaceVerificationRecordId = googleWorkspaceVerification.id;
+
+/**
+ * Cloudflare Workers custom domain binding 一式 (apex + www → `ryantsuji-dev-web`)。
+ *
+ * `apps/ryantsuji-dev/web/wrangler.jsonc` の `routes[].custom_domain: true` で
+ * wrangler が deploy 時に作成した binding を `pulumi import` で取り込む。
+ *
+ * **AAAA `100::` record について**: binding を作成すると CF backend が apex / www
+ * 双方に AAAA `100::` placeholder record を自動付随させる (`100::` は CF edge が
+ * intercept して Worker に routing する sentinel IPv6)。これは binding の lifecycle
+ * に従属するため `cloudflare.DnsRecord` で別管理せず、binding 削除時に CF が自動で
+ * 削除するに任せる (二重管理すると destroy race condition のリスク)。
+ *
+ * binding 自体の lifecycle は wrangler deploy 起点 (= app 側の deploy が真実) で、
+ * Pulumi は state 反映のみを担当する。今後 hostname を増減する場合は wrangler.jsonc
+ * を更新 → `wrangler deploy` → このファイルに resource 追記 → `pulumi import` の流れ。
+ *
+ * @graph-connects ryantsuji-dev-web [routes_to] apex / www custom domain binding で外部 request を Worker に routing
+ */
+const WORKER_CUSTOM_DOMAINS = [
+  { name: "worker-cd-apex", hostname: zoneName },
+  { name: "worker-cd-www", hostname: `www.${zoneName}` },
+] as const;
+
+/** @graph-connects none */
+const workerCustomDomains = WORKER_CUSTOM_DOMAINS.map(
+  (cd) =>
+    new cloudflare.WorkersCustomDomain(cd.name, {
+      accountId: cloudflareAccountId,
+      hostname: cd.hostname,
+      service: "ryantsuji-dev-web",
+      zoneId: zone.zoneId,
+      // `environment` は provider 6.x 系で deprecated。CF API は `production` 固定で
+      // 返してくるが、宣言側で `environment` を渡すと `WARNING property "environment"
+      // is deprecated` が毎 preview 出るため、declaration からは省く。
+      // 省いても import 後 state には `production` が残るが drift 検出されない
+      // (provider が deprecated 扱いで diff 比較から除外している)。
+    }),
+);
+
+/** @graph-connects none */
+export const workerCustomDomainIds = workerCustomDomains.map((d) => d.id);

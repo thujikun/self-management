@@ -65,6 +65,7 @@ describe("infra/core stack", () => {
         "githubWifProviderResource",
         "googleOauthClientIdSecretId",
         "googleOauthClientSecretSecretId",
+        "grafanaFaroCollectorEndpoint",
         "grafanaFaroCollectorUrlSecretId",
         "grafanaMcpTokenSecretId",
         "grafanaOtlpEndpoint",
