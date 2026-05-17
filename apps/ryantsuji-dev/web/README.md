@@ -283,7 +283,7 @@ server / client の両 layer から Grafana Cloud に観測 signal を流す:
 
 1. `pnpm exec wrangler secret list` に `GCP_SA_JSON` が入っているか
 2. Tempo の span に `track.bq.fail` event が出ていないか (reason field で
-   `parse-sa-json` / `oauth-or-insert` / `unknown-error` を区別)
+   `parse-sa-json` / `parse-input` / `build-row` / `oauth-or-insert` を区別)
 3. BQ console の `ryan.web_events` table preview に直近行が乗っているか
 
 「Tempo / Faro にデータが来ない」場合の debug 起点:
