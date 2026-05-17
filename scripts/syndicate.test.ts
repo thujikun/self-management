@@ -19,15 +19,38 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { parseFrontmatter, type Frontmatter } from "@self/content";
 
+// emit*({publish:true}) の publish 経路は実 git push / 実 dev.to API call を踏むので test
+// では `@self/syndication` の publish/create 関数だけ mock 化する。syndicateForZenn /
+// syndicateForDevto などの pure transform は実体をそのまま使う。
+vi.mock("@self/syndication", async () => {
+  const actual = await vi.importActual<typeof import("@self/syndication")>("@self/syndication");
+  return {
+    ...actual,
+    createDevtoArticle: vi.fn(),
+    publishToDevto: vi.fn(),
+    publishToZenn: vi.fn(),
+  };
+});
+
+import { createDevtoArticle, publishToDevto, publishToZenn } from "@self/syndication";
+
 import {
   buildDevtoResolver,
   buildZennResolver,
   emitDevto,
   emitZenn,
+  generateZennId,
+  insertSyndicationBlock,
   parseFileName,
   readAllPosts,
+  writebackDevtoToFile,
+  writebackZennIdToFile,
   type ParsedPost,
 } from "./syndicate.js";
+
+const createDevtoArticleMock = vi.mocked(createDevtoArticle);
+const publishToDevtoMock = vi.mocked(publishToDevto);
+const publishToZennMock = vi.mocked(publishToZenn);
 
 function makeMeta(overrides: Record<string, unknown> = {}): Frontmatter {
   return parseFrontmatter({
@@ -249,7 +272,7 @@ describe("emitZenn", () => {
     ];
     await emitZenn({ posts, outDir, footer: "", publish: false });
     expect(await readdir(outDir)).toStrictEqual(["def456.md"]);
-    expect(warnSpy).toHaveBeenCalledWith("  [skip] alpha.ja.md: no syndication.zenn.id");
+    expect(warnSpy).toHaveBeenCalledWith("  [skip] alpha.ja.md: no syndication.zenn.id (dry-run)");
   });
 });
 
@@ -334,7 +357,7 @@ describe("emitDevto", () => {
     ];
     await emitDevto({ posts, outDir, publish: false });
     expect(await readdir(outDir)).toStrictEqual(["beta.json"]);
-    expect(warnSpy).toHaveBeenCalledWith("  [skip] alpha.en.md: no syndication.devto");
+    expect(warnSpy).toHaveBeenCalledWith("  [skip] alpha.en.md: no syndication.devto (dry-run)");
   });
 
   it("throws when publish=true and no API key is provided", async () => {
@@ -348,5 +371,343 @@ describe("emitDevto", () => {
     } finally {
       if (prev !== undefined) process.env.DEV_TO_API_KEY = prev;
     }
+  });
+});
+
+describe("insertSyndicationBlock", () => {
+  const baseFm = `---\ntitle: t\npublishedAt: "2026-01-01"\n---\nbody\n`;
+
+  it("frontmatter に syndication: が無い場合は closing --- 直前に新規 block を append する", () => {
+    const updated = insertSyndicationBlock(baseFm, `  zenn:\n    id: "abc123"\n`);
+    expect(updated).toMatchInlineSnapshot(`
+      "---
+      title: t
+      publishedAt: "2026-01-01"
+      syndication:
+        zenn:
+          id: "abc123"
+      ---
+      body
+      "
+    `);
+  });
+
+  it("既存 syndication: block がある場合は直後 (先頭) に sub-key を差し込む", () => {
+    const input = `---\ntitle: t\nsyndication:\n  devto:\n    id: 100\n    slug: "old"\n---\nbody\n`;
+    const updated = insertSyndicationBlock(input, `  zenn:\n    id: "abc123"\n`);
+    expect(updated).toMatchInlineSnapshot(`
+      "---
+      title: t
+      syndication:
+        zenn:
+          id: "abc123"
+        devto:
+          id: 100
+          slug: "old"
+      ---
+      body
+      "
+    `);
+  });
+
+  it("markdown body 中の `syndication:` で始まる行には触らない (frontmatter 限定で操作)", () => {
+    // 本 bug は元実装の `/^syndication:/m` が file 全体に multiline match して body 行を frontmatter 扱いしていた
+    const input = [
+      "---",
+      "title: t",
+      "---",
+      "# YAML サンプル",
+      "",
+      "```yaml",
+      "syndication:",
+      "  foo: bar",
+      "```",
+      "",
+    ].join("\n");
+    const updated = insertSyndicationBlock(input, `  zenn:\n    id: "abc123"\n`);
+    expect(updated).toMatchInlineSnapshot(`
+      "---
+      title: t
+      syndication:
+        zenn:
+          id: "abc123"
+      ---
+      # YAML サンプル
+
+      \`\`\`yaml
+      syndication:
+        foo: bar
+      \`\`\`
+      "
+    `);
+  });
+
+  it("frontmatter delimiter が無い場合は throw", () => {
+    expect(() => insertSyndicationBlock("plain markdown\n", `  zenn:\n    id: "x"\n`)).toThrow(
+      /frontmatter delimiter/,
+    );
+  });
+});
+
+describe("writebackZennIdToFile", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "syndicate-wbz-"));
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("syndication: 不在 → frontmatter 末尾に新規 block を作って zenn.id を書く", async () => {
+    const file = join(dir, "alpha.ja.md");
+    await writeFile(file, `---\ntitle: t\npublishedAt: "2026-01-01"\n---\nhello\n`);
+    await writebackZennIdToFile(file, "d9fc317c1336c2");
+    const updated = await readFile(file, "utf8");
+    expect(updated).toMatchInlineSnapshot(`
+      "---
+      title: t
+      publishedAt: "2026-01-01"
+      syndication:
+        zenn:
+          id: "d9fc317c1336c2"
+      ---
+      hello
+      "
+    `);
+  });
+
+  it("syndication: 既存 → 先頭に zenn sub-key を挿入する", async () => {
+    const file = join(dir, "alpha.ja.md");
+    await writeFile(
+      file,
+      `---\ntitle: t\nsyndication:\n  devto:\n    id: 1\n    slug: "alpha-dev"\n---\nhello\n`,
+    );
+    await writebackZennIdToFile(file, "d9fc317c1336c2");
+    const updated = await readFile(file, "utf8");
+    expect(updated).toMatchInlineSnapshot(`
+      "---
+      title: t
+      syndication:
+        zenn:
+          id: "d9fc317c1336c2"
+        devto:
+          id: 1
+          slug: "alpha-dev"
+      ---
+      hello
+      "
+    `);
+  });
+});
+
+describe("writebackDevtoToFile", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "syndicate-wbd-"));
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("syndication: 不在 → frontmatter 末尾に新規 block を作って devto.{id,slug} を書く", async () => {
+    const file = join(dir, "alpha.en.md");
+    await writeFile(file, `---\ntitle: t\npublishedAt: "2026-01-01"\n---\nhello\n`);
+    await writebackDevtoToFile(file, 12345, "alpha-en-xxx");
+    const updated = await readFile(file, "utf8");
+    expect(updated).toMatchInlineSnapshot(`
+      "---
+      title: t
+      publishedAt: "2026-01-01"
+      syndication:
+        devto:
+          id: 12345
+          slug: "alpha-en-xxx"
+      ---
+      hello
+      "
+    `);
+  });
+
+  it("syndication: 既存 (zenn.id あり) → 先頭に devto sub-key を挿入する", async () => {
+    const file = join(dir, "alpha.en.md");
+    await writeFile(file, `---\ntitle: t\nsyndication:\n  zenn:\n    id: "z1"\n---\nhello\n`);
+    await writebackDevtoToFile(file, 12345, "alpha-en-xxx");
+    const updated = await readFile(file, "utf8");
+    expect(updated).toMatchInlineSnapshot(`
+      "---
+      title: t
+      syndication:
+        devto:
+          id: 12345
+          slug: "alpha-en-xxx"
+        zenn:
+          id: "z1"
+      ---
+      hello
+      "
+    `);
+  });
+});
+
+describe("generateZennId", () => {
+  it("14 文字 lowercase hex を返す (crypto.randomBytes(7) → hex)", () => {
+    const id = generateZennId();
+    expect(id).toMatch(/^[a-f0-9]{14}$/);
+    expect(id).toHaveLength(14);
+  });
+
+  it("呼び出しごとに異なる id を返す (= 衝突確率 1/16^14)", () => {
+    const ids = new Set(Array.from({ length: 16 }, () => generateZennId()));
+    expect(ids.size).toBe(16);
+  });
+});
+
+describe("emitZenn publish create branch", () => {
+  let outDir: string;
+  let postsDir: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    outDir = await mkdtemp(join(tmpdir(), "syndicate-zpub-out-"));
+    postsDir = await mkdtemp(join(tmpdir(), "syndicate-zpub-src-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    createDevtoArticleMock.mockReset();
+    publishToDevtoMock.mockReset();
+    publishToZennMock.mockReset();
+  });
+  afterEach(async () => {
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+    await rm(outDir, { recursive: true, force: true });
+    await rm(postsDir, { recursive: true, force: true });
+  });
+
+  it("id 不在の .ja post を publish: 新規 zenn id 生成 → writeback → publishToZenn を実行", async () => {
+    publishToZennMock.mockResolvedValueOnce({
+      filePath: "/fake/articles/xxx.md",
+      commitSha: "deadbeef0123",
+      pushed: true,
+    });
+    const srcFile = join(postsDir, "alpha.ja.md");
+    await writeFile(srcFile, `---\ntitle: t\npublishedAt: "2026-01-01"\n---\nhello\n`);
+    const posts = [makePost({ slug: "alpha", lang: "ja", body: "hello\n" })];
+
+    await emitZenn({ posts, outDir, footer: "", publish: true, postsDir, repoDir: "/fake/repo" });
+
+    // writeback で zenn id が src file に書かれる (id 自体は randomBytes 由来で非決定的)
+    const after = await readFile(srcFile, "utf8");
+    expect(after).toMatch(/zenn:\n {4}id: "[a-f0-9]{14}"/);
+    const idMatch = /zenn:\n {4}id: "([a-f0-9]{14})"/.exec(after);
+    if (!idMatch) throw new Error(`zenn.id not extracted from ${JSON.stringify(after)}`);
+    const generatedId = idMatch[1] as string;
+    // 出力 file 名は <zennId>.md
+    expect(await readdir(outDir)).toStrictEqual([`${generatedId}.md`]);
+    // publishToZenn が同 id で 1 回呼ばれる
+    expect(publishToZennMock).toHaveBeenCalledTimes(1);
+    const publishArg = publishToZennMock.mock.calls[0]?.[0];
+    expect(publishArg).toMatchObject({
+      repoDir: "/fake/repo",
+      remoteUrl: "git@github.com:thujikun/ryantsuji-dev-content.git",
+      zennId: generatedId,
+      commitSubject: `chore: sync alpha (${generatedId})`,
+    });
+    expect(publishArg?.markdown).toMatch(/hello/);
+  });
+});
+
+describe("emitDevto publish create branch", () => {
+  let outDir: string;
+  let postsDir: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    outDir = await mkdtemp(join(tmpdir(), "syndicate-dpub-out-"));
+    postsDir = await mkdtemp(join(tmpdir(), "syndicate-dpub-src-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    createDevtoArticleMock.mockReset();
+    publishToDevtoMock.mockReset();
+    publishToZennMock.mockReset();
+  });
+  afterEach(async () => {
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+    await rm(outDir, { recursive: true, force: true });
+    await rm(postsDir, { recursive: true, force: true });
+  });
+
+  it("devto 不在の .en post を publish: createDevtoArticle → writeback → PUT は skip", async () => {
+    createDevtoArticleMock.mockResolvedValueOnce({
+      id: 12345,
+      slug: "alpha-en-xxx",
+      url: "https://dev.to/ryantsuji/alpha-en-xxx",
+    });
+    const srcFile = join(postsDir, "alpha.en.md");
+    await writeFile(srcFile, `---\ntitle: t\npublishedAt: "2026-01-01"\n---\nhello\n`);
+    const posts = [makePost({ slug: "alpha", lang: "en", body: "hello\n" })];
+
+    await emitDevto({
+      posts,
+      outDir,
+      publish: true,
+      apiKey: "test-key",
+      postsDir,
+    });
+
+    // writeback で devto.{id, slug} が src file に書かれる
+    const after = await readFile(srcFile, "utf8");
+    expect(after).toMatchInlineSnapshot(`
+      "---
+      title: t
+      publishedAt: "2026-01-01"
+      syndication:
+        devto:
+          id: 12345
+          slug: "alpha-en-xxx"
+      ---
+      hello
+      "
+    `);
+    // 出力 JSON は新規 id で書かれる
+    const written = JSON.parse(await readFile(resolve(outDir, "alpha.json"), "utf8")) as {
+      id: number;
+    };
+    expect(written.id).toStrictEqual(12345);
+    // POST 直後の body と PUT body が同一なので二度叩きしない (Major #4)
+    expect(createDevtoArticleMock).toHaveBeenCalledTimes(1);
+    expect(publishToDevtoMock).not.toHaveBeenCalled();
+  });
+
+  it("devto 既存の .en post を publish: createDevtoArticle は呼ばず PUT で update", async () => {
+    publishToDevtoMock.mockResolvedValueOnce({
+      url: "https://dev.to/ryantsuji/beta",
+      editedAt: "2026-05-17T00:00:00Z",
+    });
+    const posts = [
+      makePost({
+        slug: "beta",
+        lang: "en",
+        devto: { id: 999, slug: "beta-existing" },
+        body: "world\n",
+      }),
+    ];
+
+    await emitDevto({
+      posts,
+      outDir,
+      publish: true,
+      apiKey: "test-key",
+      postsDir,
+    });
+
+    expect(createDevtoArticleMock).not.toHaveBeenCalled();
+    expect(publishToDevtoMock).toHaveBeenCalledTimes(1);
+    expect(publishToDevtoMock.mock.calls[0]?.[0]).toMatchObject({
+      apiKey: "test-key",
+      articleId: 999,
+    });
   });
 });

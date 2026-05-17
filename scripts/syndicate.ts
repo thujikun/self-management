@@ -18,6 +18,7 @@
  * @graph-connects syndication [calls] @self/syndication の syndicateForZenn / syndicateForDevto を呼ぶ
  */
 
+import { randomBytes } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -26,6 +27,7 @@ import { fileURLToPath } from "node:url";
 import matter from "gray-matter";
 import { parseFrontmatter, type Frontmatter } from "@self/content";
 import {
+  createDevtoArticle,
   publishToDevto,
   publishToZenn,
   syndicateForDevto,
@@ -99,6 +101,74 @@ export async function readAllPosts(
 }
 
 /**
+ * `raw` の **frontmatter 領域のみ** を対象に、`syndication:` block へ `blockBody` を挿入する。
+ *
+ * `^syndication:` を file 全体で multiline match すると、markdown body 中の
+ * `syndication:` で始まる行 (解説文 / 表 / コードブロック内の YAML サンプル) にも
+ * hit して body 内に挿入が混入する事故が起きる。先頭の `---\n...\n---\n` を切り出して
+ * frontmatter 側だけ書き換えることで、body は一切触らない不変式を保つ。
+ *
+ * @graph-connects none
+ */
+export function insertSyndicationBlock(raw: string, blockBody: string): string {
+  const fmMatch = /^---\n([\s\S]*?)\n---\n/.exec(raw);
+  if (!fmMatch) {
+    throw new Error("frontmatter delimiter `---\\n...\\n---\\n` not found");
+  }
+  const fmContent = fmMatch[1] as string;
+  const afterFm = raw.slice(fmMatch[0].length);
+  if (/^syndication:/m.test(fmContent)) {
+    // 既存 `syndication:` block の直後に挿入 (sub-key の他に何か有っても先頭に並ぶ)
+    const updatedFm = fmContent.replace(/(^syndication:[ \t]*\n)/m, `$1${blockBody}`);
+    return `---\n${updatedFm}\n---\n${afterFm}`;
+  }
+  // `syndication:` block 自体が無いケース: frontmatter content の末尾に新規 block を append。
+  // blockBody は trailing newline 持ちなので、最後の \n は閉じ delim 前の改行になるよう剥がしておく
+  const normalized = blockBody.endsWith("\n") ? blockBody.slice(0, -1) : blockBody;
+  return `---\n${fmContent}\nsyndication:\n${normalized}\n---\n${afterFm}`;
+}
+
+/**
+ * source .md ファイルの frontmatter に `syndication.zenn.id` を書き加える。
+ *
+ * gray-matter で parse → data 操作 → stringify する代わりに、`insertSyndicationBlock`
+ * で frontmatter 領域だけを surgical に編集する (round-trip による format drift を避ける)。
+ * 既存 `zenn.id` の上書きは想定しない (= 二重 create の防御として呼び出し側が事前 check する)。
+ *
+ * @graph-connects none
+ */
+export async function writebackZennIdToFile(file: string, zennId: string): Promise<void> {
+  const raw = await readFile(file, "utf8");
+  const insertion = `  zenn:\n    id: "${zennId}"\n`;
+  await writeFile(file, insertSyndicationBlock(raw, insertion), "utf8");
+}
+
+/**
+ * source .md ファイルの frontmatter に `syndication.devto.{id, slug}` を書き加える。
+ * 規約は `writebackZennIdToFile` と同じ (frontmatter 領域だけを surgical に書き換える)。
+ *
+ * @graph-connects none
+ */
+export async function writebackDevtoToFile(
+  file: string,
+  devtoId: number,
+  devtoSlug: string,
+): Promise<void> {
+  const raw = await readFile(file, "utf8");
+  const insertion = `  devto:\n    id: ${devtoId}\n    slug: "${devtoSlug}"\n`;
+  await writeFile(file, insertSyndicationBlock(raw, insertion), "utf8");
+}
+
+/**
+ * 14 char hex の Zenn article ID を生成 (`crypto.randomBytes(7)` → hex)。
+ *
+ * @graph-connects none
+ */
+export function generateZennId(): string {
+  return randomBytes(7).toString("hex");
+}
+
+/**
  * slug → Zenn 公開 URL の resolver を構築。`.ja.md` の frontmatter
  * `syndication.zenn.id` から逆引きする。
  */
@@ -142,6 +212,8 @@ export interface EmitZennArgs {
   publish: boolean;
   /** Zenn 用 local clone path。default: `$RYANTSUJI_CONTENT_REPO_DIR` → `~/Workspace/ryantsuji-dev-content`。 */
   repoDir?: string;
+  /** source post の dir。writeback 時の `.ja.md` path を解決する。test では tmpdir を渡す。default: {@link POSTS_DIR}。 */
+  postsDir?: string;
 }
 
 /** Zenn 変換: 全 .ja.md を Zenn 用に書き出す + 任意で repo に commit/push。 */
@@ -157,10 +229,18 @@ export async function emitZenn(args: EmitZennArgs): Promise<void> {
   for (const p of args.posts) {
     if (p.lang !== "ja") continue;
     if (args.slug && p.slug !== args.slug) continue;
-    const zennId = p.meta.syndication.zenn?.id;
+    let zennId = p.meta.syndication.zenn?.id;
     if (!zennId) {
-      console.warn(`  [skip] ${p.slug}.ja.md: no syndication.zenn.id`);
-      continue;
+      if (!args.publish) {
+        console.warn(`  [skip] ${p.slug}.ja.md: no syndication.zenn.id (dry-run)`);
+        continue;
+      }
+      // publish mode で id が無い場合は新規 article として hex を生成 → frontmatter に
+      // 書き戻し → 以後の syndicate でこの id が使われる。
+      zennId = generateZennId();
+      const srcFile = resolve(args.postsDir ?? POSTS_DIR, `${p.slug}.ja.md`);
+      await writebackZennIdToFile(srcFile, zennId);
+      console.log(`  [create] ${p.slug}.ja.md: generated zenn id=${zennId}`);
     }
     const enUrl = slugsWithEn.has(p.slug) ? `${RYANTSUJI_DEV_BASE}/posts/${p.slug}?lang=en` : null;
     const markdown = syndicateForZenn({
@@ -201,12 +281,17 @@ export interface EmitDevtoArgs {
   publish: boolean;
   /** dev.to API key。default: `$DEV_TO_API_KEY`。`publish` 時のみ必要。 */
   apiKey?: string;
+  /** source post の dir。writeback 時の `.en.md` path を解決する。test では tmpdir を渡す。default: {@link POSTS_DIR}。 */
+  postsDir?: string;
 }
 
 /** dev.to 変換: 全 .en.md を API article attributes として JSON で書き出す + 任意で PUT publish。 */
 export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
   const resolver = buildDevtoResolver(args.posts);
   await mkdir(args.outDir, { recursive: true });
+  // apiKey の有無 = publish mode の有無 と等価にする (publish mode で apiKey が無ければ
+  // 直後の throw で gate)。以後の loop では `apiKey` truthy = "publish + key あり" を
+  // 単独で narrow できる。
   const apiKey = args.publish ? (args.apiKey ?? process.env.DEV_TO_API_KEY) : undefined;
   if (args.publish && !apiKey) {
     throw new Error("--publish requires DEV_TO_API_KEY env");
@@ -215,11 +300,8 @@ export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
   for (const p of args.posts) {
     if (p.lang !== "en") continue;
     if (args.slug && p.slug !== args.slug) continue;
-    const devto = p.meta.syndication.devto;
-    if (!devto) {
-      console.warn(`  [skip] ${p.slug}.en.md: no syndication.devto`);
-      continue;
-    }
+    let devto = p.meta.syndication.devto;
+    let justCreated = false;
     const article = syndicateForDevto({
       meta: p.meta,
       body: p.body,
@@ -228,11 +310,31 @@ export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
       canonicalHost: RYANTSUJI_DEV_BASE,
       coverImageUrl: p.meta.cover ? `${RYANTSUJI_DEV_BASE}${p.meta.cover}` : undefined,
     });
+
+    if (!devto) {
+      if (!apiKey) {
+        console.warn(`  [skip] ${p.slug}.en.md: no syndication.devto (dry-run)`);
+        continue;
+      }
+      // publish mode で devto entry が無い場合は POST で article 作成 → id + slug を
+      // frontmatter に書き戻し → 以後の syndicate で update 経路に乗る。
+      const created = await createDevtoArticle({ apiKey, article });
+      devto = { id: created.id, slug: created.slug };
+      justCreated = true;
+      const srcFile = resolve(args.postsDir ?? POSTS_DIR, `${p.slug}.en.md`);
+      await writebackDevtoToFile(srcFile, created.id, created.slug);
+      console.log(
+        `  [create] ${p.slug}.en.md: dev.to article created id=${created.id} slug=${created.slug}`,
+      );
+    }
+
     const outPath = resolve(args.outDir, `${p.slug}.json`);
     await writeFile(outPath, JSON.stringify({ id: devto.id, article }, null, 2) + "\n", "utf8");
     console.log(`  devto: ${p.slug} → ${outPath}`);
 
-    if (args.publish && apiKey) {
+    // POST 直後の state と PUT body は同一なので、create 経路を踏んだ post は PUT skip。
+    // dev.to は 30 req / 30 sec の rate limit + `edited_at` 更新副作用が重なるため二度叩きを避ける。
+    if (apiKey && !justCreated) {
       const result = await publishToDevto({ apiKey, articleId: devto.id, article });
       console.log(`    publish: ${result.url}`);
     }

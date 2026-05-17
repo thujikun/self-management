@@ -11,7 +11,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DevtoArticleAttributes } from "../devto-frontmatter.js";
-import { publishToDevto } from "./devto.js";
+import { createDevtoArticle, publishToDevto } from "./devto.js";
 
 const baseArticle: DevtoArticleAttributes = {
   title: "x",
@@ -132,5 +132,78 @@ describe("publishToDevto", () => {
     const result = await promise;
     expect(result.url).toBe("https://dev.to/x");
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("createDevtoArticle", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(global, "fetch");
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  it("201 で id + slug + url を返す + POST /api/articles へ api-key 付きで投げる", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      okResponse({
+        id: 9999,
+        slug: "new-article-temp-slug-xxx",
+        url: "https://dev.to/ryantsuji/new-article-temp-slug-xxx",
+      }),
+    );
+    const result = await createDevtoArticle({ apiKey: "test-key", article: baseArticle });
+    expect(result).toStrictEqual({
+      id: 9999,
+      slug: "new-article-temp-slug-xxx",
+      url: "https://dev.to/ryantsuji/new-article-temp-slug-xxx",
+    });
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(url).toBe("https://dev.to/api/articles");
+    expect((init as RequestInit).method).toBe("POST");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers["api-key"]).toBe("test-key");
+    expect((init as RequestInit).body).toContain('"title":"x"');
+  });
+
+  it("429 で retry (sleepFn 注入で即解決)", async () => {
+    fetchSpy
+      .mockResolvedValueOnce(rateLimitResponse())
+      .mockResolvedValueOnce(
+        okResponse({ id: 1, slug: "ok-slug", url: "https://dev.to/ryantsuji/ok-slug" }),
+      );
+    const sleeps: number[] = [];
+    const result = await createDevtoArticle({
+      apiKey: "x",
+      article: baseArticle,
+      sleepFn: (ms) => {
+        sleeps.push(ms);
+        return Promise.resolve();
+      },
+    });
+    expect(result.id).toBe(1);
+    expect(sleeps).toStrictEqual([2_000]);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("非 429 error は throw", async () => {
+    fetchSpy.mockResolvedValueOnce(new Response("forbidden", { status: 403 }));
+    await expect(createDevtoArticle({ apiKey: "bad", article: baseArticle })).rejects.toThrow(
+      /403/,
+    );
+  });
+
+  it("429 retry 上限超で throw", async () => {
+    for (let i = 0; i < 6; i++) fetchSpy.mockResolvedValueOnce(rateLimitResponse());
+    await expect(
+      createDevtoArticle({
+        apiKey: "x",
+        article: baseArticle,
+        sleepFn: () => Promise.resolve(),
+      }),
+    ).rejects.toThrow(/429/);
+    expect(fetchSpy).toHaveBeenCalledTimes(6);
   });
 });

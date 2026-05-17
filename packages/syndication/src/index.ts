@@ -21,7 +21,12 @@ export { buildDevtoArticle } from "./devto-frontmatter.js";
 export type { DevtoArticleAttributes, DevtoBuildOptions } from "./devto-frontmatter.js";
 export { syndicateForZenn, syndicateForDevto } from "./pipeline.js";
 export type { SyndicateForZennArgs, SyndicateForDevtoArgs } from "./pipeline.js";
-export { publishToDevto } from "./publish/devto.js";
-export type { PublishDevtoArgs, PublishDevtoResult } from "./publish/devto.js";
+export { createDevtoArticle, publishToDevto } from "./publish/devto.js";
+export type {
+  CreateDevtoArgs,
+  CreateDevtoResult,
+  PublishDevtoArgs,
+  PublishDevtoResult,
+} from "./publish/devto.js";
 export { publishToZenn } from "./publish/zenn.js";
 export type { PublishZennArgs, PublishZennResult } from "./publish/zenn.js";
