@@ -73,9 +73,9 @@ cortex is most cleanly read as **a real attempt to build that "harness" inside a
 
 From here, I'll show **how the "harness beats model" thesis takes concrete shape on cortex**.
 
-## Who Writes the Code
+## Who Builds the Code
 
-For the first few months, **I wrote 100% of cortex by myself**. The accurate framing isn't "without a harness, others can't safely PR" but rather "**without a harness, no one — including me with extra hands — could ride this thing**."
+For the first few months, **I built 100% of cortex by myself**. The accurate framing isn't "without a harness, others can't safely PR" but rather "**without a harness, no one — including me with extra hands — could ride this thing**."
 
 Even back then, between [our Google Meet recording pipeline](/posts/meeting-intelligence) (Japanese), about half of the [17 MCP servers](/posts/17-mcp-servers), and a long tail of unpublished features, **roughly 50 loosely-coupled applications were already running**. Each one had its purpose, background, and data flow documented carefully. But the volume was such that **even with AI in the loop, you couldn't realistically have it read all the relevant docs and absorb the whole picture for any given change**. The codebase had outgrown what a person — or an AI given pieces — could hold in their head at once.
 
