@@ -56,6 +56,13 @@ export interface Env {
   X_OAUTH2_CLIENT_SECRET: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
+  /**
+   * 管理者の email アドレス。session.user.email がこの値と一致する request では
+   * draft post が listing / 詳細 / series 経路でプレビュー可能になる (公開前の動作確認用)。
+   * 未設定なら admin preview 経路は無効 (誰でも draft 不可視 = 公開挙動)。
+   * `wrangler secret put ADMIN_EMAIL` で投入。
+   */
+  ADMIN_EMAIL?: string;
   OTLP_ENDPOINT?: string;
   OTLP_AUTH_HEADER?: string;
   GCP_SA_JSON?: string;

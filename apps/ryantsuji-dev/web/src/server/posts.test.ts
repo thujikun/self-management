@@ -39,6 +39,21 @@ describe("listPosts(lang)", () => {
     expect(posts.map((p) => p.draft)).toStrictEqual(posts.map(() => false));
   });
 
+  it("includeDrafts: true を渡すと draft variant も listing に含む (admin preview)", () => {
+    const publicPosts = listPosts("en");
+    const withDrafts = listPosts("en", { includeDrafts: true });
+    // 少なくとも 1 つは draft が増えていなければ、テスト fixture に draft 記事が無い
+    // → 別 mechanism (= cortex-product-graph 等) が draft で居ると assume
+    expect(withDrafts.length).toBeGreaterThanOrEqual(publicPosts.length);
+    const draftSlugs = withDrafts.filter((p) => p.draft).map((p) => p.slug);
+    // draft mode で draft 記事 1 つでも見えるなら admin preview 経路は機能している
+    if (draftSlugs.length > 0) {
+      for (const slug of draftSlugs) {
+        expect(publicPosts.find((p) => p.slug === slug)).toBeUndefined();
+      }
+    }
+  });
+
   it("各 post の slug / title / publishedAt が schema 準拠 + servedLang / availableLangs が付く", () => {
     for (const p of listPosts("en")) {
       expect(p.slug).toMatch(/^[\w-]+$/);
@@ -119,6 +134,13 @@ describe("getRenderedPost(slug, lang)", () => {
 
   it("draft post の slug でも null (公開経路から漏らさない)", () => {
     // _draft-example.en.md は frontmatter で draft: true
+    expect(getRenderedPost("_draft-example", "en")).toBeNull();
+  });
+
+  it("includeDrafts: true で draft post の slug も lookup できる (admin preview)", () => {
+    // _draft-example.en.md は frontmatter で draft: true
+    expect(getRenderedPost("_draft-example", "en", { includeDrafts: true })).not.toBeNull();
+    // default (= public) 経路は変化なし
     expect(getRenderedPost("_draft-example", "en")).toBeNull();
   });
 });

@@ -18,8 +18,10 @@
 
 import { getCookie, getRequestHeaders, setCookie } from "@tanstack/react-start/server";
 
+import { isAdminRequest } from "./auth-session.js";
 import { LANG_COOKIE, LANG_COOKIE_MAX_AGE, isLang, type Lang } from "./i18n.js";
 import { THEME_COOKIE, THEME_COOKIE_MAX_AGE, isTheme, type Theme } from "./theme.js";
+import type { Env } from "../start.js";
 
 /**
  * Accept-Language header を取得する。server runtime 外 (= AsyncLocalStorage に
@@ -103,4 +105,37 @@ export function writeThemeCookie(theme: Theme): void {
   } catch {
     // test runtime 等で無効
   }
+}
+
+/**
+ * 現在の request の Headers をそのまま Headers object として返す。`safeAcceptLanguage`
+ * と同じく runtime 外では throw する getRequestHeaders を try/catch で握りつぶし、
+ * 取れなければ null を返す。
+ *
+ * @graph-connects tanstack-start [calls] getRequestHeaders で全 header を取り出す
+ */
+export function safeRequestHeaders(): Headers | null {
+  try {
+    const raw = getRequestHeaders() as unknown as Record<string, string | undefined>;
+    const h = new Headers();
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof v === "string") h.set(k, v);
+    }
+    return h;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 現在 request の session.user.email が `env.ADMIN_EMAIL` と一致するか。loader が
+ * draft preview の可視性を決める時に使う。runtime 外 (test 等) では headers が無く
+ * false を返すので、テスト経由では default で draft は除外される。
+ *
+ * @graph-connects better-auth [calls] isAdminRequest 経由で session.user.email を比較
+ */
+export async function isAdminFromCurrentRequest(env: Env): Promise<boolean> {
+  const headers = safeRequestHeaders();
+  if (!headers) return false;
+  return await isAdminRequest(headers, env);
 }

@@ -50,12 +50,16 @@ export function getSeriesMeta(slug: string): SeriesMeta | null {
  * `publishedAt` 昇順 fallback。同 order が複数あれば `publishedAt` で安定 sort する。
  *
  * `lang` の variant 解決は `listPosts` に委譲しているので、引数 lang variant が無い
- * post は en fallback で出る。
+ * post は en fallback で出る。`includeDrafts: true` で draft も含む (admin preview)。
  *
  * @graph-connects content [calls] listPosts(lang)
  */
-export function listSeriesPosts(seriesSlug: string, lang: Lang): PostListItem[] {
-  return listPosts(lang)
+export function listSeriesPosts(
+  seriesSlug: string,
+  lang: Lang,
+  options: { includeDrafts?: boolean } = {},
+): PostListItem[] {
+  return listPosts(lang, options)
     .filter((p) => p.series === seriesSlug)
     .sort((a, b) => {
       const oa = a.seriesOrder ?? Number.MAX_SAFE_INTEGER;
@@ -68,12 +72,14 @@ export function listSeriesPosts(seriesSlug: string, lang: Lang): PostListItem[] 
 /**
  * 指定 post を含む series 内の (prev / current / next) 情報を返す。post detail の
  * 連載 navigation box に流す。post が series に属さなければ null。
+ * `includeDrafts: true` で draft series も解決対象 (admin preview)。
  *
  * @graph-connects content [calls] listSeriesPosts
  */
 export function getSeriesNav(
   slug: string,
   lang: Lang,
+  options: { includeDrafts?: boolean } = {},
 ): {
   meta: SeriesMeta;
   posts: PostListItem[];
@@ -81,12 +87,12 @@ export function getSeriesNav(
   prev: PostListItem | null;
   next: PostListItem | null;
 } | null {
-  const all = listPosts(lang);
+  const all = listPosts(lang, options);
   const current = all.find((p) => p.slug === slug);
   if (!current?.series) return null;
   const meta = getSeriesMeta(current.series);
   if (!meta) return null;
-  const posts = listSeriesPosts(current.series, lang);
+  const posts = listSeriesPosts(current.series, lang, options);
   const idx = posts.findIndex((p) => p.slug === slug);
   // `current.series === meta.slug` かつ listSeriesPosts も同 lang を渡しているため、
   // idx は必ず ≥ 0。defensive な `if (idx < 0)` を残すと unreachable branch として
