@@ -510,6 +510,3 @@ In that sense, Product Graph is literally a knowledge graph of the AI, by the AI
 
 
 Coming up in **Part 3**: the full pipeline of **automated PR review** built on top of cpg — from GitHub webhook ingestion through AI review / automated fix / automated merge / parallel deploy. What happens when Auto Review fires with `usecase: "code-review"`, how `[Graph] Critical` comments are generated, and the worktree mechanism that lets AI apply fixes and push back.
-
-
-At airCloset, we're looking for engineers who want to build a new development experience together with AI. If you're interested, please check out our careers page at [airCloset Quest](https://corp.air-closet.com/recruiting/developers/).
