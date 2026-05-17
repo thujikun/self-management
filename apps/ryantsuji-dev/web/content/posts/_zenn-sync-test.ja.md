@@ -23,4 +23,8 @@ syndication:
 
 参考: [Agentic Graph RAG MCP](/posts/agentic-graph-rag-mcp)、[Sandbox MCP](/posts/sandbox-mcp)。
 
-検証完了後はこの記事自体を削除する想定。
+この fixture は **常駐運用**:
+
+- 本ファイル (`_zenn-sync-test.ja.md`) は repo に残し続ける (sync 経路 retest 用)
+- Zenn 側の下書き article (`zenn-sync-test`) も削除せず再利用し、同じ slug を `--include-drafts --publish` で update し続ける
+- `syndication.zenn.id` は通常 14 桁 hex (例 `d416342f46f16b`) だが、本 fixture は人間が grep して識別しやすい placeholder (`zenn-sync-test`) を意図的に使用。Zenn Web UI 経由で正式 ID を発行し直す予定は無い
