@@ -147,7 +147,7 @@ Here's the thesis. In one line:
 
 > **Each retrieval step is deterministic. Only the orchestration is AI.**
 
-![The three eras of RAG](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/sztt41rykfdvi231od0u.png)
+![The three eras of RAG](/images/posts/agentic-graph-rag-mcp/sztt41rykfdvi231od0u.png)
 
 For context: "Agentic Graph RAG" isn't a term I coined. Neo4j's [NODES AI 2026](https://neo4j.com/videos/nodes-ai-2026-agentic-graphrag-autonomous-knowledge-graph-construction-and-adaptive-retrieval-2/) featured a session titled "Agentic GraphRAG," and O'Reilly is publishing [Agentic GraphRAG](https://www.oreilly.com/library/view/agentic-graph-rag/9798341623163/) by Anthony Alcaraz and Sam Julien in November 2026. The industry as a whole is pivoting from "one-shot Graph RAG" toward "agent-driven Graph RAG." This article is my attempt to put words around the design we'd been arriving at independently inside our company.
 
@@ -169,7 +169,7 @@ The result: **errors get localized**. Retrieval itself is deterministic, so the 
 
 The most important design move in Agentic Graph RAG: **the tool's return value tells the AI what to do next**.
 
-![Tool return values become the next instruction](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/37kg7dta2liqsvc8guf9.png)
+![Tool return values become the next instruction](/images/posts/agentic-graph-rag-mcp/37kg7dta2liqsvc8guf9.png)
 
 This is different from a regular API. Regular APIs answer the question they were asked. MCP tools are **in conversation with an AI**. The other side of the conversation needs not just an "answer" but **candidates for the next move**.
 

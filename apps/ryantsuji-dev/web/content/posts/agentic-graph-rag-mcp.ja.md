@@ -143,7 +143,7 @@ Microsoft GraphRAGが何をするか、ざっくり言うと:
 
 ## Agentic Graph RAG ── 検索は決定的、判断はAI
 
-![RAGの3つの時代](https://static.zenn.studio/user-upload/6df79e52319d-20260507.png)
+![RAGの3つの時代](/images/posts/agentic-graph-rag-mcp/6df79e52319d-20260507.png)
 
 なお、Agentic Graph RAGという呼び方は私が独自に作った言葉ではありません。Neo4jの [NODES AI 2026](https://neo4j.com/videos/nodes-ai-2026-agentic-graphrag-autonomous-knowledge-graph-construction-and-adaptive-retrieval-2/) では「Agentic GraphRAG」のセッションが組まれていますし、O'ReillyからはAnthony Alcaraz / Sam Julien共著の書籍 [Agentic GraphRAG](https://www.oreilly.com/library/view/agentic-graph-rag/9798341623163/) が2026年11月に刊行予定です。業界全体が「単発のGraph RAG」から「エージェント前提のGraph RAG」へ舵を切っている流れの中で、私たちが社内で独自に積み上げてきた設計を改めて言語化したのがこの記事です。
 
@@ -167,7 +167,7 @@ Microsoft GraphRAGが何をするか、ざっくり言うと:
 
 ## ツール返却値がrunbookになる
 
-![ツール返却値が次の指示になる](https://static.zenn.studio/user-upload/744076b1776e-20260507.png)
+![ツール返却値が次の指示になる](/images/posts/agentic-graph-rag-mcp/744076b1776e-20260507.png)
 
 Agentic Graph RAGの設計でいちばん大事なのは、**ツールの返却値が「次に何をすべきか」をAIに伝える**ことです。
 
