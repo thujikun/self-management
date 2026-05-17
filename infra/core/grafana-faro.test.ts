@@ -83,6 +83,7 @@ beforeAll(async () => {
 
   output = provisionGrafanaFaro({
     cloudProvider,
+    cloudAccessPolicyToken: pulumi.output("test-cap-token"),
     stackSlug: "test-stack",
     stackUrl: pulumi.output("https://test-stack.grafana.net"),
     stackId: pulumi.output("12345"),
@@ -178,11 +179,37 @@ describe("provisionGrafanaFaro", () => {
     expect(token?.inputs["serviceAccountId"]).toStrictEqual("pulumi-stack-admin_id");
   });
 
-  it("2nd grafana.Provider は Stack instance URL を url に詰めて発行される", () => {
+  it("2nd grafana.Provider は url + auth + cloudAccessPolicyToken + frontendO11yApiAccessToken の 4 field を詰めて発行される", () => {
+    // Faro App は 3 経路 (Stack instance API / Frontend Observability management API /
+    // Cloud Portal lookup) を踏むため、`auth` (Stack SA token) と `cloudAccessPolicyToken`
+    // / `frontendO11yApiAccessToken` (Cloud-level admin CAP token) の 4 field 全てが
+    // 必要。`grafana-faro.ts:113-114` の 2 行が silent に消えても regression を拾える
+    // ように、各 field を toStrictEqual で個別に固定する。
+    //
+    // `cloudAccessPolicyToken` / `frontendO11yApiAccessToken` / `auth` は provider schema
+    // 上 secret 扱いのため、Pulumi mock は値を secret sentinel
+    // (`4dabf18193072939515e22adb298388d` 0xc26d0f04 magic) で wrap して serialize する。
+    // `auth` の値は mock 側で synthesize されない (`stackPulumiToken.key` は state に
+    // 載らない) ため `value: null` になり、CAP 系 2 field は test fixture の入力値
+    // `"test-cap-token"` がそのまま wrap される。
+    const SECRET_SENTINEL = "4dabf18193072939515e22adb298388d";
+    const SECRET_MAGIC = "1b47061264138c4ac30d75fd1eb44270";
     const provider = captured.find(
       (r) => r.type === "pulumi:providers:grafana" && r.name === "grafana-stack",
     );
     expect(provider?.inputs["url"]).toStrictEqual("https://test-stack.grafana.net");
+    expect(provider?.inputs["cloudAccessPolicyToken"]).toStrictEqual({
+      [SECRET_SENTINEL]: SECRET_MAGIC,
+      value: "test-cap-token",
+    });
+    expect(provider?.inputs["frontendO11yApiAccessToken"]).toStrictEqual({
+      [SECRET_SENTINEL]: SECRET_MAGIC,
+      value: "test-cap-token",
+    });
+    expect(provider?.inputs["auth"]).toStrictEqual({
+      [SECRET_SENTINEL]: SECRET_MAGIC,
+      value: null,
+    });
   });
 
   it("Secret container は replication.auto + secretId=grafana-faro-collector-url で発行される", () => {
