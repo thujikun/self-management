@@ -465,17 +465,20 @@ function SiteFooter() {
   const rssHref = `/rss/${lang}.xml`;
   return (
     <footer className="site-footer">
-      <Link to="/about">about</Link>
-      <span aria-hidden="true">·</span>
-      <a href={rssHref}>RSS</a>
-      <span aria-hidden="true">·</span>
-      <a href={xHref}>X</a>
-      <span aria-hidden="true">·</span>
-      <a href="https://github.com/thujikun">GitHub</a>
-      <span aria-hidden="true">·</span>
-      <Link to="/privacy">privacy</Link>
-      <span aria-hidden="true">·</span>
-      <Link to="/terms">terms</Link>
+      <nav className="site-footer__links" aria-label="footer">
+        <Link to="/about">about</Link>
+        <span aria-hidden="true">·</span>
+        <a href={rssHref}>RSS</a>
+        <span aria-hidden="true">·</span>
+        <a href={xHref}>X</a>
+        <span aria-hidden="true">·</span>
+        <a href="https://github.com/thujikun">GitHub</a>
+        <span aria-hidden="true">·</span>
+        <Link to="/privacy">privacy</Link>
+        <span aria-hidden="true">·</span>
+        <Link to="/terms">terms</Link>
+      </nav>
+      <small className="site-footer__copyright">© ryantsuji.dev</small>
     </footer>
   );
 }
