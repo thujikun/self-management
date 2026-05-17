@@ -252,55 +252,9 @@ const data = await res.json();
 
 ## 可観測性 (observability)
 
-server / client の両 layer から Grafana Cloud に観測 signal を流す:
+server (OTel → Tempo) / client (Faro → Frontend Observability) / 自前 analytics (`/api/track` → BQ `ryan.web_events`) の 3 経路で signal を流す。配線設計は `src/server.ts` / `src/lib/faro-client.ts` / `src/lib/track-client.ts` / `src/server/bq-track.ts` の JSDoc が SSoT。
 
-- **server (Cloudflare Workers)**: `@microlabs/otel-cf-workers` の `instrument()` で
-  `src/server.ts` の Worker entry を wrap。`fetch` span に加えて outbound fetch も
-  span 化し、OTLP HTTP で `OTLP_ENDPOINT` (Tempo) に送る。auth は `OTLP_AUTH_HEADER`
-  をそのまま header に流す。両 secret が未投入なら **計装そのものを skip** (fail-open)。
-- **client (RUM)**: `src/lib/faro-client.ts` の `initFaro` が `@grafana/faro-web-sdk` を
-  lazy import で初期化し、page load timing / web-vital / unhandled error / fetch tracing
-  を Faro collector に送る。`__root.tsx` の `useEffect` から 1 回だけ起動。
-  `VITE_FARO_COLLECTOR_URL` が空なら dynamic import 自体を skip して bundle 解析対象
-  からも外れる (fail-open + bundle size 影響なし)。
-
-### 自前 analytics — `/api/track` → BQ `ryan.web_events`
-
-`__root.tsx` の useEffect 内で route 変化を検知して
-`src/lib/track-client.ts:trackPageView` を呼び、`navigator.sendBeacon` (失敗時は
-`fetch keepalive`) で `POST /api/track` に JSON payload を送る。Worker 側は
-`src/routes/api/$.ts` で Hono に委譲、`src/server/bq-track.ts` が
-**SA JSON → RS256 JWT 署名 → OAuth2 access token → `tabledata.insertAll`** の経路を
-踏んで BQ table `ryan.web_events` に 1 行 streaming insert する (Pulumi で
-`infra/core/index.ts` が table / SA を declarative 作成)。
-
-- payload: `path` / `slug` / `lang` / `referrer` / `utm_*` / `viewport_w/h` /
-  `locale` / `session_id` (sessionStorage UUID、cookie 不使用、tab close で揮発)
-- server 付与: `ts` (server time) / `user_agent` (256 char truncate)
-- 必要 env:
-  - `GCP_SA_JSON` (secret、SSoT は SecretManager `gcp-sa-graph-app-key`)
-  - `BQ_PROJECT_ID` / `BQ_DATASET` / `BQ_TABLE` (`wrangler.jsonc:vars` 側、
-    現状 `ryan-self-management` / `ryan` / `web_events`)
-- fail-open: SA 未投入 / token exchange 失敗 / `insertAll` 失敗いずれも `/api/track`
-  は 204 を返し、server 側で OTel span event `track.bq.fail` を emit するのみ
-  (client request は止めない)
-- token cache: `getAccessToken` が isolate scope で 1 つ持ち、cold-start 直後の
-  並列 request では in-flight Promise を共有して OAuth 経路は 1 回に集約
-
-「BQ にデータが来ない」場合の debug 起点:
-
-1. `pnpm exec wrangler secret list` に `GCP_SA_JSON` が入っているか
-2. Tempo の span に `track.bq.fail` event が出ていないか (reason field で
-   `parse-sa-json` / `parse-input` / `build-row` / `oauth-or-insert` を区別)
-3. BQ console の `ryan.web_events` table preview に直近行が乗っているか
-
-「Tempo / Faro にデータが来ない」場合の debug 起点:
-
-1. Worker secrets に `OTLP_ENDPOINT` / `OTLP_AUTH_HEADER` が入っているか
-   (`pnpm exec wrangler secret list`)
-2. 直近 deploy 時の `VITE_FARO_COLLECTOR_URL` が build 時に注入されたか
-   (Actions log の "Fetch VITE_FARO_COLLECTOR_URL from Secret Manager" step)
-3. browser devtools network panel で `faro-collector*` への beacon が出ているか
+経路 overview と debug runbook (BQ / Tempo / Faro にデータが来ない時の確認手順) は [`docs/observability/ryantsuji-dev-web.md`](../../../docs/observability/ryantsuji-dev-web.md) を参照。
 
 ## 注意点
 
