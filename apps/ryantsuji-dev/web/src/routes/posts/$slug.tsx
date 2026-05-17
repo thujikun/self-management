@@ -325,7 +325,7 @@ function PostDetail() {
       <header className="post-detail__header">
         <h1>{frontmatter.title}</h1>
         <p className="post-detail__meta">
-          <time dateTime={frontmatter.publishedAt}>{frontmatter.publishedAt}</time>
+          <time dateTime={frontmatter.publishedAt}>{frontmatter.publishedAt.slice(0, 10)}</time>
           <span className="post-detail__divider" aria-hidden="true">
             ·
           </span>

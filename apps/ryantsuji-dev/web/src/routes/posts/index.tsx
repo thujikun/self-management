@@ -109,7 +109,7 @@ export function PostCard({ post, requestedLang }: { post: PostListItem; requeste
     <li className="post-card">
       <Link to="/posts/$slug" params={{ slug: post.slug }} className="post-card__link">
         <time className="post-card__date" dateTime={post.publishedAt}>
-          {post.publishedAt}
+          {post.publishedAt.slice(0, 10)}
         </time>
         <h2 className="post-card__title">{post.title}</h2>
         {post.summary ? <p className="post-card__summary">{post.summary}</p> : null}

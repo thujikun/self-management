@@ -1,0 +1,69 @@
+# 予約投稿 (scheduled publish) の cron driver。
+#
+# 仕組み:
+# - `apps/ryantsuji-dev/web/content/posts/` 内の `draft: true` で `publishedAt`
+#   が現在時刻以下になった post の frontmatter から `draft:` 行を物理的に消す
+# - 削除後の diff があれば github-actions[bot] が main に push
+# - その push が既存の deploy + syndicate workflow を発火させて公開が完了する
+#
+# 頻度: 15 分間隔。`publishedAt` を datetime + TZ offset (`+09:00` / `-07:00` 等)
+# で指定すれば公開時刻の最大 15 分遅延で flip される。
+#
+# permissions:
+# - `contents: write` — bot commit + push 用
+# - `id-token: write` — 不要 (本 workflow は GCP 等の OIDC を使わない)
+name: Schedule publish
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: schedule-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  schedule-publish:
+    name: Flip draft → published if publishedAt reached
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout (with write token)
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Configure git identity (bot)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # schedule-publish.cli.ts は対象 post の frontmatter を上書きし、
+      # `PUBLISHED <filename>` を 1 行ずつ stdout に書く。何も無ければ exit 0
+      # で stdout は説明行のみ。
+      - name: Run schedule-publish
+        id: run
+        run: |
+          out=$(pnpm exec tsx scripts/schedule-publish.cli.ts)
+          echo "$out"
+          # PUBLISHED 行から slug を抽出 (commit subject 用)
+          slugs=$(echo "$out" | grep -E "^PUBLISHED " | sed -E 's/^PUBLISHED ([^.]+)\.(en|ja)\.md$/\1/' | sort -u | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
+          echo "slugs=$slugs" >> "$GITHUB_OUTPUT"
+
+      - name: Commit & push if any post flipped
+        if: steps.run.outputs.slugs != ''
+        run: |
+          git add apps/ryantsuji-dev/web/content/posts/
+          # `--allow-empty` は付けない: changed が無いのに commit 走るのは bug
+          git commit -m "chore(content): publish ${{ steps.run.outputs.slugs }}"
+          # syndicate / deploy workflow を発火させたいので [skip ci] は付けない
+          git push origin HEAD:main
