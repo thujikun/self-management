@@ -55,6 +55,7 @@ import {
 export async function runRenderPost(
   slug: string,
   override: Lang | undefined,
+  options: { includeDrafts?: boolean } = {},
 ): Promise<
   Pick<RenderedDoc, "html" | "frontmatter" | "headings" | "readingTimeMinutes"> & {
     servedLang: Lang;
@@ -71,9 +72,11 @@ export async function runRenderPost(
   if (override && override !== cookieLang) {
     writeLangCookie(lang);
   }
-  const result = getRenderedPost(slug, lang);
+  const result = getRenderedPost(slug, lang, { includeDrafts: options.includeDrafts ?? false });
   if (!result) throw notFound();
-  const nav = getSeriesNav(slug, result.servedLang);
+  const nav = getSeriesNav(slug, result.servedLang, {
+    includeDrafts: options.includeDrafts ?? false,
+  });
   return {
     html: result.rendered.html,
     frontmatter: result.rendered.frontmatter,

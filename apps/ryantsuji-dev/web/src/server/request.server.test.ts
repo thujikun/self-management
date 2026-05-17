@@ -29,10 +29,19 @@ vi.mock("@tanstack/react-start/server", async (importOriginal) => {
   };
 });
 
+const mockIsAdminRequest = vi.fn<(headers: Headers, env: unknown) => Promise<boolean>>();
+vi.mock("./auth-session.js", () => ({
+  isAdminRequest: (headers: Headers, env: unknown) => mockIsAdminRequest(headers, env),
+}));
+
+import type { Env } from "../start.js";
+
 import {
+  isAdminFromCurrentRequest,
   safeAcceptLanguage,
   safeCookieLang,
   safeCookieTheme,
+  safeRequestHeaders,
   writeLangCookie,
   writeThemeCookie,
 } from "./request.server.js";
@@ -167,5 +176,61 @@ describe("writeThemeCookie", () => {
       throw new Error("No StartEvent");
     });
     expect(() => writeThemeCookie("light")).not.toThrow();
+  });
+});
+
+describe("safeRequestHeaders", () => {
+  beforeEach(() => {
+    mockGetRequestHeaders.mockReset();
+  });
+
+  it("getRequestHeaders の record を Headers object に変換して返す", () => {
+    mockGetRequestHeaders.mockReturnValue({
+      "accept-language": "ja",
+      cookie: "session=abc",
+      "x-undefined": undefined,
+    });
+    const headers = safeRequestHeaders();
+    expect(headers).not.toBeNull();
+    expect(headers?.get("accept-language")).toBe("ja");
+    expect(headers?.get("cookie")).toBe("session=abc");
+    expect(headers?.get("x-undefined")).toBeNull();
+  });
+
+  it("getRequestHeaders が throw した場合は null", () => {
+    mockGetRequestHeaders.mockImplementation(() => {
+      throw new Error("No StartEvent");
+    });
+    expect(safeRequestHeaders()).toBeNull();
+  });
+});
+
+describe("isAdminFromCurrentRequest", () => {
+  beforeEach(() => {
+    mockGetRequestHeaders.mockReset();
+    mockIsAdminRequest.mockReset();
+  });
+
+  const env = { ADMIN_EMAIL: "admin@example.com" } as Env;
+
+  it("headers が取れて isAdminRequest が true なら true", async () => {
+    mockGetRequestHeaders.mockReturnValue({ "accept-language": "en" });
+    mockIsAdminRequest.mockResolvedValue(true);
+    await expect(isAdminFromCurrentRequest(env)).resolves.toBe(true);
+    expect(mockIsAdminRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("headers が取れて isAdminRequest が false なら false", async () => {
+    mockGetRequestHeaders.mockReturnValue({ "accept-language": "en" });
+    mockIsAdminRequest.mockResolvedValue(false);
+    await expect(isAdminFromCurrentRequest(env)).resolves.toBe(false);
+  });
+
+  it("getRequestHeaders が throw → headers null → isAdminRequest 呼ばず false", async () => {
+    mockGetRequestHeaders.mockImplementation(() => {
+      throw new Error("No StartEvent");
+    });
+    await expect(isAdminFromCurrentRequest(env)).resolves.toBe(false);
+    expect(mockIsAdminRequest).not.toHaveBeenCalled();
   });
 });

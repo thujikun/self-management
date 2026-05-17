@@ -22,6 +22,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { displayTags } from "../../lib/tags.js";
+import { isAdminFromCurrentRequest } from "../../server/request.server.js";
 import { runListPosts } from "./index.server.js";
 import type { Lang } from "../../server/i18n.js";
 import type { PostListItem } from "../../server/posts.js";
@@ -51,7 +52,10 @@ const ListPostsInputSchema = z.object({
 /** @graph-connects content [calls] runListPosts → listPosts */
 const listPostsServer = createServerFn()
   .inputValidator((data: unknown) => ListPostsInputSchema.parse(data))
-  .handler(async ({ data }) => runListPosts(data.override, data.tag));
+  .handler(async ({ data, context }) => {
+    const includeDrafts = await isAdminFromCurrentRequest(context.env);
+    return runListPosts(data.override, data.tag, { includeDrafts });
+  });
 
 /** @graph-connects tanstack-router [provides] /posts route */
 export const Route = createFileRoute("/posts/")({

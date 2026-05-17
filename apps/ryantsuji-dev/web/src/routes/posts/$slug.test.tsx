@@ -88,6 +88,9 @@ const TEST_ENV = {
 const mockGetSession = vi.fn().mockResolvedValue(null);
 vi.mock("../../server/auth-session.js", () => ({
   getSessionFromHeaders: (headers: Headers) => mockGetSession(headers),
+  // isAdminRequest は draft preview gate。SSR test では admin でない前提 (public 経路)
+  // を踏ませるため常に false を返す。
+  isAdminRequest: async () => false,
 }));
 
 // engagement: 既定 = view 0 / likes 0 / comments 空。it ごとに override 可能。

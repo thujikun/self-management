@@ -209,3 +209,31 @@ describe("getSeriesNav", () => {
     expect(nav?.next).toBeNull();
   });
 });
+
+describe("listSeriesPosts / getSeriesNav: includeDrafts pass-through", () => {
+  const lang: Lang = "en";
+
+  it("listSeriesPosts({includeDrafts}) → listPosts({includeDrafts}) に転送", () => {
+    mockListPosts.mockReturnValue([]);
+    listSeriesPosts("building-ai-harness", lang, { includeDrafts: true });
+    expect(mockListPosts).toHaveBeenLastCalledWith(lang, { includeDrafts: true });
+  });
+
+  it("listSeriesPosts (option 省略) は空 options を listPosts に渡す (= 公開挙動)", () => {
+    mockListPosts.mockReturnValue([]);
+    listSeriesPosts("building-ai-harness", lang);
+    // options 省略の場合は空 object を pass-through するだけ。listPosts 側で
+    // `includeDrafts: false` に解釈される (entries(false) memo を引く)。
+    expect(mockListPosts).toHaveBeenLastCalledWith(lang, {});
+  });
+
+  it("getSeriesNav({includeDrafts}) → listPosts({includeDrafts}) に転送", () => {
+    mockListPosts.mockReturnValue([
+      makePost({ slug: "p1", series: "building-ai-harness", seriesOrder: 1 }),
+    ]);
+    getSeriesNav("p1", lang, { includeDrafts: true });
+    // listPosts は getSeriesNav 内で 2 回呼ばれる (current 検索 + listSeriesPosts)。
+    // 両方とも includeDrafts: true を持つこと。
+    expect(mockListPosts.mock.calls.every(([, opt]) => opt?.includeDrafts === true)).toBe(true);
+  });
+});

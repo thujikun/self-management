@@ -19,6 +19,7 @@ import { z } from "zod";
 import { runListSeriesPosts } from "./$slug.server.js";
 import type { Lang } from "../../server/i18n.js";
 import type { PostListItem } from "../../server/posts.js";
+import { isAdminFromCurrentRequest } from "../../server/request.server.js";
 import type { SeriesMeta } from "../../server/series.js";
 
 /**
@@ -43,7 +44,10 @@ const loadSeriesServer = createServerFn()
       .parse(input);
     return parsed;
   })
-  .handler(({ data }) => runListSeriesPosts(data.slug, data.override));
+  .handler(async ({ data, context }) => {
+    const includeDrafts = await isAdminFromCurrentRequest(context.env);
+    return runListSeriesPosts(data.slug, data.override, { includeDrafts });
+  });
 
 /** @graph-connects tanstack-router [provides] /series/$slug route */
 export const Route = createFileRoute("/series/$slug")({

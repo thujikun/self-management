@@ -88,21 +88,28 @@ function parseFilename(name: string): { slug: string; lang: Lang } | null {
 }
 
 /**
- * 内部 Map: slug → { variants: { en?, ja? } }。`draft: true` の variant は **構築段階
- * で除外** する (どちらかの lang だけ draft でも、その lang を listPosts /
- * getRenderedPost が返さないようにするため)。
+ * 内部 Map: slug → { variants: { en?, ja? } }。
+ *
+ * 公開 API は `includeDrafts: boolean` を取り、2 種類の Map を別 memo する:
+ * - `_entriesPublic` (default): `draft: true` の variant を構築段階で除外
+ * - `_entriesWithDrafts`: 全 variant を含む (admin preview 用)
+ *
+ * どちらかの lang だけ draft でも、その lang を listPosts / getRenderedPost が返さ
+ * ないようにする (= draft = variant 単位の filter)。
  *
  * @graph-connects none
  */
-let _entries: Map<string, PostEntry> | null = null;
+let _entriesPublic: Map<string, PostEntry> | null = null;
 /** @graph-connects none */
-function entries(): Map<string, PostEntry> {
-  if (_entries) return _entries;
+let _entriesWithDrafts: Map<string, PostEntry> | null = null;
+
+/** @graph-connects none */
+function buildEntries(includeDrafts: boolean): Map<string, PostEntry> {
   const out = new Map<string, PostEntry>();
   for (const [filename, doc] of Object.entries(rendered)) {
     const parsed = parseFilename(filename);
     if (!parsed) continue;
-    if (doc.frontmatter.draft) continue;
+    if (doc.frontmatter.draft && !includeDrafts) continue;
     const meta: PostMeta = { ...doc.frontmatter, slug: parsed.slug, lang: parsed.lang };
     let entry = out.get(parsed.slug);
     if (!entry) {
@@ -111,8 +118,17 @@ function entries(): Map<string, PostEntry> {
     }
     entry.variants[parsed.lang] = { meta, rendered: doc };
   }
-  _entries = out;
   return out;
+}
+
+/** @graph-connects none */
+function entries(includeDrafts: boolean = false): Map<string, PostEntry> {
+  if (includeDrafts) {
+    if (!_entriesWithDrafts) _entriesWithDrafts = buildEntries(true);
+    return _entriesWithDrafts;
+  }
+  if (!_entriesPublic) _entriesPublic = buildEntries(false);
+  return _entriesPublic;
 }
 
 /**
@@ -155,10 +171,13 @@ function availableLangs(entry: PostEntry): Lang[] {
  * 利用可能 lang を返す (`publishedAt` 降順)。`_` prefix slug は production 一覧から
  * 除外 (test fixture 用 convention)。
  *
+ * `includeDrafts: true` の時のみ draft variant も含む (admin preview 経路)。
+ * 既存 caller (= flag 省略) は `false` 動作と等価。
+ *
  * @graph-connects none
  */
-export function listPosts(lang: Lang): PostListItem[] {
-  return [...entries().values()]
+export function listPosts(lang: Lang, options: { includeDrafts?: boolean } = {}): PostListItem[] {
+  return [...entries(options.includeDrafts ?? false).values()]
     .filter((entry) => !entry.slug.startsWith("_"))
     .map((entry) => {
       const picked = variantFor(entry, lang);
@@ -173,12 +192,18 @@ export function listPosts(lang: Lang): PostListItem[] {
 
 /**
  * 公開 API: slug から pre-rendered HTML + meta を返す。要求 lang が無ければ en
- * fallback。存在しないか全 variant draft なら null。
+ * fallback。存在しないか全 variant draft (かつ admin でない) なら null。
+ *
+ * `includeDrafts: true` の時のみ draft variant も lookup 対象に入る。
  *
  * @graph-connects none
  */
-export function getRenderedPost(slug: string, lang: Lang): RenderedPostResult | null {
-  const entry = entries().get(slug);
+export function getRenderedPost(
+  slug: string,
+  lang: Lang,
+  options: { includeDrafts?: boolean } = {},
+): RenderedPostResult | null {
+  const entry = entries(options.includeDrafts ?? false).get(slug);
   if (!entry) return null;
   const picked = variantFor(entry, lang);
   return {

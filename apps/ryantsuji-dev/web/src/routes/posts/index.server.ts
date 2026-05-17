@@ -29,6 +29,7 @@ import {
 export function runListPosts(
   override: Lang | undefined,
   tagFilter: string | undefined,
+  options: { includeDrafts?: boolean } = {},
 ): {
   lang: Lang;
   posts: PostListItem[];
@@ -43,7 +44,7 @@ export function runListPosts(
   if (override && override !== cookieLang) {
     writeLangCookie(lang);
   }
-  const all = listPosts(lang);
+  const all = listPosts(lang, { includeDrafts: options.includeDrafts ?? false });
   const filtered = tagFilter ? all.filter((p) => p.tags.includes(tagFilter)) : all;
   return { lang, posts: filtered, tag: tagFilter ?? null };
 }
