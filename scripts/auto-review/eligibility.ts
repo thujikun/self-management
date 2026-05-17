@@ -99,6 +99,16 @@ export interface CiFixEligibilityConfig {
   backoffMs: number;
 }
 
+export interface UpdateBranchEligibilityConfig {
+  maxFailuresPerSha: number;
+  backoffMs: number;
+}
+
+export interface ConflictFixEligibilityConfig {
+  maxFailuresPerSha: number;
+  backoffMs: number;
+}
+
 /**
  * ci-fix 再エンキュー判定 (head_sha をキー)。
  * - 既に当該 SHA を成功 ci-fix 済みなら skip (= 既に push 済、新 SHA を待つ)
@@ -129,6 +139,83 @@ export function ciFixEligibility(
       return {
         ok: false,
         reason: `ci-fix backoff: retry in ${remain}s (failures=${failures}/${cfg.maxFailuresPerSha})`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * update-branch 再エンキュー判定 (head_sha をキー)。
+ * - 既に当該 SHA に対して成功 update-branch 済みなら skip (新 SHA を待つ)
+ * - 失敗 cap に達していたら skip (新 commit を待つ)
+ * - 失敗 backoff 窓内なら skip
+ *
+ * update-branch は script-only で fast なので backoff / cap も小さめに設定するが、
+ * GH API 側の rate limit や transient 5xx を吸収するために failure path は必要。
+ */
+export function updateBranchEligibility(
+  headSha: string,
+  cur: PRState,
+  now: number,
+  cfg: UpdateBranchEligibilityConfig,
+): EligibilityResult {
+  if (cur.lastUpdateBranchedSha === headSha) {
+    return { ok: false, reason: "already update-branched for this sha" };
+  }
+  const sameFailedSha = cur.lastFailedUpdateBranchSha === headSha;
+  const failures = sameFailedSha ? (cur.updateBranchFailureCount ?? 0) : 0;
+  if (failures >= cfg.maxFailuresPerSha) {
+    return {
+      ok: false,
+      reason: `update-branch failure cap reached (${failures}/${cfg.maxFailuresPerSha}) for sha=${headSha.slice(0, 7)}; awaiting new commit`,
+    };
+  }
+  if (sameFailedSha && cur.lastUpdateBranchFailedAt) {
+    const since = now - new Date(cur.lastUpdateBranchFailedAt).getTime();
+    if (since < cfg.backoffMs) {
+      const remain = Math.ceil((cfg.backoffMs - since) / 1000);
+      return {
+        ok: false,
+        reason: `update-branch backoff: retry in ${remain}s (failures=${failures}/${cfg.maxFailuresPerSha})`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * conflict-fix 再エンキュー判定 (head_sha をキー)。
+ * - 既に当該 SHA を成功 conflict-fix 済みなら skip (= push 済、新 SHA を待つ)
+ * - 失敗 cap に達していたら skip (新 commit を待つ)
+ * - 失敗 backoff 窓内なら skip
+ *
+ * ci-fix と並列の構造 (key は head_sha)。
+ */
+export function conflictFixEligibility(
+  headSha: string,
+  cur: PRState,
+  now: number,
+  cfg: ConflictFixEligibilityConfig,
+): EligibilityResult {
+  if (cur.lastConflictFixedSha === headSha) {
+    return { ok: false, reason: "already conflict-fixed for this sha" };
+  }
+  const sameFailedSha = cur.lastFailedConflictFixSha === headSha;
+  const failures = sameFailedSha ? (cur.conflictFixFailureCount ?? 0) : 0;
+  if (failures >= cfg.maxFailuresPerSha) {
+    return {
+      ok: false,
+      reason: `conflict-fix failure cap reached (${failures}/${cfg.maxFailuresPerSha}) for sha=${headSha.slice(0, 7)}; awaiting new commit`,
+    };
+  }
+  if (sameFailedSha && cur.lastConflictFixFailedAt) {
+    const since = now - new Date(cur.lastConflictFixFailedAt).getTime();
+    if (since < cfg.backoffMs) {
+      const remain = Math.ceil((cfg.backoffMs - since) / 1000);
+      return {
+        ok: false,
+        reason: `conflict-fix backoff: retry in ${remain}s (failures=${failures}/${cfg.maxFailuresPerSha})`,
       };
     }
   }
