@@ -18,6 +18,7 @@
  * @graph-connects syndication [calls] @self/syndication の syndicateForZenn / syndicateForDevto を呼ぶ
  */
 
+import { randomBytes } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -26,6 +27,7 @@ import { fileURLToPath } from "node:url";
 import matter from "gray-matter";
 import { parseFrontmatter, type Frontmatter } from "@self/content";
 import {
+  createDevtoArticle,
   publishToDevto,
   publishToZenn,
   syndicateForDevto,
@@ -99,6 +101,61 @@ export async function readAllPosts(
 }
 
 /**
+ * source .md ファイルの frontmatter に `syndication.zenn.id` を書き加える。
+ *
+ * gray-matter で parse → data 操作 → stringify する代わりに、YAML を直接 surgical に
+ * 編集する (round-trip による format drift を避けるため)。`syndication:` block 内に
+ * `zenn:` subkey が無い前提で、新規 block を append する。既存 `zenn.id` の上書きは
+ * 想定しない (= 二重 create の防御として呼び出し側が事前 check する)。
+ *
+ * @graph-connects none
+ */
+export async function writebackZennIdToFile(file: string, zennId: string): Promise<void> {
+  const raw = await readFile(file, "utf8");
+  const insertion = `  zenn:\n    id: "${zennId}"\n`;
+  if (/^syndication:/m.test(raw)) {
+    // `syndication:` の直後に挿入 (sub-key の他に何か有っても先頭の zenn として並ぶ)
+    const updated = raw.replace(/(^syndication:[ \t]*\n)/m, `$1${insertion}`);
+    await writeFile(file, updated, "utf8");
+    return;
+  }
+  // `syndication:` block 自体が無いケース: frontmatter 末尾 (closing `---`) の手前に挿入
+  const updated = raw.replace(/(\n)(---\n)/, `$1syndication:\n${insertion}$2`);
+  await writeFile(file, updated, "utf8");
+}
+
+/**
+ * source .md ファイルの frontmatter に `syndication.devto.{id, slug}` を書き加える。
+ * 規約は `writebackZennIdToFile` と同じ (YAML を surgical に編集して format drift を避ける)。
+ *
+ * @graph-connects none
+ */
+export async function writebackDevtoToFile(
+  file: string,
+  devtoId: number,
+  devtoSlug: string,
+): Promise<void> {
+  const raw = await readFile(file, "utf8");
+  const insertion = `  devto:\n    id: ${devtoId}\n    slug: "${devtoSlug}"\n`;
+  if (/^syndication:/m.test(raw)) {
+    const updated = raw.replace(/(^syndication:[ \t]*\n)/m, `$1${insertion}`);
+    await writeFile(file, updated, "utf8");
+    return;
+  }
+  const updated = raw.replace(/(\n)(---\n)/, `$1syndication:\n${insertion}$2`);
+  await writeFile(file, updated, "utf8");
+}
+
+/**
+ * 14 char hex の Zenn article ID を生成 (`crypto.randomBytes(7)` → hex)。
+ *
+ * @graph-connects none
+ */
+export function generateZennId(): string {
+  return randomBytes(7).toString("hex");
+}
+
+/**
  * slug → Zenn 公開 URL の resolver を構築。`.ja.md` の frontmatter
  * `syndication.zenn.id` から逆引きする。
  */
@@ -157,10 +214,18 @@ export async function emitZenn(args: EmitZennArgs): Promise<void> {
   for (const p of args.posts) {
     if (p.lang !== "ja") continue;
     if (args.slug && p.slug !== args.slug) continue;
-    const zennId = p.meta.syndication.zenn?.id;
+    let zennId = p.meta.syndication.zenn?.id;
     if (!zennId) {
-      console.warn(`  [skip] ${p.slug}.ja.md: no syndication.zenn.id`);
-      continue;
+      if (!args.publish) {
+        console.warn(`  [skip] ${p.slug}.ja.md: no syndication.zenn.id (dry-run)`);
+        continue;
+      }
+      // publish mode で id が無い場合は新規 article として hex を生成 → frontmatter に
+      // 書き戻し → 以後の syndicate でこの id が使われる。
+      zennId = generateZennId();
+      const srcFile = resolve(POSTS_DIR, `${p.slug}.ja.md`);
+      await writebackZennIdToFile(srcFile, zennId);
+      console.log(`  [create] ${p.slug}.ja.md: generated zenn id=${zennId}`);
     }
     const enUrl = slugsWithEn.has(p.slug) ? `${RYANTSUJI_DEV_BASE}/posts/${p.slug}?lang=en` : null;
     const markdown = syndicateForZenn({
@@ -215,11 +280,7 @@ export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
   for (const p of args.posts) {
     if (p.lang !== "en") continue;
     if (args.slug && p.slug !== args.slug) continue;
-    const devto = p.meta.syndication.devto;
-    if (!devto) {
-      console.warn(`  [skip] ${p.slug}.en.md: no syndication.devto`);
-      continue;
-    }
+    let devto = p.meta.syndication.devto;
     const article = syndicateForDevto({
       meta: p.meta,
       body: p.body,
@@ -228,6 +289,23 @@ export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
       canonicalHost: RYANTSUJI_DEV_BASE,
       coverImageUrl: p.meta.cover ? `${RYANTSUJI_DEV_BASE}${p.meta.cover}` : undefined,
     });
+
+    if (!devto) {
+      if (!args.publish || !apiKey) {
+        console.warn(`  [skip] ${p.slug}.en.md: no syndication.devto (dry-run or no API key)`);
+        continue;
+      }
+      // publish mode で devto entry が無い場合は POST で article 作成 → id + slug を
+      // frontmatter に書き戻し → 以後の syndicate で update 経路に乗る。
+      const created = await createDevtoArticle({ apiKey, article });
+      devto = { id: created.id, slug: created.slug };
+      const srcFile = resolve(POSTS_DIR, `${p.slug}.en.md`);
+      await writebackDevtoToFile(srcFile, created.id, created.slug);
+      console.log(
+        `  [create] ${p.slug}.en.md: dev.to article created id=${created.id} slug=${created.slug}`,
+      );
+    }
+
     const outPath = resolve(args.outDir, `${p.slug}.json`);
     await writeFile(outPath, JSON.stringify({ id: devto.id, article }, null, 2) + "\n", "utf8");
     console.log(`  devto: ${p.slug} → ${outPath}`);

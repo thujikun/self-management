@@ -249,7 +249,7 @@ describe("emitZenn", () => {
     ];
     await emitZenn({ posts, outDir, footer: "", publish: false });
     expect(await readdir(outDir)).toStrictEqual(["def456.md"]);
-    expect(warnSpy).toHaveBeenCalledWith("  [skip] alpha.ja.md: no syndication.zenn.id");
+    expect(warnSpy).toHaveBeenCalledWith("  [skip] alpha.ja.md: no syndication.zenn.id (dry-run)");
   });
 });
 
@@ -334,7 +334,9 @@ describe("emitDevto", () => {
     ];
     await emitDevto({ posts, outDir, publish: false });
     expect(await readdir(outDir)).toStrictEqual(["beta.json"]);
-    expect(warnSpy).toHaveBeenCalledWith("  [skip] alpha.en.md: no syndication.devto");
+    expect(warnSpy).toHaveBeenCalledWith(
+      "  [skip] alpha.en.md: no syndication.devto (dry-run or no API key)",
+    );
   });
 
   it("throws when publish=true and no API key is provided", async () => {
