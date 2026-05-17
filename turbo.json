@@ -8,6 +8,18 @@
       "inputs": ["src/**", "tsconfig.json", "package.json"],
       "outputs": ["dist/**"]
     },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "src/**",
+        "vite-plugins/**",
+        "vite.config.ts",
+        "vitest.config.ts",
+        "tsconfig.json",
+        "package.json",
+        "tsconfig.base.json"
+      ]
+    },
     "dev": {
       "cache": false,
       "persistent": true

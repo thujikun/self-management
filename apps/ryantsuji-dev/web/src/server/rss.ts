@@ -3,8 +3,9 @@
  *
  * 純粋関数 (`buildAtomFeed`) として post 配列 + lang + base URL を受け取り XML
  * 文字列を返すだけに留め、route ファイル (`routes/rss/$.ts`) 側で `listPosts` を
- * 呼んで配線する。これにより post 取得 (vite glob inline) と XML 構築 (純粋
- * 文字列処理) を分離でき、テストが I/O なしで書ける。
+ * 呼んで配線する。これにより post 取得 (`virtual:rendered-posts` 仮想 module —
+ * vite plugin が build 時に renderMarkdown 済 HTML を JSON で expose) と XML
+ * 構築 (純粋文字列処理) を分離でき、テストが I/O なしで書ける。
  *
  * 仕様:
  * - Atom 1.0 (RFC 4287)。RSS 2.0 ではなく Atom を採用 (timezone / xml:lang /

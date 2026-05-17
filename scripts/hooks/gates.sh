@@ -117,10 +117,16 @@ cmd_run() {
       fi
       ;;
     typecheck)
-      pnpm -r typecheck
+      # turbo task `typecheck` は `^build` に dependsOn しているため、`@self/content`
+      # の dist 等 consumer の TS resolution に必要な artifact を先に build する。
+      # gates.sh を pnpm script 経由で呼ぶことで CI matrix 並列 (build job と独立) でも
+      # 単体で完結する。
+      pnpm typecheck
       ;;
     test-coverage)
-      pnpm exec vitest run --coverage
+      # vitest config が vite plugin (rendered-posts) 経由で `@self/content` を esbuild
+      # bundling 時に解決するため、dist が必要。root script 側で turbo build を prepend。
+      pnpm test:coverage
       ;;
     build)
       pnpm build

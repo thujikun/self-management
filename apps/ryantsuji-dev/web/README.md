@@ -7,7 +7,8 @@ ryantsuji.dev のフロントエンド + API。**TanStack Start (SSR + RSC) + Ho
 - TanStack Router file-based routing (`src/routes/`)
 - TanStack Query を root context に同居 (loader / hook で共有 cache)
 - Hono を `/api/*` の catch-all に embed (RPC type を `ApiType` として export)
-- **RSC 有効化** (`tanstackStart({ rsc: { enabled: true } })` + `@vitejs/plugin-rsc`)。`createServerFn` の handler 経由で重 dep (shiki / unified) は **rsc env のみに bundle** され client / ssr bundle に漏れない
+- **RSC 有効化** (`tanstackStart({ rsc: { enabled: true } })` + `@vitejs/plugin-rsc`)。`createServerFn` の handler 経由で server-only logic を rsc env に隔離 (client / ssr bundle に漏れない)
+- **markdown は build 時に pre-render** (`vite-plugins/rendered-posts.ts` → `virtual:rendered-posts`)。shiki / unified / remark-* は全 runtime bundle (client / ssr / rsc / worker) から完全に除外され、CF Workers 上では HTML 文字列 lookup のみで済む (Worker CPU 上限 10ms / Error 1102 を構造的に解消)
 - **CF Workers binding を `context.env` で型付きアクセス** (`process.env` 経路は廃止)
 - 1 CF Worker に SSR + API を統合 (deploy unit を 1 つに)
 
@@ -19,7 +20,7 @@ ryantsuji.dev のフロントエンド + API。**TanStack Start (SSR + RSC) + Ho
 |---|---|---|
 | api | route 内 API handler | server bundle 内 |
 | middleware | TanStack Start middleware | server bundle 内 |
-| **rsc** | server component / server function を Flight stream に emit | `dist/server/rsc/` |
+| **rsc** | server component / server function を Flight stream に emit (markdown は build 時 pre-render 済の HTML を lookup のみ) | `dist/server/rsc/` |
 | client | hydration + flight stream consumer | `dist/client/` |
 | ssr | initial HTML render (client bundle と同 input) | `dist/server/` |
 
@@ -158,7 +159,7 @@ SSoT は GCP Secret Manager なので、値を入れ直したら `gcloud secrets
 - design tokens: `@self/design-tokens` (OKLCH + glass morphism)
 - content: `@self/content` (markdown render pipeline)
 - /posts: 投稿一覧 + 詳細 route + content/posts/*.md 統合
-- **RSC isolation: shiki / unified を rsc env に閉じ込め client bundle 540KB 化**
+- **build-time markdown pre-render**: `vite-plugins/rendered-posts.ts` で `content/posts/*.md` を build 時に renderMarkdown → `virtual:rendered-posts` 仮想 module で全 runtime bundle から shiki / unified / remark-* を除去 (Worker upload 7637 → 6489 KiB、CPU 上限 10ms / Error 1102 を構造的に解消)
 - **db schema**: `packages/db` (Drizzle + Neon) — posts / comments / likes / view_counts schema
 - **auth**: Better Auth (GitHub / X / Google OAuth、open sign-up — 第三者検証は OAuth provider に委ねる)
 - **engagement**: `/posts/$slug` に views (+1 per loader call) / likes (toggle、auth 必須) / comments (投稿、auth 必須) を追加
