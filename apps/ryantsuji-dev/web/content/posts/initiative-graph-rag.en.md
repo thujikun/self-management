@@ -81,7 +81,7 @@ This manual analysis takes 30-60 minutes, **happening every week for multiple in
 
 We built **Biz Graph** to solve this.
 
-![System Overview](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/5h5bh00l1qeisenx8e8t.png)
+![System Overview](/images/posts/initiative-graph-rag/5h5bh00l1qeisenx8e8t.png)
 
 ### Scale
 
@@ -120,7 +120,7 @@ Initiative("SNS campaign") ──AFFECTS──→ Metric("new_members")
 
 Instead, we designed **Week nodes as shared anchors for indirect connections**.
 
-![Week Anchor](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/lklff5l2jw4nqayu1b4o.png)
+![Week Anchor](/images/posts/initiative-graph-rag/lklff5l2jw4nqayu1b4o.png)
 
 ```plaintext
 Initiative("SNS campaign")     ──ACTIVE_DURING_WEEK──→  Week:2026-03-03
@@ -157,7 +157,7 @@ However, there's **no join key** between initiative categories ("Marketing (Adve
 
 **MetricDomain** (6 domains) structuralizes this tacit knowledge.
 
-![MetricDomain](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/1gk36ev3zjhg301k2frw.png)
+![MetricDomain](/images/posts/initiative-graph-rag/1gk36ev3zjhg301k2frw.png)
 
 | Domain | Meaning | Connected metric types |
 |--------|---------|----------------------|

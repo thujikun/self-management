@@ -71,7 +71,7 @@ This is daily life in a 991-table × 15-schema world. It's not just "I don't kno
 
 This is what we built to solve it.
 
-![System Overview](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/5jtx7gjc1tf5w5l22oz6.png)
+![System Overview](/images/posts/db-graph-mcp/5jtx7gjc1tf5w5l22oz6.png)
 
 Four components:
 
@@ -355,7 +355,7 @@ Even if "return" doesn't appear in the table name, the AI description's mention 
 
 The builder runs six phases daily:
 
-![System Overview](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/5jtx7gjc1tf5w5l22oz6.png)
+![System Overview](/images/posts/db-graph-mcp/5jtx7gjc1tf5w5l22oz6.png)
 *(See the Builder section of the diagram)*
 
 **① ORM Parsing** — Parse 4 ORM types (TypeORM, Sequelize, Drizzle, Mongoose) across 28 repositories to extract table definitions.
@@ -402,7 +402,7 @@ The schema list shows review progress bars. The table list supports filtering by
 
 The table detail screen displays columns with type badges, FK targets, and enum definitions — with inline editing for descriptions and deprecation flags.
 
-![Review UI — Table Detail](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/m73nswk2gk7lt4x2mb0e.png)
+![Review UI — Table Detail](/images/posts/db-graph-mcp/m73nswk2gk7lt4x2mb0e.png)
 *Review UI: FK targets and enum definitions shown as badges. Descriptions can be edited inline.*
 
 Available review actions:
@@ -454,7 +454,7 @@ Now for the security design I'm most proud of.
 
 **Solution:** A three-stage authentication chain — GCP OIDC → AWS STS → VPC Lambda — enables secure cross-cloud connectivity.
 
-![Query Dataflow](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/o8yi9z4popag67qiz86t.png)
+![Query Dataflow](/images/posts/db-graph-mcp/o8yi9z4popag67qiz86t.png)
 
 ### Authentication Flow
 
@@ -523,7 +523,7 @@ Staging uses test data, so no anonymization needed. Only production view queries
 
 This question doesn't get asked anymore. The DB Account Pipeline automates everything.
 
-![Credential Flow](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/8hhym019cnixbs153q2v.png)
+![Credential Flow](/images/posts/db-graph-mcp/8hhym019cnixbs153q2v.png)
 
 ### Flow
 

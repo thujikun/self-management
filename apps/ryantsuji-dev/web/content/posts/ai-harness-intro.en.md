@@ -52,7 +52,7 @@ Monday morning. An engineer implements a feature locally, pushes a branch, opens
 
 By the time the engineer logs in at 9 AM, Slack already shows: "pipeline patched." The only incidents engineers personally handle are the ones AI genuinely can't crack.
 
-![Two automation loops](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/0kuzjonpzd1rcb9k1iiw.png)
+![Two automation loops](/images/posts/ai-harness-intro/0kuzjonpzd1rcb9k1iiw.png)
 
 What's behind both scenes is the dev environment described in the rest of this post.
 
@@ -129,7 +129,7 @@ What lets "**~4 months of intensive dev, mostly solo**" coexist with "**non-engi
 
 cortex's harness is structured as a **flywheel** of 4 elements, mapped to Fowler's **Guides (proactive) / Sensors (reactive)** split, that **mutually reinforce one another**.
 
-![cortex AI Harness Flywheel](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/i2xoe4l8e8m4od7iv7z2.png)
+![cortex AI Harness Flywheel](/images/posts/ai-harness-intro/i2xoe4l8e8m4od7iv7z2.png)
 
 ### ① Product Graph (Guides — supplying the right context)
 
@@ -208,7 +208,7 @@ Build is parallelized via [Turborepo](https://turbo.build/) and [pnpm workspaces
 
 ## Numbers (snapshot at time of writing)
 
-![Scale](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/nn4g1ogy3j3i2dsp3rwm.png)
+![Scale](/images/posts/ai-harness-intro/nn4g1ogy3j3i2dsp3rwm.png)
 
 |  | Value |
 |---|---|
