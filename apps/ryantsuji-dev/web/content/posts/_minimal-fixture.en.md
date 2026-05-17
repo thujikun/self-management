@@ -9,5 +9,6 @@ Minimal test fixture used by `$slug.test.tsx`. No headings, no tags — covers t
 null branches of TOC rendering and tag-list rendering in `routes/posts/$slug.tsx`.
 
 Slugs prefixed with `_` are excluded from `/posts` listing (production publishing
-surface) but remain reachable via direct `getPostSource(slug, lang)` so test
-fixtures can be SSR'd without polluting the index.
+surface) but remain reachable via direct `getRenderedPost(slug, lang)` (the
+`virtual:rendered-posts` lookup that backs `/posts/$slug`) so test fixtures can
+be SSR'd without polluting the index.

@@ -6,14 +6,15 @@
  * slug 単位、要求 lang variant が無い post は en fallback で表示 (badge で
  * `JP only` / `EN+JP` 等を示す)。
  *
- * 直接 `listPosts` を import すると gray-matter が client bundle に乗るため、
- * server fn の handler 経由でしか触らない。
+ * `listPosts` 自体は `virtual:rendered-posts` (build 時 pre-render 済) を lookup
+ * するだけだが、Accept-Language header / lang cookie の取得は server-only のため
+ * server fn の handler 経由で呼ぶ。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business 投稿一覧 route (en/ja 多言語対応)。Accept-Language から優先 lang を決め、slug 単位で dedupe した card list を render。各 card には available lang バッジを付け、user が toggle で言語を切替えられるよう `?lang=ja` 等の link を提供する。server fn で gray-matter を rsc env に閉じ込め、client bundle 軽量化も維持
+ * @graph-business 投稿一覧 route (en/ja 多言語対応)。Accept-Language から優先 lang を決め、slug 単位で dedupe した card list を render。各 card には available lang バッジを付け、user が toggle で言語を切替えられるよう `?lang=ja` 等の link を提供する。markdown render の重 dep は build 時 pre-render 済で全 runtime bundle から除外、server fn は lang 決定 (header / cookie) のために server に閉じ込める
  * @graph-connects tanstack-router [provides] /posts route
- * @graph-connects tanstack-start [provides] createServerFn で listPosts を rsc env に閉じ込める
+ * @graph-connects tanstack-start [provides] createServerFn で Accept-Language / cookie 読み出し + listPosts lookup を server に閉じ込める
  */
 
 import { createServerFn } from "@tanstack/react-start";

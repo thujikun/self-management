@@ -53,6 +53,7 @@ export default defineConfig({
       reporter: ["text", "html"],
       include: [
         "apps/**/src/**/*.{ts,tsx}",
+        "apps/ryantsuji-dev/web/vite-plugins/**/*.ts",
         "packages/**/src/**/*.{ts,tsx}",
         "scripts/hooks/**/*.ts",
         "infra/**/*.ts",

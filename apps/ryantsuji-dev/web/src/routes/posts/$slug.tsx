@@ -3,7 +3,7 @@
  *
  * loader は **renderPost → loadEngagement の serial 化**で動く:
  * (frontmatter が engagement の post upsert に必要なため Promise.all 不可)
- * - `renderPostServer` — slug → renderMarkdown (rsc env のみで shiki/unified を bundle)
+ * - `renderPostServer` — slug → `virtual:rendered-posts` から build 時 pre-render 済の HTML / frontmatter / headings / readingTime を lookup (runtime に shiki / unified は持ち込まない)
  * - `loadEngagementServer` — view count を +1 + likes summary + comments list を 1 まとめ取得
  *
  * client の mutation (like toggle / comment 投稿) は `toggleLikeServer` / `addCommentServer`
@@ -16,8 +16,8 @@
  * @graph-domain publishing
  * @graph-business 投稿詳細 route。markdown render + engagement (views/likes/comments) を 1 SSR loader で並列取得し、client の mutation (like toggle / comment 投稿) を server fn 経由で実行する。auth gate は server 側で行い、未認証経路は sign-in CTA を表示
  * @graph-connects tanstack-router [provides] /posts/$slug route
- * @graph-connects tanstack-start [provides] createServerFn で renderMarkdown / engagement DB ops を rsc env に閉じ込める
- * @graph-connects content [calls] @self/content の renderMarkdown で source → RenderedDoc 変換 (server-only)
+ * @graph-connects tanstack-start [provides] createServerFn で pre-rendered HTML lookup / engagement DB ops を server に閉じ込める
+ * @graph-connects content [calls] @self/content の RenderedDoc 型 (markdown render 本体は build 時 vite plugin で完了済)
  * @graph-connects content [embeds] engagement.ts 経由で posts/likes/comments/view_counts を Drizzle 経由で読み書き
  * @graph-connects better-auth [calls] getSessionFromHeaders で current user を解決して like/comment を gate
  */
@@ -104,11 +104,12 @@ const EngagementInputSchema = z.object({
 });
 
 /**
- * server function: slug + override lang → markdown source 取得 (en/ja variant 解決) →
- * renderMarkdown で render。lang は server で Accept-Language と組合せて確定する。
- * shiki / unified の重 dep は `runRenderPost` 経由 = rsc env のみに bundle される。
+ * server function: slug + override lang → `virtual:rendered-posts` の pre-rendered
+ * map から該当 (slug, lang) を lookup。lang は server で Accept-Language と組合せて
+ * 確定する。markdown render (shiki / unified / remark-*) は vite plugin が build 時に
+ * Node 上で完走済で、runtime bundle (rsc / ssr / client / worker) には一切入らない。
  *
- * @graph-connects content [calls] runRenderPost → getPostSource + renderMarkdown
+ * @graph-connects content [calls] runRenderPost → getRenderedPost (pre-rendered HTML lookup)
  */
 const renderPostServer = createServerFn()
   .inputValidator((data: unknown) => RenderInputSchema.parse(data))

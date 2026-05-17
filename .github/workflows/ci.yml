@@ -40,8 +40,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
       - uses: ./.github/actions/setup
-      - name: Restore turbo cache (build / typecheck only)
-        if: matrix.gate == 'build' || matrix.gate == 'typecheck'
+      - name: Restore turbo cache (build / typecheck / test-coverage)
+        if: matrix.gate == 'build' || matrix.gate == 'typecheck' || matrix.gate == 'test-coverage'
         uses: actions/cache@v4
         with:
           path: .turbo

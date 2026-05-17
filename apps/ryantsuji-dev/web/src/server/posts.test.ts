@@ -1,19 +1,21 @@
 /**
- * `server/posts.ts` の post loader が import.meta.glob 経由で markdown を読み、
- * `listPosts(lang)` / `getPostSource(slug, lang)` を期待通り提供するかの test。
+ * `server/posts.ts` の post loader が `virtual:rendered-posts` (vite plugin が build 時
+ * に renderMarkdown 済の `Record<filename, RenderedDoc>` を expose) を読み、
+ * `listPosts(lang)` / `getRenderedPost(slug, lang)` を期待通り提供するかの test。
  *
- * 実 markdown source (apps/ryantsuji-dev/web/content/posts/) を vite が test 実行時にも
- * 同じ glob で inline する。en/ja variant は filename suffix で判別される。
+ * 実 markdown source (apps/ryantsuji-dev/web/content/posts/) を `renderedPostsPlugin` が
+ * test 実行時にも同 plugin 経由で pre-render し、`virtual:rendered-posts` として供給する。
+ * en/ja variant は filename suffix で判別される。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business post loader の構造保証。listPosts(lang) が要求 lang variant + en fallback で新着順を返すこと、getPostSource(slug, lang) が published source を返し未知 slug で null を返すこと、availableLangs / servedLang が正しく報告されること
+ * @graph-business post loader の構造保証。listPosts(lang) が要求 lang variant + en fallback で新着順を返すこと、getRenderedPost(slug, lang) が published source を返し未知 slug で null を返すこと、availableLangs / servedLang が正しく報告されること
  * @graph-connects none
  */
 
 import { describe, expect, it, vi } from "vitest";
 
-import { __testing, getPostSource, listPosts } from "./posts.js";
+import { __testing, getRenderedPost, listPosts } from "./posts.js";
 
 describe("listPosts(lang)", () => {
   it("en 要求で少なくとも 1 件返り、publishedAt 降順で並ぶ", () => {
@@ -65,8 +67,8 @@ describe("listPosts(lang)", () => {
     const slugs = new Set(listPosts("en").map((p) => p.slug));
     expect(slugs.has("_minimal-fixture")).toBe(false);
     expect(slugs.has("_draft-example")).toBe(false);
-    // 直接アクセス (getPostSource) は引続き fixture を返すこと
-    expect(getPostSource("_minimal-fixture", "en")).not.toBeNull();
+    // 直接アクセス (getRenderedPost) は引続き fixture を返すこと
+    expect(getRenderedPost("_minimal-fixture", "en")).not.toBeNull();
   });
 
   it("meta.lang は filename suffix 由来で servedLang と必ず一致する (frontmatter 側の値は採用しない)", () => {
@@ -82,24 +84,25 @@ describe("listPosts(lang)", () => {
   });
 });
 
-describe("getPostSource(slug, lang)", () => {
-  it("既存 published slug + en で markdown 全文 (frontmatter 込み) を返す", () => {
+describe("getRenderedPost(slug, lang)", () => {
+  it("既存 published slug + en で pre-rendered HTML + frontmatter を返す", () => {
     const slug = listPosts("en")[0]?.slug ?? "";
-    const result = getPostSource(slug, "en");
+    const result = getRenderedPost(slug, "en");
     expect(result).not.toBeNull();
-    expect(result?.source).toMatch(/^---\n/);
-    expect(result?.source).toMatch(/\n---\n/);
+    expect(result?.rendered.html).toContain("<");
+    expect(result?.rendered.frontmatter.title.length).toBeGreaterThan(0);
+    expect(result?.rendered.readingTimeMinutes).toBeGreaterThan(0);
     expect(result?.servedLang).toBe("en");
     expect(result?.availableLangs).toContain("en");
   });
 
   it("存在しない slug で null", () => {
-    expect(getPostSource("does-not-exist-anywhere", "en")).toBeNull();
+    expect(getRenderedPost("does-not-exist-anywhere", "en")).toBeNull();
   });
 
   it("ja 要求で ja variant が無ければ en fallback (servedLang='en')", () => {
     // `_minimal-fixture` は en variant のみ (test fixture)
-    const result = getPostSource("_minimal-fixture", "ja");
+    const result = getRenderedPost("_minimal-fixture", "ja");
     expect(result).not.toBeNull();
     expect(result?.servedLang).toBe("en");
     expect(result?.availableLangs).toEqual(["en"]);
@@ -109,14 +112,14 @@ describe("getPostSource(slug, lang)", () => {
     // dev.to + Zenn pair が揃っている post を抽出
     const pair = listPosts("ja").find((p) => p.availableLangs.includes("ja"));
     expect(pair).toBeDefined();
-    const result = getPostSource(pair!.slug, "ja");
+    const result = getRenderedPost(pair!.slug, "ja");
     expect(result?.servedLang).toBe("ja");
     expect(result?.availableLangs).toContain("ja");
   });
 
   it("draft post の slug でも null (公開経路から漏らさない)", () => {
     // _draft-example.en.md は frontmatter で draft: true
-    expect(getPostSource("_draft-example", "en")).toBeNull();
+    expect(getRenderedPost("_draft-example", "en")).toBeNull();
   });
 });
 
@@ -132,7 +135,18 @@ describe("variantFor (internal、fallback ロジックと invariant 破れの fa
       syndication: {},
       lang: "ja" as const,
     },
-    source: "---\ntitle: 'ja'\npublishedAt: 2026-01-01\n---\nja body",
+    rendered: {
+      html: "<p>ja body</p>",
+      frontmatter: {
+        title: "Ja-only test",
+        publishedAt: "2026-01-01",
+        tags: [],
+        draft: false,
+        syndication: {},
+      },
+      headings: [],
+      readingTimeMinutes: 1,
+    },
   };
 
   it("ja-only entry を en 要求すると ja に fallback (servedLang='ja')", () => {
@@ -162,29 +176,29 @@ describe("variantFor (internal、fallback ロジックと invariant 破れの fa
 
 describe("parsePath (internal、filename 規約の防御パース)", () => {
   it("`<slug>.<lang>.md` 形式を分解して { slug, lang } を返す", () => {
-    expect(__testing.parsePath("../../content/posts/db-graph-mcp.en.md")).toEqual({
+    expect(__testing.parseFilename("../../content/posts/db-graph-mcp.en.md")).toEqual({
       slug: "db-graph-mcp",
       lang: "en",
     });
-    expect(__testing.parsePath("foo/bar/example.ja.md")).toEqual({
+    expect(__testing.parseFilename("foo/bar/example.ja.md")).toEqual({
       slug: "example",
       lang: "ja",
     });
   });
 
   it("`<slug>.md` (lang suffix 無し) は null", () => {
-    expect(__testing.parsePath("./hello.md")).toBeNull();
+    expect(__testing.parseFilename("./hello.md")).toBeNull();
   });
 
   it("未対応 lang suffix (e.g. `.fr.md`) は null", () => {
-    expect(__testing.parsePath("./hello.fr.md")).toBeNull();
+    expect(__testing.parseFilename("./hello.fr.md")).toBeNull();
   });
 
   it("非 md は null", () => {
-    expect(__testing.parsePath("./hello.en.txt")).toBeNull();
+    expect(__testing.parseFilename("./hello.en.txt")).toBeNull();
   });
 
   it("空文字 path も crash せず null", () => {
-    expect(__testing.parsePath("")).toBeNull();
+    expect(__testing.parseFilename("")).toBeNull();
   });
 });
