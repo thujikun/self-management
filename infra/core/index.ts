@@ -831,7 +831,7 @@ const webEventsTable = new gcp.bigquery.Table(
       "ryantsuji.dev client-side beacon events (page view / engagement)。" +
       "Worker /api/track が streaming insert で append。第三者 tracker 不採用。",
     timePartitioning: { type: "DAY", field: "ts" },
-    clustering: ["event_type", "slug"],
+    clusterings: ["event_type", "slug"],
     schema: pulumi.jsonStringify([
       {
         name: "ts",
