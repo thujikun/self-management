@@ -17,7 +17,7 @@ import * as gcp from "@pulumi/gcp";
 import * as grafana from "@pulumiverse/grafana";
 import * as pulumi from "@pulumi/pulumi";
 
-import { provisionGrafanaFaro } from "./grafana-faro.js";
+import { provisionGrafanaFaro } from "./grafana-faro";
 
 /** @graph-connects none */
 const gcpConfig = new pulumi.Config("gcp");
