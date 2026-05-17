@@ -65,8 +65,12 @@ jobs:
         run: |
           out=$(pnpm exec tsx scripts/schedule-publish.cli.ts)
           echo "$out"
-          # PUBLISHED 行から slug を抽出 (commit subject 用)
-          slugs=$(echo "$out" | grep -E "^PUBLISHED " | sed -E 's/^PUBLISHED ([^.]+)\.(en|ja)\.md$/\1/' | sort -u | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
+          # PUBLISHED 行から slug を抽出 (commit subject 用)。0 マッチで grep が
+          # exit 1 を返すと shell の `-o pipefail` で step が失敗するため、
+          # 「no-op の cron tick = 正常」を保つ意図で `|| true` を末尾に付け、
+          # 戻り値の責務を slugs の空判定 (`steps.run.outputs.slugs != ''`) に
+          # 寄せる (= 失敗判定は grep の exit code ではなく後段の if で行う)。
+          slugs=$(echo "$out" | grep -E "^PUBLISHED " | sed -E 's/^PUBLISHED ([^.]+)\.(en|ja)\.md$/\1/' | sort -u | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g' || true)
           echo "slugs=$slugs" >> "$GITHUB_OUTPUT"
 
       - name: Commit & push if any post flipped
