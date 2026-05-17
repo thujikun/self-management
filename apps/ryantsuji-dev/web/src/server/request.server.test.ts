@@ -13,7 +13,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockGetRequestHeaders = vi.fn<() => Record<string, string | undefined>>();
+const mockGetRequestHeaders = vi.fn<() => Headers>();
 const mockGetCookie = vi.fn<(name: string) => string | undefined>();
 const mockSetCookie =
   vi.fn<(name: string, value: string, options: Record<string, unknown>) => void>();
@@ -52,12 +52,12 @@ describe("safeAcceptLanguage", () => {
   });
 
   it("Accept-Language header が取れたらその文字列を返す", () => {
-    mockGetRequestHeaders.mockReturnValue({ "accept-language": "ja,en;q=0.8" });
+    mockGetRequestHeaders.mockReturnValue(new Headers({ "accept-language": "ja,en;q=0.8" }));
     expect(safeAcceptLanguage()).toStrictEqual("ja,en;q=0.8");
   });
 
-  it("header object に accept-language キーが無ければ null", () => {
-    mockGetRequestHeaders.mockReturnValue({});
+  it("Headers に accept-language キーが無ければ null", () => {
+    mockGetRequestHeaders.mockReturnValue(new Headers());
     expect(safeAcceptLanguage()).toStrictEqual(null);
   });
 
@@ -184,12 +184,12 @@ describe("safeRequestHeaders", () => {
     mockGetRequestHeaders.mockReset();
   });
 
-  it("getRequestHeaders の record を Headers object に変換して返す", () => {
-    mockGetRequestHeaders.mockReturnValue({
+  it("getRequestHeaders の Headers をそのまま返す", () => {
+    const source = new Headers({
       "accept-language": "ja",
       cookie: "session=abc",
-      "x-undefined": undefined,
     });
+    mockGetRequestHeaders.mockReturnValue(source);
     const headers = safeRequestHeaders();
     expect(headers).not.toBeNull();
     expect(headers?.get("accept-language")).toBe("ja");
@@ -214,14 +214,14 @@ describe("isAdminFromCurrentRequest", () => {
   const env = { ADMIN_EMAIL: "admin@example.com" } as Env;
 
   it("headers が取れて isAdminRequest が true なら true", async () => {
-    mockGetRequestHeaders.mockReturnValue({ "accept-language": "en" });
+    mockGetRequestHeaders.mockReturnValue(new Headers({ "accept-language": "en" }));
     mockIsAdminRequest.mockResolvedValue(true);
     await expect(isAdminFromCurrentRequest(env)).resolves.toBe(true);
     expect(mockIsAdminRequest).toHaveBeenCalledTimes(1);
   });
 
   it("headers が取れて isAdminRequest が false なら false", async () => {
-    mockGetRequestHeaders.mockReturnValue({ "accept-language": "en" });
+    mockGetRequestHeaders.mockReturnValue(new Headers({ "accept-language": "en" }));
     mockIsAdminRequest.mockResolvedValue(false);
     await expect(isAdminFromCurrentRequest(env)).resolves.toBe(false);
   });
