@@ -16,6 +16,7 @@ import {
   Outlet,
   Scripts,
   createRootRouteWithContext,
+  useLocation,
   useRouter,
 } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
@@ -156,7 +157,8 @@ export async function performInitFaroClient(args: {
 
 /** @graph-connects none */
 function RootComponent() {
-  const { theme } = Route.useLoaderData();
+  const { theme, lang } = Route.useLoaderData();
+  const location = useLocation();
   // Grafana Faro は client でしか動かない (window / document を eager 参照する) ので、
   // SDK 自体を lazy import + useEffect 内で初期化する。collector URL が未投入なら
   // dynamic import 自体を skip して bundle 解析対象から外す。
@@ -167,6 +169,15 @@ function RootComponent() {
       importFaro: () => import("../lib/faro-client.js"),
     });
   }, []);
+  // 自前 analytics: 各 route change で page_view を 1 件送る。SPA navigation 経由でも
+  // 撃つので useLocation を依存に取る。client-only beacon は track-client 側で
+  // window guard 済 (= SSR は no-op)。
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    void import("../lib/track-client.js").then(({ trackPageView }) =>
+      trackPageView({ path: location.pathname, lang }),
+    );
+  }, [location.pathname, lang]);
   return (
     <RootDocument theme={theme}>
       <Outlet />
