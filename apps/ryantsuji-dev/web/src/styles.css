@@ -160,6 +160,13 @@ main {
   max-width: var(--container-content);
   margin: 0 auto;
   padding: var(--space-12) var(--space-6) var(--space-6);
+  /* body が `display: flex; flex-direction: column` で main は flex item。flex item
+     のデフォルト `min-width: auto` は intrinsic (= min-content) 幅を下限にするので、
+     mobile (375px) より広い pre/code/table 等の content があると main 自体が膨らみ
+     `max-width` で抑えても効かない (= mobile で右側はみ出しの根本原因)。
+     `min-width: 0` で flex item が parent 幅まで縮むことを許可し、内部の
+     pre は自身の `overflow-x: auto` で content を横スクロールに倒す。 */
+  min-width: 0;
 }
 
 /* ─── landing (`/`) ─────────────────────────── */
