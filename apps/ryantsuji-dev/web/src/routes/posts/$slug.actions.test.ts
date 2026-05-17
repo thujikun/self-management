@@ -14,6 +14,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { CommentView } from "../../server/engagement.js";
+
 import {
   dispatchCommentSubmit,
   dispatchLikeClick,
@@ -109,13 +111,13 @@ describe("executeAddCommentAction", () => {
 });
 
 describe("dispatchLikeClick", () => {
-  let setSubmitting: ReturnType<typeof vi.fn>;
-  let setError: ReturnType<typeof vi.fn>;
-  let setLikes: ReturnType<typeof vi.fn>;
+  let setSubmitting: ReturnType<typeof vi.fn<(v: boolean) => void>>;
+  let setError: ReturnType<typeof vi.fn<(e: string | null) => void>>;
+  let setLikes: ReturnType<typeof vi.fn<(l: { liked: boolean; count: number }) => void>>;
   beforeEach(() => {
-    setSubmitting = vi.fn();
-    setError = vi.fn();
-    setLikes = vi.fn();
+    setSubmitting = vi.fn<(v: boolean) => void>();
+    setError = vi.fn<(e: string | null) => void>();
+    setLikes = vi.fn<(l: { liked: boolean; count: number }) => void>();
   });
 
   it("auth false: 何もしない (setSubmitting も呼ばない)", async () => {
@@ -179,17 +181,17 @@ describe("dispatchLikeClick", () => {
 });
 
 describe("dispatchCommentSubmit", () => {
-  let setSubmitting: ReturnType<typeof vi.fn>;
-  let setError: ReturnType<typeof vi.fn>;
-  let setComments: ReturnType<typeof vi.fn>;
-  let setDraft: ReturnType<typeof vi.fn>;
-  let invalidate: ReturnType<typeof vi.fn>;
+  let setSubmitting: ReturnType<typeof vi.fn<(v: boolean) => void>>;
+  let setError: ReturnType<typeof vi.fn<(e: string | null) => void>>;
+  let setComments: ReturnType<typeof vi.fn<(next: CommentView[]) => void>>;
+  let setDraft: ReturnType<typeof vi.fn<(v: string) => void>>;
+  let invalidate: ReturnType<typeof vi.fn<() => void>>;
   beforeEach(() => {
-    setSubmitting = vi.fn();
-    setError = vi.fn();
-    setComments = vi.fn();
-    setDraft = vi.fn();
-    invalidate = vi.fn();
+    setSubmitting = vi.fn<(v: boolean) => void>();
+    setError = vi.fn<(e: string | null) => void>();
+    setComments = vi.fn<(next: CommentView[]) => void>();
+    setDraft = vi.fn<(v: string) => void>();
+    invalidate = vi.fn<() => void>();
   });
 
   it("auth false: 何もしない", async () => {
