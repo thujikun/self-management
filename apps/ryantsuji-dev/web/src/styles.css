@@ -81,14 +81,21 @@
 html {
   /* fixed-position の blob (body::before/::after) や `right: -Nvmax` で viewport を
      超える装飾要素が mobile で横スクロールを引き起こすのを防ぐ。`clip` は
-     `hidden` と違って scroll position も生成しないので、装飾の overflow に
-     最適。 */
+     `hidden` と違って scroll position も生成しないので、装飾の overflow に最適。
+     dark bg は body / html 両方に当てて、body が content sized でも viewport 下半分が
+     default 白で透けるのを防ぐ (body から min-height: 100vh を外したため)。 */
   overflow-x: clip;
+  background: var(--bg-base);
 }
 
 body {
   margin: 0;
+  /* sticky-footer pattern: 短い post でも footer が viewport 底に張り付き、main と
+     footer の間の void が消える。`main` 自体は default の auto height で content
+     ぶんしか取らず、`footer` を `margin-top: auto` で flex 末尾に押し付ける。 */
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-base);
   position: relative;
   overflow-x: clip;
@@ -143,7 +150,7 @@ a:hover {
 main {
   max-width: var(--container-content);
   margin: 0 auto;
-  padding: var(--space-12) var(--space-6);
+  padding: var(--space-12) var(--space-6) var(--space-6);
 }
 
 /* ─── landing (`/`) ─────────────────────────── */
@@ -998,8 +1005,10 @@ main {
 /* ─── site footer (全 page 共通) ─── */
 
 .site-footer {
+  /* sticky-footer pattern: `body` の flex column 末尾に `margin-top: auto` で押し付け、
+     短い post でも viewport 底に張り付き「巨大な void」を消す。max-width は中央寄せ用。 */
   max-width: var(--container-content);
-  margin: var(--space-12) auto var(--space-8);
+  margin: auto auto var(--space-4);
   padding: var(--space-6);
   display: flex;
   gap: var(--space-3);
@@ -1068,6 +1077,7 @@ main {
   top: calc(var(--space-12, 4rem) + var(--space-3));
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--space-2);
   padding: var(--space-2);
   border: 1px solid var(--glass-border);
@@ -1076,7 +1086,7 @@ main {
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
   backdrop-filter: blur(var(--glass-blur)) saturate(180%);
   align-self: start;
-  width: 48px;
+  width: 64px;
 }
 
 .post-share-pane__btn {
@@ -1085,9 +1095,9 @@ main {
   align-items: center;
   justify-content: center;
   gap: var(--space-1);
-  width: 36px;
-  min-height: 36px;
-  padding: var(--space-1) 0;
+  width: 48px;
+  min-height: 48px;
+  padding: var(--space-2) 0;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: transparent;
@@ -1111,12 +1121,12 @@ main {
 }
 
 .post-share-pane__icon {
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-lg);
   line-height: 1;
 }
 
 .post-share-pane__count {
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   font-weight: var(--font-weight-medium);
   color: var(--text-muted);
 }
@@ -1129,7 +1139,7 @@ main {
 @media (min-width: 960px) {
   .post-detail {
     display: grid;
-    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-columns: 72px minmax(0, 1fr);
     gap: var(--space-6);
   }
   .post-detail__crumbs,
@@ -1138,15 +1148,22 @@ main {
   .engagement {
     grid-column: 2;
   }
-  .post-share-pane {
+  .post-share-rail {
     grid-column: 1;
     grid-row: 2 / span 99;
   }
 }
 
 /* mobile: engagement section 内で sticky-bottom (section が viewport に入った時のみ底固定。
-   ページ全体に対する常時 fixed toolbar ではない) */
+   ページ全体に対する常時 fixed toolbar ではない)。
+   rail wrapper は `display: contents` で layout から外し、pane を `.post-detail`
+   直下に "戻して" sticky の containing block を `.post-detail` (= ページ全体相当の高さ)
+   にする。これをしないと containing block が rail (= pane と同 height) になり
+   sticky-bottom が機能しなくなる。 */
 @media (max-width: 959px) {
+  .post-share-rail {
+    display: contents;
+  }
   .post-share-pane {
     flex-direction: row;
     justify-content: space-around;
