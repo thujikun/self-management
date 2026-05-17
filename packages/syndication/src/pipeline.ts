@@ -28,12 +28,30 @@ export interface SyndicateForZennArgs {
   /** ryantsuji.dev の base URL (例: `https://ryantsuji.dev`)。`/images/...` 相対 URL
    *  を絶対化するため必要。trailing slash 無し前提。 */
   canonicalHost: string;
+  /** 同 slug の英語版が ryantsuji.dev にある場合、その絶対 URL
+   *  (例: `https://ryantsuji.dev/posts/<slug>?lang=en`)。null なら header を inject しない。
+   *  Zenn は canonical_url を持てない (dev.to のように原典明示できない) ので、JA reader
+   *  に英語版の存在を Zenn-only header として伝える役割。 */
+  enUrl: string | null;
   /** Zenn 末尾に付加する footer markdown (null なら footer なし) */
   footerMarkdown: string | null;
   /** Zenn 記事 emoji。default `🤖` */
   emoji?: string;
   /** publication_name。null で omit (個人 publish)、default `"aircloset"` */
   publicationName?: string | null;
+}
+
+/**
+ * Zenn 用 cross-lang header の markdown を組む。`enUrl` が null なら空文字。
+ * Zenn の `:::message` callout 構文で記事冒頭 (= greeting より前) に置き、JA reader に
+ * 英語版の存在を伝える。dev.to は `canonical_url` で原典 (ryantsuji.dev) を明示できる
+ * が、Zenn には同等の機構が無いためこの header で誘導する。
+ *
+ * @graph-connects none
+ */
+export function buildZennCrossLangHeader(enUrl: string | null): string {
+  if (!enUrl) return "";
+  return `:::message\n[English Version is here](${enUrl})\n:::\n\n`;
 }
 
 /**
@@ -46,12 +64,14 @@ export function syndicateForZenn(args: SyndicateForZennArgs): string {
   const linkRewritten = rewriteInternalLinks(args.body, args.resolver);
   const imageRewritten = rewriteImageLinks(linkRewritten, args.canonicalHost);
   const withFooter = appendFooter(imageRewritten, args.footerMarkdown);
+  const header = buildZennCrossLangHeader(args.enUrl);
+  const withHeader = `${header}${withFooter.replace(/^\s+/u, "")}`;
   const fm = buildZennFrontmatter(args.meta, {
     emoji: args.emoji,
     publicationName: args.publicationName,
   });
   const fmYaml = stringifyZennFrontmatter(fm);
-  return `${fmYaml}\n\n${withFooter.replace(/^\s+/u, "")}`;
+  return `${fmYaml}\n\n${withHeader}`;
 }
 
 /** @graph-connects none */

@@ -149,6 +149,10 @@ export async function emitZenn(args: EmitZennArgs): Promise<void> {
   const resolver = buildZennResolver(args.posts);
   await mkdir(args.outDir, { recursive: true });
   const repoDir = args.repoDir ?? process.env.RYANTSUJI_CONTENT_REPO_DIR ?? ZENN_REPO_LOCAL_DEFAULT;
+  // 同 slug の en variant 存在を SET で持ち、ja syndication 時に enUrl を組む。
+  // dev.to は canonical_url で原典を出せるが Zenn には無いので、Zenn だけ header で
+  // 「English version on ryantsuji.dev」を表示する。
+  const slugsWithEn = new Set(args.posts.filter((q) => q.lang === "en").map((q) => q.slug));
 
   for (const p of args.posts) {
     if (p.lang !== "ja") continue;
@@ -158,11 +162,13 @@ export async function emitZenn(args: EmitZennArgs): Promise<void> {
       console.warn(`  [skip] ${p.slug}.ja.md: no syndication.zenn.id`);
       continue;
     }
+    const enUrl = slugsWithEn.has(p.slug) ? `${RYANTSUJI_DEV_BASE}/posts/${p.slug}?lang=en` : null;
     const markdown = syndicateForZenn({
       meta: p.meta,
       body: p.body,
       resolver,
       canonicalHost: RYANTSUJI_DEV_BASE,
+      enUrl,
       footerMarkdown: args.footer,
     });
     const outPath = resolve(args.outDir, `${zennId}.md`);
