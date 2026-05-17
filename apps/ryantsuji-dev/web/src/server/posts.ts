@@ -7,11 +7,11 @@
  * fallback は常に `en`** (dev.to import を SoT に揃えたので en は全 post に存在する
  * 前提)。
  *
- * 旧設計 (`import.meta.glob('?raw', eager)` + runtime `renderMarkdown`) は長い記事で
- * Worker の CPU 上限を超え Error 1102 を引き起こしていた。新設計は vite plugin
- * (`virtual:rendered-posts`) で build 時に renderMarkdown を全 .md に走らせて HTML +
- * frontmatter + headings + readingTime を JSON 化し、runtime は lookup のみ。
- * shiki / unified は Worker bundle から完全に除外される。
+ * 旧設計 (vite の eager raw glob で `.md` を inline し runtime で `renderMarkdown`)
+ * は長い記事で Worker の CPU 上限を超え Error 1102 を引き起こしていた。新設計は
+ * vite plugin (`virtual:rendered-posts`) で build 時に renderMarkdown を全 .md に
+ * 走らせて HTML + frontmatter + headings + readingTime を JSON 化し、runtime は
+ * lookup のみ。shiki / unified は Worker bundle から完全に除外される。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing

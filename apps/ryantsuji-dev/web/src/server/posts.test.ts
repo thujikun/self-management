@@ -1,9 +1,11 @@
 /**
- * `server/posts.ts` の post loader が import.meta.glob 経由で markdown を読み、
+ * `server/posts.ts` の post loader が `virtual:rendered-posts` (vite plugin が build 時
+ * に renderMarkdown 済の `Record<filename, RenderedDoc>` を expose) を読み、
  * `listPosts(lang)` / `getRenderedPost(slug, lang)` を期待通り提供するかの test。
  *
- * 実 markdown source (apps/ryantsuji-dev/web/content/posts/) を vite が test 実行時にも
- * 同じ glob で inline する。en/ja variant は filename suffix で判別される。
+ * 実 markdown source (apps/ryantsuji-dev/web/content/posts/) を `renderedPostsPlugin` が
+ * test 実行時にも同 plugin 経由で pre-render し、`virtual:rendered-posts` として供給する。
+ * en/ja variant は filename suffix で判別される。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing

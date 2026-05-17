@@ -7,9 +7,10 @@
  * で「どの vite environment を Worker bundle にするか」を明示する。
  *
  * `tanstackStart({ rsc: { enabled: true } })` + `@vitejs/plugin-rsc` で 5 environment
- * (api / middleware / **rsc** / client / ssr) build に展開。`createServerFn().handler()`
- * 内から呼ぶ重 dep (shiki / unified) は rsc env のみに bundle され、client にも ssr にも
- * 漏れない。spike record は `docs/spike/rsc.md`。
+ * (api / middleware / **rsc** / client / ssr) build に展開。markdown render の重 dep
+ * (shiki / unified / remark-*) は `renderedPostsPlugin` で build 時に Node 上で実行
+ * され、rsc を含む全 runtime bundle からは完全に除外される (Worker CPU 上限 10ms /
+ * Error 1102 を構造的に解消)。spike record は `docs/spike/rsc.md`。
  *
  * `server.entry: "./src/server.ts"` で本 app 固有の Worker entry を wire し、Workers
  * が渡す `(req, env, ctx)` を TanStack Start handler の `requestContext: { env, ctx }`
