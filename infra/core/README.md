@@ -5,6 +5,7 @@ self-management の core インフラ。
 ## 中身
 
 - BigQuery dataset `ryan` (location: `asia-northeast1`)
+  - Table `ryan.web_events` — ryantsuji.dev の client beacon (page view / engagement) を Worker `/api/track` (PR-B) 経由で streaming insert する analytics 表。`event_type` / `slug` で clustering、server-time `ingested_at` で daily partition (client skew 影響回避)、`expirationMs` 未設定 (個人スケールでは BQ free tier に十分収まる前提)
 - Service account `graph-app@ryan-self-management.iam.gserviceaccount.com`
 - IAM:
   - `graph-app` SA に `roles/bigquery.dataEditor` on `ryan` dataset
@@ -20,6 +21,7 @@ self-management の core インフラ。
   - `xmcp-app-credentials` — X dev app の consumer key/secret + bearer token
   - `xmcp-user-{ryantsuji,ryanaircloset}` — X user account の OAuth1 access token
   - `cloudflare-api-token` — CF Workers deploy 用 API token (`CLOUDFLARE_API_TOKEN`)。Ryan が CF Dashboard で Workers Scripts:Edit + Workers Routes:Edit (ryantsuji.dev) の minimal scope token を発行して手動投入
+  - `grafana-faro-collector-url` — Grafana Cloud Frontend Observability (Faro) collector URL。Ryan が Grafana Cloud UI で Faro App 作成 → 生成された collector URL を `gcloud secrets versions add` で投入 (PR-B の ryantsuji.dev web build-time に inline で消費)
 - Cloud Run job `graph-migrate` + Artifact Registry repo `self-mgmt` (graph migrate ジョブ用)
 - Grafana Cloud Stack 連携 (OTLP endpoint + write token を declarative 管理)
 - **GitHub Actions WIF** — pool `github-actions` + provider `github-actions` + SA `pulumi-ci` (long-lived key 不使用)。本 repo (thujikun/self-management) からの workflow のみ impersonate 可

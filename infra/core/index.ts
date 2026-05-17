@@ -816,6 +816,11 @@ export const grafanaOtlpTokenSecretId = otlpTokenSecret.id;
  * - `session_id` は client 生成 UUID v4 (localStorage、IP 非保存で cookie banner 不要)
  * - `referrer` / `utm_*` は流入分析、`viewport_w` / `locale` は端末分析
  * - `ts` は client 側 ISO 8601、`ingested_at` を BQ default で書いて lag 追跡
+ * - partition は `ingested_at` (server-time、`CURRENT_TIMESTAMP` default) で daily。
+ *   client 側の `ts` を partition field にすると、時計ずれや悪意ある client の skew
+ *   (`ts=2099-...` 等) で遥か未来 / 過去の partition が作られ partition pruning が
+ *   崩れる / storage cost が膨らむため不採用。analytics は `ts` 普通の column として
+ *   read (`SELECT ... FROM ryan.web_events WHERE DATE(ingested_at) = ...`)。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
@@ -830,7 +835,9 @@ const webEventsTable = new gcp.bigquery.Table(
     description:
       "ryantsuji.dev client-side beacon events (page view / engagement)。" +
       "Worker /api/track が streaming insert で append。第三者 tracker 不採用。",
-    timePartitioning: { type: "DAY", field: "ts" },
+    // partition は server-time の ingested_at で daily。client 側 ts を field にすると
+    // 時計 skew で partition pruning が崩れるため。
+    timePartitioning: { type: "DAY", field: "ingested_at" },
     clusterings: ["event_type", "slug"],
     schema: pulumi.jsonStringify([
       {

@@ -48,22 +48,46 @@ beforeAll(() => {
 });
 
 describe("infra/core stack", () => {
-  it("module import に成功し、必須 export を全部返す", async () => {
+  it("公開 export 一覧を契約として固定する", async () => {
     const m = await import("./index.js");
-    expect(m.datasetId).toBeDefined();
-    expect(m.datasetLocation).toBeDefined();
-    expect(m.graphServiceAccountEmail).toBeDefined();
-    expect(m.graphServiceAccountKey).toBeDefined();
-    expect(m.grafanaOtlpEndpoint).toBeDefined();
-    expect(m.grafanaStackId).toBeDefined();
-    expect(m.grafanaOtlpTokenSecretId).toBeDefined();
-    expect(m.xmcpAppSecretId).toBeDefined();
-    expect(m.XMCP_ACCOUNTS).toEqual(["ryantsuji", "ryanaircloset"]);
-    expect(m.artifactRegistryRepoId).toBeDefined();
-    expect(m.graphMigrateJobName).toBeDefined();
-    expect(m.cloudflareApiTokenSecretId).toBeDefined();
-    expect(m.pulumiCiServiceAccountEmail).toBeDefined();
-    expect(m.githubWifProviderResource).toBeDefined();
+    // testing.md「index.ts / barrel テストは機械的に固定する」に従い、Object.keys 全体を
+    // inline snapshot で固定。新規 export / 削除 / リネームを 1 行で検知する。
+    expect(Object.keys(m).sort()).toMatchInlineSnapshot(`
+      [
+        "XMCP_ACCOUNTS",
+        "artifactRegistryRepoId",
+        "betterAuthSecretId",
+        "cloudflareApiTokenSecretId",
+        "datasetId",
+        "datasetLocation",
+        "githubOauthClientIdSecretId",
+        "githubOauthClientSecretSecretId",
+        "githubWifProviderResource",
+        "googleOauthClientIdSecretId",
+        "googleOauthClientSecretSecretId",
+        "grafanaFaroCollectorUrlSecretId",
+        "grafanaMcpTokenSecretId",
+        "grafanaOtlpEndpoint",
+        "grafanaOtlpTokenSecretId",
+        "grafanaStackId",
+        "grafanaStackUrl",
+        "graphMigrateJobName",
+        "graphServiceAccountEmail",
+        "graphServiceAccountKey",
+        "neonDatabaseUrlSecretId",
+        "normalizeOtlpUrl",
+        "pulumiCiServiceAccountEmail",
+        "webEventsTableId",
+        "xOauth2ClientIdSecretId",
+        "xOauth2ClientSecretSecretId",
+        "xmcpAppSecretId",
+      ]
+    `);
+  });
+
+  it("XMCP_ACCOUNTS は ryantsuji / ryanaircloset の 2 件", async () => {
+    const m = await import("./index.js");
+    expect(m.XMCP_ACCOUNTS).toStrictEqual(["ryantsuji", "ryanaircloset"]);
   });
 
   it("datasetId は 'ryan'", async () => {
