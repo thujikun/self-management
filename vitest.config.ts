@@ -19,6 +19,12 @@
 
 import { defineConfig } from "vitest/config";
 
+import {
+  COVERAGE_EXCLUDE,
+  COVERAGE_INCLUDE,
+  COVERAGE_THRESHOLDS,
+} from "./scripts/hooks/coverage-config.js";
+
 export default defineConfig({
   test: {
     projects: [
@@ -48,71 +54,20 @@ export default defineConfig({
     // 次の閾値突破時 (60s 級) は timeout 拡張ではなく `globalSetup` で ts-morph
     // project を prewarm して cold-start 自体を短くする方針に切替える。
     testTimeout: 30000,
+    // coverage の include / exclude / threshold は `scripts/hooks/coverage-config.ts`
+    // を SSoT として import する。staged 単位 coverage check (`coverage-staged`
+    // gate) も同 module を読むため、CI と pre-commit で「coverage 対象集合」が
+    // drift しない設計。新規 exclude を増やす時は coverage-config.ts を編集すれば
+    // 両方に自動反映される。
+    //
+    // 閾値運用ルール: 「閾値を下げる代わりにテストを追加する」(下げる変更は禁止)。
+    // 初期から 90% で開始 (Ryan ルール、2026-05-05)。
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
-      include: [
-        "apps/**/src/**/*.{ts,tsx}",
-        "apps/ryantsuji-dev/web/vite-plugins/**/*.ts",
-        "packages/**/src/**/*.{ts,tsx}",
-        "scripts/hooks/**/*.ts",
-        "infra/**/*.ts",
-      ],
-      // bin/ や scripts/ の CLI entry point は process.argv / 標準入出力依存で
-      // unit test 対象外。pure logic は src/ 側に分離してテスト済。
-      exclude: [
-        "**/*.test.ts",
-        "**/*.spec.ts",
-        "**/dist/**",
-        "**/node_modules/**",
-        // SDK ラッパー: BigQuery / Vertex AI への外部 HTTP 呼び出しが本体で、
-        // 純粋ロジック部分は parser 側 (operations-log/threads/memory/strategy) で
-        // 既にテスト対象。ここの unit test は real-API 統合テストか E2E でやる。
-        "apps/graph/product/src/migrate/common/bq-merge.ts",
-        "apps/graph/product/src/migrate/common/embedding.ts",
-        // ryantsuji-dev/web の DB / 認証 runtime ラッパー: Drizzle/Neon HTTP / Better Auth
-        // への外部 IO が本体。pure 入力 validation は engagement-validate.ts に切出してテスト
-        // 対象、route 経由の整合は $slug.test.tsx 等で担保する。同型 (bq-merge.ts) と同じ exclude 方針。
-        "apps/ryantsuji-dev/web/src/server/db.ts",
-        "apps/ryantsuji-dev/web/src/server/auth-session.ts",
-        "apps/ryantsuji-dev/web/src/server/engagement.ts",
-        // .server.ts: client bundle 隔離のための薄い委譲ファイル。実体は engagement.ts /
-        // auth-session.ts に。test は run* を直接呼ぶ ($slug.test.tsx 内) ので動作担保はある
-        // が、coverage 計測は exclude (薄い wiring + 上記 module の delegation のみ)。
-        "apps/ryantsuji-dev/web/src/routes/posts/$slug.server.ts",
-        "apps/ryantsuji-dev/web/src/routes/series/$slug.server.ts",
-        // CF Workers entry / startInstance: Worker runtime でのみ実行されるため node test
-        // からは到達不可。env binding 経路の正しさは route 側 ($slug.test.tsx) が踏み、
-        // 実 deploy は wrangler deploy --dry-run + 手動 smoke で検証する方針。
-        "apps/ryantsuji-dev/web/src/server.ts",
-        "apps/ryantsuji-dev/web/src/start.ts",
-        // 中間 type 定義のみ (実行時ロジックなし)
-        "apps/graph/product/src/migrate/common/types.ts",
-        // CLI entry-point: process.argv / staged file 取得 / process.exit のみ。
-        // 純粋ロジックは sibling lib で網羅テスト済み。
-        "scripts/hooks/*.cli.ts",
-        "scripts/*.cli.ts",
-        // Pulumi の Pulumi.yaml / Pulumi.<stack>.yaml は code ではない
-        "**/Pulumi.*.yaml",
-        // TanStack Router 自動生成 routeTree (commit 済だが human-authored ではないので coverage 計測対象外)
-        "**/routeTree.gen.ts",
-        // vitest setup は test infrastructure (mock 定義) なので coverage 計測対象外。
-        // pure logic を持つ場合は src/ に切り出してテスト対象にする。
-        "**/test-setup.ts",
-      ],
-      // 閾値は **each-file 基準** で強制 (Ryan ルール: 全体平均では 1 ファイル 100% で
-      // 他をごまかせるため不採用)。`perFile: true` で coverage.include の各ファイルが
-      // 独立に threshold を満たす必要がある。
-      //
-      // 閾値運用ルール: 「閾値を下げる代わりにテストを追加する」(下げる変更は禁止)。
-      // 初期から 90% で開始 (Ryan ルール、2026-05-05): 最初から整えないと運用できない。
-      thresholds: {
-        perFile: true,
-        lines: 90,
-        functions: 90,
-        branches: 90,
-        statements: 90,
-      },
+      include: [...COVERAGE_INCLUDE],
+      exclude: [...COVERAGE_EXCLUDE],
+      thresholds: { ...COVERAGE_THRESHOLDS },
     },
   },
 });
