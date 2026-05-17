@@ -63,11 +63,24 @@ describe("buildCommentTree", () => {
 });
 
 describe("CommentList SSR", () => {
-  it("空 list で empty placeholder を出す", () => {
+  it("空 list で empty placeholder を出す (lang default = en)", () => {
     const html = renderToString(
       <CommentList
         comments={[]}
         currentUserId={null}
+        onReply={async () => ({ ok: true })}
+        onDelete={async () => {}}
+      />,
+    );
+    expect(html).toMatch(/no comments yet/);
+  });
+
+  it("lang=ja を渡すと placeholder も日本語", () => {
+    const html = renderToString(
+      <CommentList
+        comments={[]}
+        currentUserId={null}
+        lang="ja"
         onReply={async () => ({ ok: true })}
         onDelete={async () => {}}
       />,
@@ -112,8 +125,10 @@ describe("CommentList SSR", () => {
     );
     // delete button は own only
     expect((html.match(/comments__action--danger/g) ?? []).length).toBe(1);
-    // reply button は両 top-level に出る (canReply は currentUserId 有無のみ)
-    expect((html.match(/>reply</g) ?? []).length).toBe(2);
+    // reply hint button (focus-only) は両 top-level に出る (canReply は currentUserId 有無のみ)
+    expect((html.match(/class="comments__action">reply</g) ?? []).length).toBe(2);
+    // 各 thread bottom に永続的な reply form が並ぶ (= top-level 数だけ form がある)
+    expect((html.match(/comments__form--reply/g) ?? []).length).toBe(2);
   });
 });
 
@@ -138,7 +153,7 @@ describe("CommentList DOM interaction (happy-dom)", () => {
     });
   }
 
-  it("reply button click で form が open し、submit で onReply が呼ばれる", async () => {
+  it("reply hint button click で textarea に focus、submit で onReply が呼ばれる", async () => {
     const onReply = vi.fn().mockResolvedValue({ ok: true });
     mount({
       comments: [makeComment({ id: "top" })],
@@ -146,14 +161,15 @@ describe("CommentList DOM interaction (happy-dom)", () => {
       onReply,
       onDelete: async () => {},
     });
-    // 初期は reply form 非表示
-    expect(container.querySelector(".comments__form--reply")).toBeNull();
-    const replyBtn = container.querySelector(".comments__action") as HTMLButtonElement;
-    act(() => replyBtn.click());
+    // 永続 reply form が初期から存在する
     const form = container.querySelector(".comments__form--reply");
     expect(form).toBeTruthy();
-    // body を埋めて submit
+    // reply ボタン (header の hint) を click → textarea に focus が移る
+    const replyBtn = container.querySelector(".comments__action") as HTMLButtonElement;
     const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    act(() => replyBtn.click());
+    expect(document.activeElement).toBe(textarea);
+    // body を埋めて submit
     const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
     await act(async () => {
       setter?.call(textarea, "reply body");
@@ -164,7 +180,7 @@ describe("CommentList DOM interaction (happy-dom)", () => {
     expect(onReply).toHaveBeenCalledWith({ parentId: "top", body: "reply body" });
   });
 
-  it("空 textarea で submit → onReply に空文字エラー (button disabled なので click 自体不可)", async () => {
+  it("空 textarea で submit button は disabled", async () => {
     const onReply = vi.fn().mockResolvedValue({ ok: true });
     mount({
       comments: [makeComment({ id: "top" })],
@@ -172,13 +188,11 @@ describe("CommentList DOM interaction (happy-dom)", () => {
       onReply,
       onDelete: async () => {},
     });
-    const replyBtn = container.querySelector(".comments__action") as HTMLButtonElement;
-    act(() => replyBtn.click());
     const submit = container.querySelector(".comments__submit") as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
   });
 
-  it("onReply が error を返したら textarea の form 内に error 表示", async () => {
+  it("onReply が error を返したら form 内に error 表示", async () => {
     const onReply = vi.fn().mockResolvedValue({ ok: false, error: "server boom" });
     mount({
       comments: [makeComment({ id: "top" })],
@@ -186,8 +200,6 @@ describe("CommentList DOM interaction (happy-dom)", () => {
       onReply,
       onDelete: async () => {},
     });
-    const replyBtn = container.querySelector(".comments__action") as HTMLButtonElement;
-    act(() => replyBtn.click());
     const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
     await act(async () => {

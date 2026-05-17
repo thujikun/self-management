@@ -271,14 +271,78 @@ function PostDetail() {
       </header>
       <PostToc headings={headings} />
       <PostBody html={html} />
-      <EngagementSection
+      <PostShareRail
         slug={slug}
         title={frontmatter.title}
         lang={servedLang}
         initialLikes={engagement.likes}
-        initialComments={engagement.comments}
       />
+      <EngagementSection slug={slug} lang={servedLang} initialComments={engagement.comments} />
     </main>
+  );
+}
+
+/**
+ * 左 sticky の share / like rail。`.post-detail` 直下に置くことで desktop grid
+ * (column 1) に乗せ、article の左横で sticky になる。
+ *
+ * 元々は `EngagementSection` 内 (comment セクションと同居) に置いていたが、その
+ * 場合 `.post-detail` の grid item にならず desktop でも記事の下に縦並びで出てしまう
+ * 不具合があった。like 系の state は本 component が単独で持ち、comments と独立した
+ * 状態管理にして責務を分離する (`submitting` flag も like / comment で別)。
+ *
+ * @graph-connects better-auth [calls] useSession で auth state を取得
+ * @graph-connects content [calls] toggleLikeServer (server fn 経由)
+ */
+export function PostShareRail({
+  slug,
+  title,
+  lang,
+  initialLikes,
+}: {
+  slug: string;
+  title: string;
+  lang: Lang;
+  initialLikes: { count: number; liked: boolean };
+}) {
+  const { data: session } = useSession();
+  const toggleLikeFn = useServerFn(toggleLikeServer);
+  const [likes, setLikes] = useState(initialLikes);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isAuthenticated = !!session?.user;
+
+  const onLike = () =>
+    dispatchLikeClick({
+      isAuthenticated,
+      submitting,
+      toggleLikeFn,
+      slug,
+      setSubmitting,
+      setError,
+      setLikes,
+    });
+
+  const postUrl = `${SHARE_SITE_URL}/posts/${slug}${lang === "ja" ? "?lang=ja" : ""}`;
+  const signInHref = `/posts/${slug}`;
+
+  return (
+    <div className="post-share-rail">
+      <PostSharePane
+        title={title}
+        lang={lang}
+        postUrl={postUrl}
+        likes={isAuthenticated ? likes : null}
+        onLike={onLike}
+        likeSubmitting={submitting}
+        signInHref={isAuthenticated ? undefined : signInHref}
+      />
+      {error ? (
+        <p className="comments__error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -417,24 +481,18 @@ export async function dispatchCommentSubmit(deps: {
  */
 export function EngagementSection({
   slug,
-  title,
   lang,
-  initialLikes,
   initialComments,
 }: {
   slug: string;
-  title: string;
   lang: Lang;
-  initialLikes: { count: number; liked: boolean };
   initialComments: CommentView[];
 }) {
   const { data: session } = useSession();
   const router = useRouter();
-  const toggleLikeFn = useServerFn(toggleLikeServer);
   const addCommentFn = useServerFn(addCommentServer);
   const deleteCommentFn = useServerFn(deleteCommentServer);
 
-  const [likes, setLikes] = useState(initialLikes);
   const [comments, setComments] = useState(initialComments);
   const [draft, setDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -442,17 +500,6 @@ export function EngagementSection({
 
   const isAuthenticated = !!session?.user;
   const currentUserId = session?.user.id ?? null;
-
-  const onLike = () =>
-    dispatchLikeClick({
-      isAuthenticated,
-      submitting,
-      toggleLikeFn,
-      slug,
-      setSubmitting,
-      setError,
-      setLikes,
-    });
 
   const onSubmitComment = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -498,51 +545,53 @@ export function EngagementSection({
     }
   };
 
-  const postUrl = `${SHARE_SITE_URL}/posts/${slug}${lang === "ja" ? "?lang=ja" : ""}`;
   const signInHref = `/posts/${slug}`;
+  // 未認証 user にも textarea を出して、submit 時に sign-in 画面へ誘導する。
+  // 「書こうとしたら login を要求」のオンボーディング動線が、書く前に sign-in
+  // バナーを見せるより自然 (Medium / Zenn 同 pattern)。
+  const submitLabel = isAuthenticated
+    ? submitting
+      ? "posting..."
+      : "post"
+    : lang === "ja"
+      ? "ログインして投稿"
+      : "sign in to post";
 
   return (
-    <section className="engagement" aria-label="engagement">
-      <PostSharePane
-        title={title}
-        lang={lang}
-        postUrl={postUrl}
-        likes={isAuthenticated ? likes : null}
-        onLike={onLike}
-        likeSubmitting={submitting}
-        signInHref={isAuthenticated ? undefined : signInHref}
-      />
-
+    <section id="comments" className="engagement" aria-label="engagement">
       <h2 className="comments__heading">comments ({comments.length})</h2>
-      {!isAuthenticated ? (
-        <Link to="/sign-in" search={{ redirect: signInHref }} className="engagement__signin">
-          sign in to like / comment
-        </Link>
-      ) : null}
-      {isAuthenticated ? (
-        <form className="comments__form" onSubmit={onSubmitComment}>
-          <label htmlFor="comment-body" className="visually-hidden">
-            comment
-          </label>
-          <textarea
-            id="comment-body"
-            className="comments__input"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="思ったことを書いてください"
-            rows={3}
-            maxLength={4000}
-            disabled={submitting}
-          />
+      <form className="comments__form" onSubmit={onSubmitComment}>
+        <label htmlFor="comment-body" className="visually-hidden">
+          comment
+        </label>
+        <textarea
+          id="comment-body"
+          className="comments__input"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={lang === "ja" ? "思ったことを書いてください" : "share your thoughts"}
+          rows={3}
+          maxLength={4000}
+          disabled={submitting}
+        />
+        {isAuthenticated ? (
           <button
             type="submit"
             className="comments__submit"
             disabled={submitting || draft.trim().length === 0}
           >
-            {submitting ? "posting..." : "post"}
+            {submitLabel}
           </button>
-        </form>
-      ) : null}
+        ) : (
+          <Link
+            to="/sign-in"
+            search={{ redirect: signInHref }}
+            className="comments__submit comments__submit--signin"
+          >
+            {submitLabel}
+          </Link>
+        )}
+      </form>
       {error ? (
         <p className="comments__error" role="alert">
           {error}
@@ -552,6 +601,7 @@ export function EngagementSection({
       <CommentList
         comments={comments}
         currentUserId={currentUserId}
+        lang={lang}
         onReply={onReply}
         onDelete={onDeleteComment}
       />

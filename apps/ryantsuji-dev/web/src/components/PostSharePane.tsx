@@ -114,6 +114,17 @@ export function PostSharePane({
       ) : null}
 
       <a
+        href="#comments"
+        className="post-share-pane__btn post-share-pane__btn--comments"
+        aria-label="jump to comments"
+        title="jump to comments"
+      >
+        <span className="post-share-pane__icon" aria-hidden="true">
+          ❝
+        </span>
+      </a>
+
+      <a
         href={xUrl}
         target="_blank"
         rel="noopener noreferrer"
