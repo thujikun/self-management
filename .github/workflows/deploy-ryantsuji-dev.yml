@@ -142,7 +142,13 @@ jobs:
       # main push 時のみ実行 (PR は dry-run mode で diff だけ stdout 出して PUT は skip
       # → review 用)。dry-run でも CLOUDFLARE_API_TOKEN は必要 (GET _manifest.json で
       # bucket 認証する)。
+      #
+      # `vars.CLOUDFLARE_ACCOUNT_ID` 未設定時 (= 初回 setup 前) は step 自体を skip。
+      # ドキュメント (`docs/infra/r2-images.md`) の「初回 setup」に従って vars を入れる
+      # まで sync は走らないが、wrangler deploy 自体は影響を受けない (R2 binding は
+      # bucket 既存判定で resolve、object が空でも runtime は 404 を返すだけ)。
       - name: Sync content/images/ → R2 (${{ github.event_name == 'pull_request' && 'dry-run' || 'apply' }})
+        if: vars.CLOUDFLARE_ACCOUNT_ID != ''
         working-directory: .
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
