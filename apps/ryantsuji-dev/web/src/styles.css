@@ -1002,6 +1002,225 @@ main {
   font-size: var(--font-size-sm);
 }
 
+/* ─── /about (author profile page) ─── */
+
+.about {
+  max-width: var(--container-content);
+  margin: 0 auto;
+  padding: var(--space-12) var(--space-6);
+}
+
+.about__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-bottom: var(--space-12);
+}
+
+@media (max-width: 640px) {
+  .about__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+}
+
+.about__avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.about__intro h1 {
+  font-family: var(--font-family-serif);
+  font-size: var(--font-size-3xl);
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--space-2);
+}
+
+.about__tagline {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+}
+
+.about__section {
+  margin: 0 0 var(--space-8);
+}
+
+.about__section h2 {
+  font-family: var(--font-family-serif);
+  font-size: var(--font-size-lg);
+  margin: 0 0 var(--space-3);
+  letter-spacing: -0.01em;
+}
+
+.about__section p {
+  margin: 0 0 var(--space-3);
+  color: var(--text-primary);
+  line-height: var(--line-height-relaxed);
+}
+
+.about__post-list {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-6);
+  color: var(--text-primary);
+  line-height: var(--line-height-relaxed);
+}
+
+.about__post-list li {
+  margin: 0 0 var(--space-2);
+}
+
+.about__post-meta {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.about__links {
+  margin: 0;
+  padding-left: var(--space-6);
+  color: var(--text-primary);
+  line-height: var(--line-height-relaxed);
+}
+
+.about__links li {
+  margin: 0 0 var(--space-2);
+}
+
+.about__nav {
+  margin-top: var(--space-12);
+  font-size: var(--font-size-sm);
+}
+
+/* ─── /series/$slug (連載 hub) ─── */
+
+.series {
+  max-width: var(--container-content);
+  margin: 0 auto;
+  padding: var(--space-12) var(--space-6);
+}
+
+.series__header {
+  margin-bottom: var(--space-8);
+}
+
+.series__header h1 {
+  font-family: var(--font-family-serif);
+  font-size: var(--font-size-3xl);
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--space-2);
+}
+
+.series__tagline {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.series__count {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  margin: 0 0 var(--space-6);
+}
+
+.series__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.series__item {
+  border-top: 1px solid var(--border-subtle);
+  padding: var(--space-4) 0;
+}
+
+.series__item:last-child {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.series__item-part {
+  display: inline-block;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--accent-bg);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-1);
+}
+
+.series__item h2 {
+  font-family: var(--font-family-serif);
+  font-size: var(--font-size-lg);
+  margin: 0 0 var(--space-2);
+  letter-spacing: -0.01em;
+}
+
+.series__item h2 a {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.series__item h2 a:hover {
+  color: var(--accent-bg);
+  text-decoration: underline;
+}
+
+.series__item-summary {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.series__item-meta {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  margin-top: var(--space-2);
+}
+
+/* post detail 内に挿入される連載 navigation box */
+.post-series-box {
+  margin: var(--space-6) 0;
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.post-series-box__label {
+  display: inline-block;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--accent-bg);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-2);
+}
+
+.post-series-box__title {
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.post-series-box__title a {
+  color: inherit;
+}
+
+.post-series-box__nav {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  color: var(--text-secondary);
+}
+
 /* ─── site footer (全 page 共通) ─── */
 
 .site-footer {

@@ -124,4 +124,37 @@ describe("parseFrontmatter", () => {
     expect(only_zenn.syndication.zenn?.id).toBe("abc");
     expect(only_zenn.syndication.devto).toBeUndefined();
   });
+
+  it("series + seriesOrder=1 が parse される", () => {
+    const m = parseFrontmatter({
+      title: "x",
+      publishedAt: "2026-05-08",
+      series: "building-ai-harness",
+      seriesOrder: 1,
+    });
+    expect(m.series).toBe("building-ai-harness");
+    expect(m.seriesOrder).toBe(1);
+  });
+
+  it("series 未指定でも parse 成功 (optional)", () => {
+    const m = parseFrontmatter({ title: "x", publishedAt: "2026-05-08" });
+    expect(m.series).toBeUndefined();
+    expect(m.seriesOrder).toBeUndefined();
+  });
+
+  it("series='' (min 1 違反) は throw", () => {
+    expect(() => parseFrontmatter({ title: "x", publishedAt: "2026-05-08", series: "" })).toThrow();
+  });
+
+  it("seriesOrder=0 / 負値 / 小数 (int positive 違反) は throw", () => {
+    for (const bad of [0, -1, 1.5]) {
+      expect(() =>
+        parseFrontmatter({
+          title: "x",
+          publishedAt: "2026-05-08",
+          seriesOrder: bad,
+        }),
+      ).toThrow();
+    }
+  });
 });

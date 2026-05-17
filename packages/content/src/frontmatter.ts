@@ -46,6 +46,18 @@ export const FrontmatterSchema = z.object({
    */
   cover: z.string().startsWith("/").optional(),
   /**
+   * 連載 (series) の slug。同じ slug を持つ post が同じ series hub
+   * (`/series/<slug>`) に集約される。例: `"building-ai-harness"`。`title` field は
+   * series hub 側の `series.config.ts` で別途定義する設計 (= post 側は slug 参照だけ
+   * 持つことで、連載タイトルが changed しても全 post を再編集しなくて済む)。
+   */
+  series: z.string().min(1).optional(),
+  /**
+   * 同 series 内での順序 (Part 1 = 1, Part 2 = 2, ...)。表示順 + nav 構築に使う。
+   * 未指定なら publishedAt 昇順 fallback。
+   */
+  seriesOrder: z.number().int().positive().optional(),
+  /**
    * syndication target の外部 ID マップ。`packages/syndication` がここを引いて
    * publish / 内部 link 解決をする。値が無い post は当該 target に syndicate しない。
    *

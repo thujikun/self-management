@@ -183,19 +183,29 @@ function RootComponent() {
     );
   }, [location.pathname]);
   return (
-    <RootDocument theme={theme}>
+    <RootDocument theme={theme} lang={lang}>
       <Outlet />
     </RootDocument>
   );
 }
 
 /** @graph-connects none */
-function RootDocument({ children, theme }: { children: ReactNode; theme: Theme | null }) {
+function RootDocument({
+  children,
+  theme,
+  lang,
+}: {
+  children: ReactNode;
+  theme: Theme | null;
+  lang: Lang;
+}) {
   // `data-theme` は明示選択 (cookie) 時のみ付ける。null の時は CSS の
   // `@media (prefers-color-scheme)` に判定を委ねる。
   const htmlProps = theme ? { "data-theme": theme } : {};
+  // `<html lang>` は SEO / a11y 両面で per-request に正しい lang を返す方が良い
+  // (Accept-Language / cookie / ?lang= で確定した値をそのまま流す)。
   return (
-    <html lang="en" {...htmlProps}>
+    <html lang={lang} {...htmlProps}>
       <head>
         <HeadContent />
       </head>
@@ -450,15 +460,22 @@ function SiteFooter() {
   const { lang } = Route.useLoaderData();
   // X handle は lang で切替: ja → @RyanAircloset (JP 公式), en → @ryantsuji (EN 集約)
   const xHref = lang === "ja" ? "https://x.com/RyanAircloset" : "https://x.com/ryantsuji";
+  // RSS link は当該 lang feed を指す (header の <link rel="alternate"> 側で en/jp
+  // 両方 expose しているので、UI 表示は user の見ている lang に集中させる)
+  const rssHref = `/rss/${lang}.xml`;
   return (
     <footer className="site-footer">
-      <Link to="/privacy">privacy</Link>
+      <Link to="/about">about</Link>
       <span aria-hidden="true">·</span>
-      <Link to="/terms">terms</Link>
+      <a href={rssHref}>RSS</a>
       <span aria-hidden="true">·</span>
       <a href={xHref}>X</a>
       <span aria-hidden="true">·</span>
       <a href="https://github.com/thujikun">GitHub</a>
+      <span aria-hidden="true">·</span>
+      <Link to="/privacy">privacy</Link>
+      <span aria-hidden="true">·</span>
+      <Link to="/terms">terms</Link>
     </footer>
   );
 }

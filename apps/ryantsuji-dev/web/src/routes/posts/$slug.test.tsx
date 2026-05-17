@@ -31,6 +31,7 @@ import {
   EngagementSection,
   PostShareRail,
   buildPostMeta,
+  buildPostJsonLd,
   dispatchCommentSubmit,
   dispatchLikeClick,
   executeAddCommentAction,
@@ -190,6 +191,42 @@ describe("/posts/$slug — detail (SSR)", () => {
     const html = await ssrAt("/posts/this-slug-does-not-exist");
     expect(html).not.toMatch(/<article class="post-body">/);
     expect(html).not.toMatch(/<h1>/);
+  });
+
+  it("series 所属 post (ai-harness-intro) は冒頭に series box + all parts link が出る (EN)", async () => {
+    const html = await ssrAt("/posts/ai-harness-intro?lang=en");
+    expect(html).toMatch(/<aside class="post-series-box"/);
+    expect(html).toMatch(/post-series-box__label[^>]*>Series</);
+    // hub link + 当該 series title が出る (連載 trunk への動線)
+    expect(html).toMatch(/href="\/series\/building-ai-harness"[^>]*>Building AI Harness</);
+    expect(html).toMatch(/all parts/);
+    // 1 件しか無い series なので prev/next link は無し (端点)
+    expect(html).not.toMatch(/← previous/);
+    expect(html).not.toMatch(/next →/);
+  });
+
+  it("series 所属 post を ?lang=ja で踏むと series box の文言が日本語", async () => {
+    const html = await ssrAt("/posts/ai-harness-intro?lang=ja");
+    expect(html).toMatch(/post-series-box__label[^>]*>連載</);
+    expect(html).toMatch(/第/);
+    expect(html).toMatch(/目次/);
+  });
+
+  it("series に属さない post (db-graph-mcp 等) は series box が出ない", async () => {
+    const html = await ssrAt("/posts/db-graph-mcp?lang=en");
+    expect(html).not.toMatch(/<aside class="post-series-box"/);
+  });
+
+  it("post page に canonical link が出る", async () => {
+    // JSON-LD script は head().scripts 経由で出力されるが、
+    // `renderToString(<RouterProvider />)` の薄い test SSR path では HeadContent が
+    // scripts まで hoist しないため、JSON-LD 自体の挙動は `buildPostJsonLd` の
+    // unit test 群で個別に担保する。本 SSR test は canonical link (= head().links)
+    // が route 経由で head に出ることを最低限保証する。
+    const html = await ssrAt("/posts/ai-harness-intro?lang=en");
+    expect(html).toMatch(
+      /<link[^>]*rel="canonical"[^>]*href="https:\/\/ryantsuji\.dev\/posts\/ai-harness-intro"/,
+    );
   });
 });
 
@@ -1216,5 +1253,103 @@ describe("buildPostMeta", () => {
       name: "description",
       content: "Plain Title — ryantsuji.dev",
     });
+  });
+});
+
+describe("buildPostJsonLd", () => {
+  it("EN post: image 有 + updatedAt 有", () => {
+    const json = buildPostJsonLd({
+      slug: "hello",
+      title: "Hello",
+      summary: "intro",
+      cover: "/posts/hello.en.cover.png",
+      publishedAt: "2026-05-10",
+      updatedAt: "2026-05-12",
+      lang: "en",
+    });
+    const doc = JSON.parse(json);
+    expect(doc["@type"]).toBe("Article");
+    expect(doc.headline).toBe("Hello");
+    expect(doc.description).toBe("intro");
+    expect(doc.inLanguage).toBe("en-US");
+    expect(doc.datePublished).toBe("2026-05-10");
+    expect(doc.dateModified).toBe("2026-05-12");
+    expect(doc.author).toMatchObject({
+      "@type": "Person",
+      name: "Ryan Tsuji",
+      url: "https://ryantsuji.dev/about",
+    });
+    expect(doc.author.sameAs).toEqual(
+      expect.arrayContaining(["https://x.com/ryantsuji", "https://github.com/thujikun"]),
+    );
+    expect(doc.image).toStrictEqual(["https://ryantsuji.dev/posts/hello.en.cover.png"]);
+    expect(doc.mainEntityOfPage).toStrictEqual({
+      "@type": "WebPage",
+      "@id": "https://ryantsuji.dev/posts/hello",
+    });
+  });
+
+  it("JA post: mainEntityOfPage に ?lang=ja が付く + inLanguage=ja-JP", () => {
+    const json = buildPostJsonLd({
+      slug: "world",
+      title: "World",
+      publishedAt: "2026-05-10",
+      lang: "ja",
+    });
+    const doc = JSON.parse(json);
+    expect(doc.inLanguage).toBe("ja-JP");
+    expect(doc.mainEntityOfPage).toStrictEqual({
+      "@type": "WebPage",
+      "@id": "https://ryantsuji.dev/posts/world?lang=ja",
+    });
+  });
+
+  it("cover 無し → image field 自体を omit", () => {
+    const json = buildPostJsonLd({
+      slug: "x",
+      title: "X",
+      publishedAt: "2026-05-10",
+      lang: "en",
+    });
+    const doc = JSON.parse(json);
+    expect(doc.image).toBeUndefined();
+  });
+
+  it("updatedAt 無し → dateModified は publishedAt と同値 fallback", () => {
+    const json = buildPostJsonLd({
+      slug: "x",
+      title: "X",
+      publishedAt: "2026-05-10",
+      lang: "en",
+    });
+    const doc = JSON.parse(json);
+    expect(doc.dateModified).toBe("2026-05-10");
+  });
+
+  it("summary 無し → description は title から組み立て (`<title> — ryantsuji.dev`)", () => {
+    const json = buildPostJsonLd({
+      slug: "x",
+      title: "Plain Title",
+      publishedAt: "2026-05-10",
+      lang: "en",
+    });
+    const doc = JSON.parse(json);
+    expect(doc.description).toBe("Plain Title — ryantsuji.dev");
+  });
+
+  it("`</script>` injection 防止: title に raw `</script>` を入れても出力に raw 形が混じらない", () => {
+    const json = buildPostJsonLd({
+      slug: "x",
+      title: "</script><img src=x>",
+      publishedAt: "2026-05-10",
+      lang: "en",
+    });
+    // raw `</script>` (case-insensitive) は混じらない
+    expect(json).not.toMatch(/<\/script/i);
+    // escape 後の形 (`<\/script>`) が含まれる
+    expect(json).toContain("<\\/script>");
+    // parse して JSON 構造が壊れていないことを確認
+    const doc = JSON.parse(json);
+    expect(doc.headline).toBe("</script><img src=x>");
   });
 });
