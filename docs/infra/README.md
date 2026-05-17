@@ -47,3 +47,4 @@ pulumi up
 
 - [DESIGN.md](../DESIGN.md) — 全体方針
 - [product-graph/README.md](../product-graph/README.md) — graph 用インフラ要件
+- [grafana-cloud-setup.md](./grafana-cloud-setup.md) — `grafana-cloud-admin-token` policy の region / scope 要件 (Pulumi 初回 setup / token rotation 時に必読)

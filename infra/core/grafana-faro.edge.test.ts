@@ -54,6 +54,7 @@ beforeAll(() => {
   // が unresolved な間 (preview 直後など) に同じ状態になりうる経路の契約化。
   output = provisionGrafanaFaro({
     cloudProvider,
+    cloudAccessPolicyToken: pulumi.output("test-cap-token"),
     stackSlug: "test-stack",
     stackUrl: pulumi.output(undefined as unknown as string),
     stackId: pulumi.output("12345"),
