@@ -35,6 +35,7 @@ describe("syndicateForZenn", () => {
       meta,
       body: "前回の [Other](/posts/other-post) を参照。\n",
       resolver,
+      canonicalHost: "https://ryantsuji.dev",
       footerMarkdown: "---\n採用中。",
       emoji: "📊",
       publicationName: "aircloset",
@@ -56,6 +57,7 @@ describe("syndicateForZenn", () => {
       meta,
       body: "本文。",
       resolver,
+      canonicalHost: "https://ryantsuji.dev",
       footerMarkdown: null,
     });
     expect(out).not.toContain("採用中");
@@ -67,10 +69,23 @@ describe("syndicateForZenn", () => {
       meta,
       body: "x",
       resolver,
+      canonicalHost: "https://ryantsuji.dev",
       footerMarkdown: null,
       publicationName: null,
     });
     expect(out).not.toContain("publication_name");
+  });
+
+  it("`/images/...` を canonicalHost 経由の絶対 URL に書き換える", () => {
+    const out = syndicateForZenn({
+      meta,
+      body: "![alt](/images/posts/db-graph-mcp/a.png)\n",
+      resolver,
+      canonicalHost: "https://ryantsuji.dev",
+      footerMarkdown: null,
+    });
+    expect(out).toContain("![alt](https://ryantsuji.dev/images/posts/db-graph-mcp/a.png)");
+    expect(out).not.toMatch(/\]\(\/images\//);
   });
 });
 
@@ -104,5 +119,19 @@ describe("syndicateForDevto", () => {
     });
     expect(out.cover_image).toBe("https://ryantsuji.dev/posts/db-graph.cover.png");
     expect(out.series).toBe("ai-harness");
+  });
+
+  it("`/images/...` を canonicalHost 経由の絶対 URL に書き換える", () => {
+    const out = syndicateForDevto({
+      meta,
+      body: "![alt](/images/posts/db-graph/a.png)\n",
+      slug: "db-graph",
+      resolver,
+      canonicalHost: "https://ryantsuji.dev",
+    });
+    expect(out.body_markdown).toContain(
+      "![alt](https://ryantsuji.dev/images/posts/db-graph/a.png)",
+    );
+    expect(out.body_markdown).not.toMatch(/\]\(\/images\//);
   });
 });

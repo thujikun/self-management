@@ -14,9 +14,13 @@
  * syndicate されていない post を内部リンクしている = 警告ケース)。実 publish
  * 層は warn を出すこと。
  *
+ * 加えて `rewriteImageLinks` で `/images/...` 相対 URL を `<host>/images/...` に
+ * 絶対化する変換も提供する (syndication 先で `/images/` が当該ドメインに解決され
+ * 404 になるのを防ぐ)。
+ *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business markdown 内の /posts/<slug> 相対 link を、resolver 経由で外部公開 URL に置き換える pure 変換。fragment (#section) / query (?lang=) は保持し、resolver が null を返したら link を変更せず残す (publish 層で警告)
+ * @graph-business markdown 内の相対 link を syndication target 用に絶対化する pure 変換。/posts/<slug> は resolver 経由で外部公開 URL へ、/images/* は ryantsuji.dev base URL を prefix。fragment (#section) / query (?lang=) は保持
  * @graph-connects none
  */
 
@@ -45,4 +49,20 @@ export function rewriteInternalLinks(content: string, resolver: SlugResolver): s
       return `](${external}${suffix ?? ""})`;
     },
   );
+}
+
+/**
+ * markdown 内の `/images/...` 相対 URL を `<baseUrl>/images/...` の絶対 URL に置換する。
+ *
+ * ryantsuji.dev では post 添付画像を `![alt](/images/posts/<slug>/<file>)` で参照するが、
+ * dev.to / Zenn に syndicate するとそのドメインで解決され 404 になる。配信元は常に
+ * ryantsuji.dev (R2 経由) なので、syndicate 時に絶対 URL に書き換えて配信元を固定する。
+ *
+ * `]\(/images/` で始まる pattern を取れば markdown image `![alt](...)` も link
+ * `[text](...)` も両方拾える。`baseUrl` は trailing slash 無し前提 (`https://ryantsuji.dev`)。
+ *
+ * @graph-connects none
+ */
+export function rewriteImageLinks(content: string, baseUrl: string): string {
+  return content.replace(/\]\(\/images\//g, `](${baseUrl}/images/`);
 }
