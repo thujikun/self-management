@@ -126,7 +126,7 @@ export function SeriesHubBody({
                 </h2>
                 {p.summary ? <p className="series__item-summary">{p.summary}</p> : null}
                 <p className="series__item-meta">
-                  <time dateTime={p.publishedAt}>{p.publishedAt}</time>
+                  <time dateTime={p.publishedAt}>{p.publishedAt.slice(0, 10)}</time>
                 </p>
               </li>
             );
