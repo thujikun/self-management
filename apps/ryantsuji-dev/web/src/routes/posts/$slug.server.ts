@@ -120,6 +120,12 @@ export function serializeSeriesNav(
 /**
  * loadEngagementServer の handler 本体。test で直接呼べる pure 化された shape。
  *
+ * admin (`session.user.email === env.ADMIN_EMAIL`) からの request では `bumpView: false`
+ * にして公開前の draft preview で view count が伸びるのを防ぐ。`ensurePost` は引続き
+ * 呼ばれるが、posts 行は公開時に title / publishedAt が再 upsert される shape なので
+ * preview 由来の row が残っても公開時の表示には影響しない (view_counts のみ admin が
+ * 触れない方向に倒す)。
+ *
  * @graph-connects content [calls] loadPostEngagement (view bump + likes + comments)
  */
 export async function runLoadEngagement(
@@ -133,10 +139,11 @@ export async function runLoadEngagement(
   const db = createDbFromEnv(env);
   const session = await getSessionFromHeaders(new Headers(getRequestHeaders()), env);
   const userId = session?.user.id ?? null;
+  const isAdmin = !!env.ADMIN_EMAIL && session?.user.email === env.ADMIN_EMAIL;
   return await loadPostEngagement(db, {
     slug: args.slug,
     identifier: userId,
-    bumpView: true,
+    bumpView: !isAdmin,
     post: args.post,
   });
 }

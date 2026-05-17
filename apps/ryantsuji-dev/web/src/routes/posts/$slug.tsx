@@ -44,6 +44,14 @@ import {
   runRenderPost,
   runToggleLike,
 } from "./$slug.server.js";
+import {
+  dispatchCommentSubmit,
+  dispatchLikeClick,
+  executeAddCommentAction,
+  executeLikeAction,
+  type AddCommentFn,
+  type ToggleLikeFn,
+} from "./$slug.actions.js";
 
 /** @graph-connects none */
 const SlugSchema = z.string().min(1);
@@ -479,8 +487,8 @@ const SHARE_SITE_URL = SITE_URL;
 /**
  * like / comment の client logic は `$slug.actions.ts` に分離 (本 file の行数 cap
  * 回避と test 容易性確保のため)。React component から `dispatchLikeClick` /
- * `dispatchCommentSubmit` を呼ぶ。再 export は test で本 file の export を期待して
- * いる経路への互換性維持。
+ * `dispatchCommentSubmit` を呼ぶ。下の再 export は test で本 file の export を
+ * 期待している経路への互換性維持 (`$slug.test.tsx` が `from "./$slug.js"` で参照)。
  */
 export {
   executeLikeAction,
@@ -489,13 +497,7 @@ export {
   dispatchCommentSubmit,
   type AddCommentFn,
   type ToggleLikeFn,
-} from "./$slug.actions.js";
-
-import {
-  dispatchCommentSubmit,
-  dispatchLikeClick,
-  executeAddCommentAction,
-} from "./$slug.actions.js";
+};
 
 /**
  * post 末尾の engagement 領域。like 押下 + comment 投稿の client 側 UI を持つ。
