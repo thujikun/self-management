@@ -90,6 +90,11 @@ html {
      default 白で透けるのを防ぐ (body から min-height: 100vh を外したため)。 */
   overflow-x: clip;
   background: var(--bg-base);
+  /* 短い page (top page 等) で vertical scrollbar が出ないと viewport 幅が
+     scrollbar 幅分広くなり、`margin: auto` で中央配置している header / main の
+     位置が長い post page と微妙にずれる。`stable` で常に scrollbar 領域を
+     確保することで全 page で同じ effective viewport 幅にする。 */
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -564,12 +569,20 @@ main {
   border: 1px solid var(--border-subtle);
 }
 
+/* inline `<code>` (= `:not(pre) > code`) は monospace 1 word として扱われ、URL や
+   関数シグネチャのような 80+ char の string が wrap せず mobile viewport を
+   突き抜けて overflow させる原因になる (`overflow-x: clip` の `html` / `body` で
+   横スクロール不能なため、視覚的に右側にはみ出した状態になる)。
+   `overflow-wrap: anywhere` で「他に breakable point が無ければ任意位置で改行」
+   を許可する。code block (`pre > code`) は `.post-body pre` 側で `overflow-x: auto`
+   が効いているので影響しない。 */
 .post-body code {
   font-family: var(--font-family-mono);
   font-size: 0.92em;
   background: var(--bg-elevated);
   padding: 0.1em 0.35em;
   border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
 }
 
 .post-body pre {
@@ -608,7 +621,16 @@ main {
   }
 }
 
+/* `<table>` の default `display: table` は intrinsic content width で展開され、
+   mobile viewport より広い列を持つと parent を越えて overflow する。`display: block`
+   + `overflow-x: auto` で「テーブル自体が wrap せず必要なら横スクロールできる box」
+   に倒す。touch device では指でスワイプ可。テーブル意味論 (row/column accessor)
+   は header / data row の relative 関係を `<th>` / `<td>` で保持しているので、
+   display block にしても screen reader 経路は壊れない。 */
 .post-body table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   margin: var(--space-4) 0;
   font-size: var(--font-size-sm);
