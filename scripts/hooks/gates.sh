@@ -26,6 +26,7 @@ GATES_STAGED=(
   no-ignore
   line-count
   graph-tags
+  css-tokens
   log-check
   lint
   format-check
@@ -92,6 +93,14 @@ cmd_run() {
       else
         # shellcheck disable=SC2046
         pnpm exec tsx scripts/hooks/check-graph-tags.cli.ts $(git ls-files)
+      fi
+      ;;
+    css-tokens)
+      if [ "$mode" = staged ]; then
+        pnpm exec tsx scripts/hooks/check-css-tokens.cli.ts "${files[@]}"
+      else
+        # shellcheck disable=SC2046
+        pnpm exec tsx scripts/hooks/check-css-tokens.cli.ts $(git ls-files '*.css')
       fi
       ;;
     log-check)
