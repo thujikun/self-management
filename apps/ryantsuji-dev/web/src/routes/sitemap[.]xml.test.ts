@@ -16,7 +16,7 @@ import { Route, handleSitemapRequest } from "./sitemap[.]xml.js";
 
 describe("handleSitemapRequest", () => {
   it("Response shape — 200 / application/xml / cache-control / XML header", async () => {
-    const res = handleSitemapRequest(new Date("2026-05-18T00:00:00Z"));
+    const res = handleSitemapRequest();
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("application/xml; charset=utf-8");
     expect(res.headers.get("cache-control")).toBe("public, max-age=3600, s-maxage=3600");
@@ -28,8 +28,8 @@ describe("handleSitemapRequest", () => {
     expect(body.trimEnd().endsWith("</urlset>")).toBe(true);
   });
 
-  it("static / series / post が含まれる + buildDate が反映される", async () => {
-    const res = handleSitemapRequest(new Date("2026-05-18T12:34:56Z"));
+  it("static / series / post が含まれる + static/series は lastmod 無し", async () => {
+    const res = handleSitemapRequest();
     const body = await res.text();
     // static
     expect(body).toContain("<loc>https://ryantsuji.dev/</loc>");
@@ -39,8 +39,11 @@ describe("handleSitemapRequest", () => {
     expect(body).toContain("<loc>https://ryantsuji.dev/terms</loc>");
     // series (registry に必ずある building-ai-harness)
     expect(body).toContain("<loc>https://ryantsuji.dev/series/building-ai-harness</loc>");
-    // build date が static entries の lastmod に乗る
-    expect(body).toContain("<lastmod>2026-05-18</lastmod>");
+    // static entry に lastmod は乗らない (loc 直後が即 </url>)
+    expect(body).toMatch(/<loc>https:\/\/ryantsuji\.dev\/<\/loc>\s+<\/url>/);
+    expect(body).toMatch(
+      /<loc>https:\/\/ryantsuji\.dev\/series\/building-ai-harness<\/loc>\s+<\/url>/,
+    );
     // post 1 件以上が hreflang alternate 付きで載る
     expect(body).toMatch(/<xhtml:link rel="alternate" hreflang="en" href=".*\/posts\//);
     // x-default が含まれる
@@ -50,7 +53,7 @@ describe("handleSitemapRequest", () => {
   it("draft post は public sitemap に出ない (listPosts は includeDrafts=false 既定)", async () => {
     // production deploy で draft が漏れないことの最低限の wire 担保。
     // listPosts 自体の draft 除外 test は server/posts.test.ts が SoT。
-    const res = handleSitemapRequest(new Date("2026-05-18T00:00:00Z"));
+    const res = handleSitemapRequest();
     const body = await res.text();
     // `_` prefix は test fixture 用 / draft は published only filter 済
     expect(body).not.toMatch(/<loc>https:\/\/ryantsuji\.dev\/posts\/_/);

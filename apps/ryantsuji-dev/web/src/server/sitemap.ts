@@ -127,6 +127,10 @@ export function postLastmod(post: PostListItem): string {
  * - posts は `availableLangs` を見て各 variant ごとに 1 entry ずつ emit。reciprocal
  *   な alternate set を全 entry に同一で載せる
  * - series / static は single canonical (lang-neutral) なので alternate 無し
+ * - static / series hub の `<lastmod>` は意図的に omit する。Google は `<lastmod>` が
+ *   実際の更新日と一致してないと sitemap 全体の signal weight を下げる方針なので、
+ *   「request 時刻 = 今日」を毎回貼ると逆に noise になる。post entry だけが
+ *   frontmatter 由来の正しい lastmod を持つ
  *
  * @graph-connects none
  */
@@ -135,20 +139,17 @@ export function buildSitemapXml(input: {
   posts: ReadonlyArray<PostListItem>;
   seriesSlugs: ReadonlyArray<string>;
   staticPaths: ReadonlyArray<string>;
-  buildDate: string;
 }): string {
   const urlEntries: string[] = [];
 
-  // static (lang-neutral) entries
+  // static (lang-neutral) entries — lastmod 無し (real 更新日が無いので Google に「毎日更新」と誤認させない)
   for (const p of input.staticPaths) {
-    urlEntries.push(buildStaticUrlEntry({ url: `${input.baseUrl}${p}`, lastmod: input.buildDate }));
+    urlEntries.push(buildStaticUrlEntry({ url: `${input.baseUrl}${p}` }));
   }
 
-  // series hub entries (lang-neutral、URL に lang param 載らない)
+  // series hub entries (lang-neutral、URL に lang param 載らない) — lastmod 同上の理由で omit
   for (const slug of input.seriesSlugs) {
-    urlEntries.push(
-      buildStaticUrlEntry({ url: `${input.baseUrl}/series/${slug}`, lastmod: input.buildDate }),
-    );
+    urlEntries.push(buildStaticUrlEntry({ url: `${input.baseUrl}/series/${slug}` }));
   }
 
   // post entries — variant ごとに 1 つずつ

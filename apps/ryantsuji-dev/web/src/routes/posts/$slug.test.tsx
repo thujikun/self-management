@@ -25,6 +25,7 @@ import { renderMarkdown } from "@self/content";
 
 import { getRouter } from "../../router.js";
 import { listPosts } from "../../server/posts.js";
+import { buildPostUrlEntry } from "../../server/sitemap.js";
 import * as authClient from "../../lib/auth-client.js";
 
 import {
@@ -1474,7 +1475,7 @@ describe("buildPostLinks", () => {
     ]);
   });
 
-  it("ja だけある post — en alternate / x-default は emit しない", () => {
+  it("ja だけある post — en alternate は emit せず、x-default は ja URL に倒す (sitemap と alternate 集合一致)", () => {
     const links = buildPostLinks({
       slug: "ja-only",
       servedLang: "ja",
@@ -1483,6 +1484,36 @@ describe("buildPostLinks", () => {
     expect(links).toStrictEqual([
       { rel: "canonical", href: "https://ryantsuji.dev/posts/ja-only?lang=ja" },
       { rel: "alternate", hreflang: "ja", href: "https://ryantsuji.dev/posts/ja-only?lang=ja" },
+      {
+        rel: "alternate",
+        hreflang: "x-default",
+        href: "https://ryantsuji.dev/posts/ja-only?lang=ja",
+      },
     ]);
+  });
+
+  it("ja-only の buildPostLinks と sitemap の buildPostUrlEntry で hreflang 集合 (lang + href) が一致する", () => {
+    // GSC が head と sitemap の hreflang を cross-check する仕様。両者がズレると warning 出る
+    const links = buildPostLinks({
+      slug: "ja-only",
+      servedLang: "ja",
+      availableLangs: ["ja"],
+    });
+    const headHreflangSet = links
+      .filter((l) => l.rel === "alternate")
+      .map((l) => `${l.hreflang}|${l.href}`)
+      .sort();
+    const entry = buildPostUrlEntry({
+      baseUrl: "https://ryantsuji.dev",
+      slug: "ja-only",
+      servedLang: "ja",
+      availableLangs: ["ja"],
+      lastmod: "2026-05-15",
+    });
+    const sitemapHreflangSet = Array.from(
+      entry.matchAll(/hreflang="([^"]+)" href="([^"]+)"/g),
+      (m) => `${m[1]}|${m[2]}`,
+    ).sort();
+    expect(headHreflangSet).toStrictEqual(sitemapHreflangSet);
   });
 });

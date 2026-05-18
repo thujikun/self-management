@@ -176,7 +176,6 @@ describe("buildSitemapXml", () => {
         posts: [],
         seriesSlugs: [],
         staticPaths: [],
-        buildDate: "2026-05-18",
       }),
     ).toMatchInlineSnapshot(`
       "<?xml version="1.0" encoding="UTF-8"?>
@@ -187,7 +186,7 @@ describe("buildSitemapXml", () => {
     `);
   });
 
-  it("static + series + post 混在 — 順序 (static → series → post variant) で出力", () => {
+  it("static + series + post 混在 — 順序 (static → series → post variant) で出力、static/series は lastmod 無し", () => {
     const posts: PostListItem[] = [
       {
         slug: "hello",
@@ -204,7 +203,6 @@ describe("buildSitemapXml", () => {
         posts,
         seriesSlugs: ["building-ai-harness"],
         staticPaths: ["/", "/about"],
-        buildDate: "2026-05-18",
       }),
     ).toMatchInlineSnapshot(`
       "<?xml version="1.0" encoding="UTF-8"?>
@@ -212,15 +210,12 @@ describe("buildSitemapXml", () => {
               xmlns:xhtml="http://www.w3.org/1999/xhtml">
         <url>
           <loc>https://ryantsuji.dev/</loc>
-          <lastmod>2026-05-18</lastmod>
         </url>
         <url>
           <loc>https://ryantsuji.dev/about</loc>
-          <lastmod>2026-05-18</lastmod>
         </url>
         <url>
           <loc>https://ryantsuji.dev/series/building-ai-harness</loc>
-          <lastmod>2026-05-18</lastmod>
         </url>
         <url>
           <loc>https://ryantsuji.dev/posts/hello</loc>
@@ -241,6 +236,45 @@ describe("buildSitemapXml", () => {
     `);
   });
 
+  it("static / series entry は lastmod を一切出さない (毎日「今日」signal を吐かない)", () => {
+    const xml = buildSitemapXml({
+      baseUrl: BASE,
+      posts: [],
+      seriesSlugs: ["s1", "s2"],
+      staticPaths: ["/", "/about", "/posts"],
+    });
+    // urlset 内に <lastmod> tag が 1 つも無い (post が空集合なので post 由来も無し)
+    expect(xml).not.toMatch(/<lastmod>/);
+    // static / series の loc は出る
+    expect(xml).toContain("<loc>https://ryantsuji.dev/</loc>");
+    expect(xml).toContain("<loc>https://ryantsuji.dev/about</loc>");
+    expect(xml).toContain("<loc>https://ryantsuji.dev/posts</loc>");
+    expect(xml).toContain("<loc>https://ryantsuji.dev/series/s1</loc>");
+    expect(xml).toContain("<loc>https://ryantsuji.dev/series/s2</loc>");
+  });
+
+  it("post entry は frontmatter 由来の lastmod を出す (static/series が無くても post 側だけは出る)", () => {
+    const posts: PostListItem[] = [
+      {
+        slug: "p1",
+        title: "P1",
+        publishedAt: "2026-01-01",
+        updatedAt: "2026-03-20",
+        availableLangs: ["en"],
+        servedLang: "en",
+      } as PostListItem,
+    ];
+    const xml = buildSitemapXml({
+      baseUrl: BASE,
+      posts,
+      seriesSlugs: [],
+      staticPaths: [],
+    });
+    expect(xml).toContain("<lastmod>2026-03-20</lastmod>");
+    // post の lastmod は 1 個だけ (single variant)
+    expect(xml.match(/<lastmod>/g)).toStrictEqual(["<lastmod>"]);
+  });
+
   it("post の availableLangs 順で alternate emit (en → ja 順)", () => {
     const posts: PostListItem[] = [
       {
@@ -256,7 +290,6 @@ describe("buildSitemapXml", () => {
       posts,
       seriesSlugs: [],
       staticPaths: [],
-      buildDate: "2026-05-18",
     });
     // en variant entry 内で en alternate が ja より先に並ぶ (en/ja 各 variant につき同様)
     const enIdx = xml.indexOf('hreflang="en"');

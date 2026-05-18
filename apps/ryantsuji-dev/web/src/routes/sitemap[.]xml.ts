@@ -42,22 +42,22 @@ const SITE_URL = "https://ryantsuji.dev";
 const STATIC_PATHS: ReadonlyArray<string> = ["/", "/about", "/posts", "/privacy", "/terms"];
 
 /**
- * sitemap response を組み立てる pure helper (`Date` だけ inject 可能にして test
- * での日付固定を許す)。`includeDrafts: false` 固定 — draft は public sitemap に
- * 露出させない。
+ * sitemap response を組み立てる pure helper。`includeDrafts: false` 固定 — draft は
+ * public sitemap に露出させない。
+ *
+ * static / series hub の `<lastmod>` は意図的に省く (`server/sitemap.ts:buildSitemapXml`
+ * の JSDoc 参照)。post の lastmod は frontmatter 由来なので、request 時刻は不要。
  *
  * @graph-connects content [calls] listPosts + buildSitemapXml
  */
-export function handleSitemapRequest(now: Date = new Date()): Response {
+export function handleSitemapRequest(): Response {
   const posts = listPosts("en");
   const seriesSlugs = Object.keys(SERIES_REGISTRY);
-  const buildDate = now.toISOString().slice(0, 10);
   const xml = buildSitemapXml({
     baseUrl: SITE_URL,
     posts,
     seriesSlugs,
     staticPaths: STATIC_PATHS,
-    buildDate,
   });
   return new Response(xml, {
     status: 200,

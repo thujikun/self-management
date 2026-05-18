@@ -192,9 +192,11 @@ export function postUrlFor(slug: string, lang: Lang): string {
  * 列を組む pure 関数。Route.head() から呼ばれる。
  *
  * - canonical: 現在 serve している variant の URL (en は無印、ja は `?lang=ja`)
- * - alternate hreflang: `availableLangs` に含まれる lang のみ emit。en があれば
- *   `x-default` も同 URL で出す (Google が user lang を判定できない時の fallback
- *   を en に倒す)
+ * - alternate hreflang: `availableLangs` に含まれる lang のみ emit
+ * - x-default: en があれば en URL に倒し、無ければ「使える唯一の lang」の URL に
+ *   倒す (= sitemap 側 `server/sitemap.ts:buildPostUrlEntry` と同 logic)。head と
+ *   sitemap の hreflang 集合を Google が cross-check するため、ja-only 等の片言
+ *   case でも両者で x-default 有無を揃える
  *
  * GSC の「重複しています。ユーザーにより、正規ページとして選択されていません」
  * 警告は、ja と en の canonical が path 同一 + query 違いで、Google から見て
@@ -217,6 +219,9 @@ export function buildPostLinks(input: {
   }
   if (input.availableLangs.includes("ja")) {
     links.push({ rel: "alternate", hreflang: "ja", href: postUrlFor(input.slug, "ja") });
+    if (!input.availableLangs.includes("en")) {
+      links.push({ rel: "alternate", hreflang: "x-default", href: postUrlFor(input.slug, "ja") });
+    }
   }
   return links;
 }
