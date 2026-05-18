@@ -8,74 +8,30 @@
  * 使い方:
  *   pnpm exec tsx scripts/hooks/check-css-tokens.cli.ts <css-file> [<css-file> ...]
  *
- * 引数なしの場合は repo 内の全 authored `.css` を対象とする (CI full-mode 想定)。
+ * 引数なし or `.css` を含まない場合は何も check せず exit 0。orchestration / fs IO は
+ * `runCheckCssTokens` に集約 (test 容易性のため、本 cli は process bridge のみ)。
  *
  * @graph-stack core
  * @graph-domain infra
- * @graph-business CSS custom property 参照の整合性 check の CLI thin entry。staged file から `.css` だけ拾って checkCssTokens に流し、未宣言 token への参照を 1 件でも検出したら exit 1 で commit を止める
- * @graph-connects none
+ * @graph-business CSS custom property 参照の整合性 check の CLI thin entry。runCheckCssTokens を呼んで stderr を流し exit code を返すだけ。design-tokens dist 不在は fail-fast (silent skip しない) で pre-commit と CI の drift を防ぐ
+ * @graph-connects ./check-css-tokens [calls] runCheckCssTokens で orchestration を実行
  */
 
-import { readFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { runCheckCssTokens } from "./check-css-tokens.js";
 
-import { DEFAULT_DYNAMIC_PREFIXES, checkCssTokens } from "./check-css-tokens.js";
-
-// declaration sources は **常に固定**:
+// declaration source は **常に固定**:
 // - 該当 css file 自身 (`:root` / `@theme` block の宣言を拾う)
 // - `packages/design-tokens/dist/tokens.css` (= semantic / primitive tokens の SoT)
 // 追加 source が必要になったらここに 1 行足す。
 const DESIGN_TOKENS_CSS = "packages/design-tokens/dist/tokens.css";
 
-function main(): void {
-  const args = process.argv.slice(2);
-  const targets = args.filter((a) => a.endsWith(".css"));
-  if (targets.length === 0) {
-    // 引数なし or `.css` が含まれない → 何もチェックせず exit 0 (staged mode で
-    // .css 変更が無いコミットは通す)。
-    return;
-  }
-
-  const declarationSources: Array<{ file: string; content: string }> = [];
-
-  // 1. design-tokens dist
-  const tokensPath = resolve(DESIGN_TOKENS_CSS);
-  if (existsSync(tokensPath)) {
-    declarationSources.push({ file: DESIGN_TOKENS_CSS, content: readFileSync(tokensPath, "utf8") });
-  }
-
-  // 2. 引数の css file 自身も declaration source として読み込む
-  //    (file 内で完結した自前 declaration `:root { --x: 1px }` 等を拾うため)
-  const referenceSources: Array<{ file: string; content: string }> = [];
-  for (const t of targets) {
-    const abs = resolve(t);
-    if (!existsSync(abs)) continue;
-    const content = readFileSync(abs, "utf8");
-    declarationSources.push({ file: t, content });
-    referenceSources.push({ file: t, content });
-  }
-
-  const violations = checkCssTokens({
-    declarationSources,
-    referenceSources,
-    dynamicPrefixes: DEFAULT_DYNAMIC_PREFIXES,
-  });
-
-  if (violations.length === 0) {
-    return;
-  }
-
-  console.error("✗ check-css-tokens: undefined CSS custom property reference(s) found:\n");
-  for (const v of violations) {
-    console.error(`  ${v.file}:${v.line}  var(${v.token})  ← not declared`);
-  }
-  console.error(
-    "\n  fix: 有効な token に置換するか、`packages/design-tokens` の semantic token に追加",
-  );
-  console.error(
-    "       (runtime に inject される `--tw-*` / `--shiki-*` 等は cli の dynamicPrefixes に追加)",
-  );
-  process.exit(1);
+const result = runCheckCssTokens({
+  args: process.argv.slice(2),
+  designTokensCssPath: DESIGN_TOKENS_CSS,
+});
+if (result.stderr.length > 0) {
+  console.error(result.stderr.join("\n"));
 }
-
-main();
+if (result.exitCode !== 0) {
+  process.exit(result.exitCode);
+}

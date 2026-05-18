@@ -96,6 +96,13 @@ cmd_run() {
       fi
       ;;
     css-tokens)
+      # design-tokens dist (= 全 semantic / primitive token の SoT) を CLI が読むため、
+      # 先に build:css を流して dist 不在による silent skip / 誤検出を防ぐ。pre-commit
+      # は staged に `.css` が含まれる時しか本 case に入らないので、build の overhead
+      # は十分小さい。CI 側でも `gate (css-tokens)` job は `needs: build` 無しで動く
+      # ので本 case 内で build を踏むのが SSoT (= 「pre-commit と CI で check が drift」
+      # の構造的排除)。
+      pnpm --filter @self/design-tokens build:css >/dev/null
       if [ "$mode" = staged ]; then
         pnpm exec tsx scripts/hooks/check-css-tokens.cli.ts "${files[@]}"
       else
