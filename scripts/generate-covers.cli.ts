@@ -27,7 +27,9 @@ async function main(): Promise<void> {
   const fonts = await loadOgFonts();
 
   console.log("[og-image] reading posts...");
-  const posts = await readAllPosts();
+  // og:image は syndication 可否に関わらず全 post に対して生成する
+  // (ryantsuji.dev 限定 post も unfurl で固有 cover を出すため)
+  const posts = await readAllPosts(undefined, { includeExcluded: true });
   console.log(`[og-image] ${posts.length} post entries (slug filter: ${slug ?? "none"})`);
 
   const results = await generateAllCovers({ posts, fonts, slug, writeFrontmatter });
