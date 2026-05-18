@@ -50,6 +50,10 @@ async function main(): Promise<void> {
     `loaded ${posts.length} posts (target=${target}${slug ? `, slug=${slug}` : ""}${publish ? ", publish" : ", dry-run"}${includeDrafts ? ", include-drafts" : ""})`,
   );
 
+  // CLI 起動時に now を 1 度 fix し、Zenn / dev.to の publishAt 判定が同一 Date を
+  // 共有するようにする。process 内で publishAt 境界をまたいでも一貫した published 値になる
+  const now = new Date();
+
   if (target === "zenn" || target === "all") {
     const footer = await readFile(ZENN_FOOTER_PATH, "utf8");
     await emitZenn({
@@ -58,6 +62,7 @@ async function main(): Promise<void> {
       footer,
       slug,
       publish,
+      now,
     });
   }
   if (target === "devto" || target === "all") {
@@ -66,6 +71,7 @@ async function main(): Promise<void> {
       outDir: resolve(OUT_DIR, "devto"),
       slug,
       publish,
+      now,
     });
   }
   console.log("done");

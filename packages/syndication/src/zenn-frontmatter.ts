@@ -15,6 +15,8 @@
 
 import type { Frontmatter } from "@self/content";
 
+import { isPublishedNow } from "./devto-frontmatter.js";
+
 /**
  * Zenn frontmatter の TS 表現。生成後 YAML.stringify するため shape を厳密化。
  *
@@ -39,6 +41,8 @@ export interface ZennBuildOptions {
   emoji?: string;
   /** Zenn publication (会社 org) 配下に publish する場合の name。default `aircloset`。 */
   publicationName?: string | null;
+  /** `syndication.zenn.publishAt` 評価時刻。未指定なら `new Date()`。 */
+  now?: Date;
 }
 
 /**
@@ -56,7 +60,7 @@ export function buildZennFrontmatter(
     emoji: options.emoji ?? "🤖",
     type: "tech",
     topics: meta.tags.slice(0, 5),
-    published: !meta.draft,
+    published: isPublishedNow(meta, "zenn", options.now ?? new Date()),
     ...(options.publicationName !== null
       ? { publication_name: options.publicationName ?? "aircloset" }
       : {}),
