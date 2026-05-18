@@ -55,8 +55,8 @@ export function semanticToVars(tokens: SemanticTokens): string[] {
  * tokens.css 全文を生成。
  *
  * 構成:
- * - `:root` block: 全 primitive + light semantic
- * - `@media (prefers-color-scheme: dark) :root`: cookie 無し時の system default (dark)
+ * - `:root` block: 全 primitive + dark semantic (site baseline)
+ * - `@media (prefers-color-scheme: light) :root`: system が light を選好する場合の override
  * - `:root[data-theme="dark"]`: cookie で dark を明示 (system が light でも dark を強制)
  * - `:root[data-theme="light"]`: cookie で light を明示 (system が dark でも light を強制)
  *

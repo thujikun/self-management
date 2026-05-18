@@ -68,10 +68,11 @@ const getPost = createServerFn().handler(async ({ data: { slug } }) => {
 `PostBody` は `dangerouslySetInnerHTML` で `html` を流す server component。shiki が出す output は CSS variables (`--shiki-light` / `--shiki-dark`) ベースなので、styles.css 側で:
 
 ```css
-pre.shiki { background: var(--shiki-light-bg); color: var(--shiki-light); }
-@media (prefers-color-scheme: dark) {
-  pre.shiki { background: var(--shiki-dark-bg); color: var(--shiki-dark); }
-  pre.shiki span { color: var(--shiki-dark) !important; }
+pre.shiki { background: var(--shiki-dark-bg); color: var(--shiki-dark); }
+pre.shiki span { color: var(--shiki-dark); }
+@media (prefers-color-scheme: light) {
+  pre.shiki { background: var(--shiki-light-bg); color: var(--shiki-light); }
+  pre.shiki span { color: var(--shiki-light); }
 }
 ```
 

@@ -85,7 +85,7 @@ describe("semanticToVars", () => {
 });
 
 describe("buildCss", () => {
-  it("output 全体を inline snapshot で固定 (:root + dark @media block)", () => {
+  it("output 全体を inline snapshot で固定 (:root + light @media block)", () => {
     expect(buildCss()).toMatchInlineSnapshot(`
       "/**
        * @self/design-tokens — generated tokens.css

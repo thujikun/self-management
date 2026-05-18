@@ -6,7 +6,7 @@
  * 意味のある名前で書く (= `gray.50` / `gray.900` という physical name は隠す)。
  *
  * light / dark の値は同一 token name で異なる primitive にマップする。
- * `prefers-color-scheme: dark` で一括切替。
+ * site baseline は dark で、`prefers-color-scheme: light` で一括切替。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
