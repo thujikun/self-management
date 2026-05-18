@@ -51,4 +51,39 @@ describe("OgTemplate", () => {
     const tealNode = all.find((n) => n.props.style?.backgroundColor === "#0abab5");
     expect(tealNode).toBeDefined();
   });
+
+  it("ambient blob 2 つ (左上 + 右下) が radial-gradient で配置される", () => {
+    // Arrange: site と同じ ambient blob (左上 accent-bg + 右下 accent-border light)
+    // を VNode walk で固定し、誰かが blob を削除 / 移動した時に落ちるようにする。
+    const root = OgTemplate({ title: "x" });
+    const all = flatten(root).filter((n): n is VNode => typeof n !== "string");
+
+    // Act
+    const blobs = all.filter(
+      (n) =>
+        typeof n.props.style?.backgroundImage === "string" &&
+        n.props.style.backgroundImage.startsWith("radial-gradient("),
+    );
+
+    // Assert: 2 つ、anchor / size / color / opacity を全部 freeze
+    expect(blobs).toHaveLength(2);
+    expect(blobs[0].props.style).toStrictEqual({
+      position: "absolute",
+      top: -360,
+      left: -360,
+      width: 1080,
+      height: 1080,
+      backgroundImage: "radial-gradient(closest-side, #0abab5 0%, transparent 70%)",
+      opacity: 0.45,
+    });
+    expect(blobs[1].props.style).toStrictEqual({
+      position: "absolute",
+      bottom: -300,
+      right: -300,
+      width: 900,
+      height: 900,
+      backgroundImage: "radial-gradient(closest-side, #39c4bf 0%, transparent 70%)",
+      opacity: 0.32,
+    });
+  });
 });
