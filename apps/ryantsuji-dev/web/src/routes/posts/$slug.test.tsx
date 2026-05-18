@@ -1442,9 +1442,9 @@ describe("buildPostLinks", () => {
     });
     expect(links).toStrictEqual([
       { rel: "canonical", href: "https://ryantsuji.dev/posts/hello" },
-      { rel: "alternate", hreflang: "en", href: "https://ryantsuji.dev/posts/hello" },
-      { rel: "alternate", hreflang: "x-default", href: "https://ryantsuji.dev/posts/hello" },
-      { rel: "alternate", hreflang: "ja", href: "https://ryantsuji.dev/posts/hello?lang=ja" },
+      { rel: "alternate", hrefLang: "en", href: "https://ryantsuji.dev/posts/hello" },
+      { rel: "alternate", hrefLang: "x-default", href: "https://ryantsuji.dev/posts/hello" },
+      { rel: "alternate", hrefLang: "ja", href: "https://ryantsuji.dev/posts/hello?lang=ja" },
     ]);
   });
 
@@ -1456,9 +1456,9 @@ describe("buildPostLinks", () => {
     });
     expect(links).toStrictEqual([
       { rel: "canonical", href: "https://ryantsuji.dev/posts/hello?lang=ja" },
-      { rel: "alternate", hreflang: "en", href: "https://ryantsuji.dev/posts/hello" },
-      { rel: "alternate", hreflang: "x-default", href: "https://ryantsuji.dev/posts/hello" },
-      { rel: "alternate", hreflang: "ja", href: "https://ryantsuji.dev/posts/hello?lang=ja" },
+      { rel: "alternate", hrefLang: "en", href: "https://ryantsuji.dev/posts/hello" },
+      { rel: "alternate", hrefLang: "x-default", href: "https://ryantsuji.dev/posts/hello" },
+      { rel: "alternate", hrefLang: "ja", href: "https://ryantsuji.dev/posts/hello?lang=ja" },
     ]);
   });
 
@@ -1470,8 +1470,8 @@ describe("buildPostLinks", () => {
     });
     expect(links).toStrictEqual([
       { rel: "canonical", href: "https://ryantsuji.dev/posts/en-only" },
-      { rel: "alternate", hreflang: "en", href: "https://ryantsuji.dev/posts/en-only" },
-      { rel: "alternate", hreflang: "x-default", href: "https://ryantsuji.dev/posts/en-only" },
+      { rel: "alternate", hrefLang: "en", href: "https://ryantsuji.dev/posts/en-only" },
+      { rel: "alternate", hrefLang: "x-default", href: "https://ryantsuji.dev/posts/en-only" },
     ]);
   });
 
@@ -1483,10 +1483,10 @@ describe("buildPostLinks", () => {
     });
     expect(links).toStrictEqual([
       { rel: "canonical", href: "https://ryantsuji.dev/posts/ja-only?lang=ja" },
-      { rel: "alternate", hreflang: "ja", href: "https://ryantsuji.dev/posts/ja-only?lang=ja" },
+      { rel: "alternate", hrefLang: "ja", href: "https://ryantsuji.dev/posts/ja-only?lang=ja" },
       {
         rel: "alternate",
-        hreflang: "x-default",
+        hrefLang: "x-default",
         href: "https://ryantsuji.dev/posts/ja-only?lang=ja",
       },
     ]);
@@ -1501,7 +1501,7 @@ describe("buildPostLinks", () => {
     });
     const headHreflangSet = links
       .filter((l) => l.rel === "alternate")
-      .map((l) => `${l.hreflang}|${l.href}`)
+      .map((l) => `${l.hrefLang}|${l.href}`)
       .sort();
     const entry = buildPostUrlEntry({
       baseUrl: "https://ryantsuji.dev",

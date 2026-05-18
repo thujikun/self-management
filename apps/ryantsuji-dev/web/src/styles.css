@@ -430,6 +430,14 @@ main {
   gap: var(--space-2);
 }
 
+.post-detail__tags > li > a {
+  /* WCAG 2.2 SC 2.5.8 (target-size)。tag chip を 24x24px 以上の tap area に拡張。 */
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding-inline: var(--space-1);
+}
+
 /* ─── PostToc (Zenn 風 floating TOC) ─── */
 
 /* 共通 list / link / heading スタイル */
@@ -733,7 +741,11 @@ main {
 }
 
 .post-body a {
+  /* WCAG 2.2 SC 1.4.1 (Use of Color)。teal/text 間のコントラストだけでは 3:1 に
+     届かないので、色に加えて underline を出して周辺テキストと区別可能にする。 */
   color: var(--text-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .post-body a.heading-anchor {

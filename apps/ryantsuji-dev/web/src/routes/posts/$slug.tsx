@@ -209,18 +209,20 @@ export function buildPostLinks(input: {
   slug: string;
   servedLang: Lang;
   availableLangs: ReadonlyArray<Lang>;
-}): Array<{ rel: string; href: string; hreflang?: string }> {
-  const links: Array<{ rel: string; href: string; hreflang?: string }> = [
+}): Array<{ rel: string; href: string; hrefLang?: string }> {
+  // React JSX の `<link>` props は camelCase の `hrefLang` を要求するため key 名は
+  // `hrefLang` で持つ (HTML 出力は React が自動で小文字 `hreflang` に直す)。
+  const links: Array<{ rel: string; href: string; hrefLang?: string }> = [
     { rel: "canonical", href: postUrlFor(input.slug, input.servedLang) },
   ];
   if (input.availableLangs.includes("en")) {
-    links.push({ rel: "alternate", hreflang: "en", href: postUrlFor(input.slug, "en") });
-    links.push({ rel: "alternate", hreflang: "x-default", href: postUrlFor(input.slug, "en") });
+    links.push({ rel: "alternate", hrefLang: "en", href: postUrlFor(input.slug, "en") });
+    links.push({ rel: "alternate", hrefLang: "x-default", href: postUrlFor(input.slug, "en") });
   }
   if (input.availableLangs.includes("ja")) {
-    links.push({ rel: "alternate", hreflang: "ja", href: postUrlFor(input.slug, "ja") });
+    links.push({ rel: "alternate", hrefLang: "ja", href: postUrlFor(input.slug, "ja") });
     if (!input.availableLangs.includes("en")) {
-      links.push({ rel: "alternate", hreflang: "x-default", href: postUrlFor(input.slug, "ja") });
+      links.push({ rel: "alternate", hrefLang: "x-default", href: postUrlFor(input.slug, "ja") });
     }
   }
   return links;
@@ -377,7 +379,7 @@ function PostDetail() {
       </nav>
       <header className="post-detail__header">
         <h1>{frontmatter.title}</h1>
-        <p className="post-detail__meta">
+        <div className="post-detail__meta">
           <time dateTime={frontmatter.publishedAt}>{frontmatter.publishedAt.slice(0, 10)}</time>
           <span className="post-detail__divider" aria-hidden="true">
             ·
@@ -399,7 +401,7 @@ function PostDetail() {
               </ul>
             </>
           ) : null}
-        </p>
+        </div>
       </header>
       {seriesNav ? <PostSeriesBox nav={seriesNav} lang={servedLang} /> : null}
       <PostToc headings={headings} />
