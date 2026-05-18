@@ -91,7 +91,7 @@ export function parseFileName(name: string): { slug: string; lang: "ja" | "en" }
  */
 export async function readAllPosts(
   postsDir: string = POSTS_DIR,
-  options: { includeDrafts?: boolean } = {},
+  options: { includeDrafts?: boolean; includeExcluded?: boolean } = {},
 ): Promise<ParsedPost[]> {
   const files = await readdir(postsDir);
   const out: ParsedPost[] = [];
@@ -108,8 +108,9 @@ export async function readAllPosts(
     const meta = parseFrontmatter(grayMatter.data);
     if (meta.draft && !options.includeDrafts) continue;
     // `excludeFromSyndication: true` の post は ryantsuji.dev のみに公開し、
-    // Zenn / dev.to には流さない。
-    if (meta.excludeFromSyndication) continue;
+    // Zenn / dev.to には流さない。generate-covers 等の non-syndicate な consumer は
+    // `includeExcluded: true` で除外を無効化できる。
+    if (meta.excludeFromSyndication && !options.includeExcluded) continue;
     out.push({ slug: parsed.slug, lang: parsed.lang, meta, body: grayMatter.content });
   }
   return out;
