@@ -227,6 +227,13 @@ describe("readAllPosts", () => {
     const posts = await readAllPosts(dir, { includeDrafts: true });
     expect(posts.map((p) => p.slug).sort()).toStrictEqual(["real"]);
   });
+
+  it("excludeFromSyndication: true の post は syndication 対象から除外", async () => {
+    await writeFile(join(dir, "internal.ja.md"), baseFm("excludeFromSyndication: true\n"));
+    await writeFile(join(dir, "public.ja.md"), baseFm());
+    const posts = await readAllPosts(dir);
+    expect(posts.map((p) => p.slug).sort()).toStrictEqual(["public"]);
+  });
 });
 
 describe("emitZenn", () => {

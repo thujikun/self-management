@@ -21,6 +21,7 @@ const meta: Frontmatter = {
   tags: ["ai", "mcp"],
   draft: false,
   syndication: {},
+  excludeFromSyndication: false,
   summary: "summary",
 };
 

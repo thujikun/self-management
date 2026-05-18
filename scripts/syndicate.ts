@@ -107,6 +107,9 @@ export async function readAllPosts(
     const grayMatter = matter(raw);
     const meta = parseFrontmatter(grayMatter.data);
     if (meta.draft && !options.includeDrafts) continue;
+    // `excludeFromSyndication: true` の post は ryantsuji.dev のみに公開し、
+    // Zenn / dev.to には流さない。
+    if (meta.excludeFromSyndication) continue;
     out.push({ slug: parsed.slug, lang: parsed.lang, meta, body: grayMatter.content });
   }
   return out;
