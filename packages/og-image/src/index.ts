@@ -10,5 +10,5 @@
  * @graph-connects none
  */
 
-export { renderOgImage } from "./generate.js";
+export { renderOgImage, renderSiteOgImage } from "./generate.js";
 export type { OgImageInput, OgLang, OgFonts } from "./generate.js";

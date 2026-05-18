@@ -27,8 +27,20 @@ const TEXT_MUTED = "#a3a8af";
 /** @graph-connects none */
 const BG_BASE = "#0c1417";
 
+/**
+ * Noto Serif JP に含まれない box-drawing horizontal (U+2500) を em-dash (U+2014) に
+ * 置き換える。`──` を 2 連ねるソース表記が `―` 1 文字 (em-dash) に置換される形で、
+ * 視覚的に近いダッシュとして render される。
+ *
+ * @graph-connects none
+ */
+export function sanitizeOgText(text: string): string {
+  return text.replace(/─/gu, "—");
+}
+
 /** @graph-connects og-image [calls] h() factory */
 export function OgTemplate({ title }: { title: string }): VNode {
+  const safeTitle = sanitizeOgText(title);
   return h(
     "div",
     {
@@ -38,7 +50,8 @@ export function OgTemplate({ title }: { title: string }): VNode {
         display: "flex",
         flexDirection: "column",
         backgroundColor: BG_BASE,
-        padding: "96px",
+        // 下に余白を控えめにして footer を image 下辺に寄せる。top は 96 を維持。
+        padding: "96px 96px 56px 96px",
         position: "relative",
       },
     },
@@ -125,7 +138,7 @@ export function OgTemplate({ title }: { title: string }): VNode {
             letterSpacing: "-0.015em",
           },
         },
-        title,
+        safeTitle,
       ),
     ),
     // 下段: tagline

@@ -42,6 +42,12 @@ export interface DevtoBuildOptions {
   coverImageUrl?: string;
   /** dev.to series 名 (任意) */
   series?: string;
+  /**
+   * `syndication.devto.publishAt` を評価する時刻。未指定なら `new Date()`。test 用に
+   * 注入できる + CLI 経路で 1 回固定にしてプロセス内で `publishAt` の境界をまたぐ
+   * race を防ぐ。
+   */
+  now?: Date;
 }
 
 /**
@@ -58,7 +64,7 @@ export function buildDevtoArticle(
 ): DevtoArticleAttributes {
   const attrs: DevtoArticleAttributes = {
     title: meta.title,
-    published: !meta.draft,
+    published: isPublishedNow(meta, "devto", options.now ?? new Date()),
     body_markdown: bodyMarkdown,
     tags: meta.tags.slice(0, 4),
     canonical_url: `${options.canonicalHost.replace(/\/$/u, "")}/posts/${options.slug}`,
@@ -67,4 +73,20 @@ export function buildDevtoArticle(
   if (options.coverImageUrl) attrs.cover_image = options.coverImageUrl;
   if (options.series) attrs.series = options.series;
   return attrs;
+}
+
+/**
+ * `meta.draft` と `meta.syndication.<target>.publishAt` を合わせて「いま `published:
+ * true` にしてよいか」を判定する。draft が立ってる時は常に false、publishAt が
+ * 未指定なら `!meta.draft`、publishAt が指定されてる時は `now >= publishAt`。
+ *
+ * @graph-connects none
+ */
+export function isPublishedNow(meta: Frontmatter, target: "zenn" | "devto", now: Date): boolean {
+  if (meta.draft) return false;
+  const publishAt = meta.syndication?.[target]?.publishAt;
+  if (!publishAt) return true;
+  const t = new Date(publishAt);
+  if (Number.isNaN(t.getTime())) return true;
+  return t.getTime() <= now.getTime();
 }

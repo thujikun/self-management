@@ -11,7 +11,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { VNode } from "./h.js";
-import { OgTemplate } from "./og-template.js";
+import { OgTemplate, sanitizeOgText } from "./og-template.js";
 
 function flatten(node: VNode | string | undefined): (VNode | string)[] {
   if (node === undefined) return [];
@@ -50,6 +50,16 @@ describe("OgTemplate", () => {
     const all = flatten(root).filter((n): n is VNode => typeof n !== "string");
     const tealNode = all.find((n) => n.props.style?.backgroundColor === "#0abab5");
     expect(tealNode).toBeDefined();
+  });
+
+  it("U+2500 (box-drawing horizontal) は em-dash に sanitize される (Noto Serif JP の glyph 欠落で tofu になるのを回避)", () => {
+    const root = OgTemplate({ title: "前段 ── 後段" });
+    const strings = flatten(root).filter((n): n is string => typeof n === "string");
+    expect(strings).toContain("前段 —— 後段");
+    // sanitize 直接呼びの境界も freeze
+    expect(sanitizeOgText("a─b")).toBe("a—b");
+    expect(sanitizeOgText("──")).toBe("——");
+    expect(sanitizeOgText("a-b")).toBe("a-b"); // ASCII hyphen は触らない
   });
 
   it("ambient blob 2 つ (左上 + 右下) が radial-gradient で配置される", () => {

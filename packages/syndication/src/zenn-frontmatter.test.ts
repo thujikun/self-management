@@ -10,7 +10,11 @@
 import { describe, expect, it } from "vitest";
 import type { Frontmatter } from "@self/content";
 
-import { buildZennFrontmatter, stringifyZennFrontmatter } from "./zenn-frontmatter.js";
+import {
+  buildZennFrontmatter,
+  isZennPublishedNow,
+  stringifyZennFrontmatter,
+} from "./zenn-frontmatter.js";
 
 const base: Frontmatter = {
   title: "テスト記事",
@@ -60,6 +64,56 @@ describe("buildZennFrontmatter", () => {
 
   it("tags 空配列なら topics も空", () => {
     expect(buildZennFrontmatter({ ...base, tags: [] }).topics).toStrictEqual([]);
+  });
+
+  it("syndication.zenn.publishAt が未来なら published: false", () => {
+    const out = buildZennFrontmatter(
+      { ...base, syndication: { zenn: { id: "x", publishAt: "2099-01-01" } } },
+      { now: new Date("2026-05-18T00:00:00Z") },
+    );
+    expect(out.published).toBe(false);
+  });
+
+  it("syndication.zenn.publishAt が過去なら published: true", () => {
+    const out = buildZennFrontmatter(
+      { ...base, syndication: { zenn: { id: "x", publishAt: "2020-01-01" } } },
+      { now: new Date("2026-05-18T00:00:00Z") },
+    );
+    expect(out.published).toBe(true);
+  });
+});
+
+describe("isZennPublishedNow", () => {
+  const now = new Date("2026-05-18T00:00:00Z");
+  it("draft 立っていれば常に false", () => {
+    expect(isZennPublishedNow({ ...base, draft: true }, now)).toBe(false);
+  });
+  it("publishAt 未指定なら true", () => {
+    expect(isZennPublishedNow(base, now)).toBe(true);
+  });
+  it("publishAt 未来 → false", () => {
+    expect(
+      isZennPublishedNow(
+        { ...base, syndication: { zenn: { id: "x", publishAt: "2099-01-01" } } },
+        now,
+      ),
+    ).toBe(false);
+  });
+  it("publishAt 過去 → true", () => {
+    expect(
+      isZennPublishedNow(
+        { ...base, syndication: { zenn: { id: "x", publishAt: "2020-01-01" } } },
+        now,
+      ),
+    ).toBe(true);
+  });
+  it("publishAt parse 不能 → true fallback", () => {
+    expect(
+      isZennPublishedNow(
+        { ...base, syndication: { zenn: { id: "x", publishAt: "garbage" } } },
+        now,
+      ),
+    ).toBe(true);
   });
 });
 

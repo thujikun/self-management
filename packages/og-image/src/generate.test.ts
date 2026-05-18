@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 
 import { describe, expect, it } from "vitest";
 
-import { renderOgImage } from "./generate.js";
+import { renderOgImage, renderSiteOgImage } from "./generate.js";
 
 const CACHE_DIR = resolve(tmpdir(), "og-image-test-cache");
 
@@ -86,6 +86,15 @@ describe("renderOgImage", () => {
   it("JP (multi-byte) タイトルでも同じく 1200x630 PNG を返す", async () => {
     const fonts = await loadFonts();
     const png = await renderOgImage({ lang: "ja", title: "テスト記事", fonts });
+    expect(isPng(png)).toBe(true);
+    expect(pngDims(png)).toStrictEqual({ width: 1200, height: 630 });
+  });
+});
+
+describe("renderSiteOgImage", () => {
+  it("site default (`public/og-image.png` 用) も 1200x630 PNG を返す", async () => {
+    const fonts = await loadFonts();
+    const png = await renderSiteOgImage(fonts);
     expect(isPng(png)).toBe(true);
     expect(pngDims(png)).toStrictEqual({ width: 1200, height: 630 });
   });
