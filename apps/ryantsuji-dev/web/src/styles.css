@@ -298,6 +298,11 @@ main {
   color: var(--text-muted);
 }
 
+.landing__meta a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
 /* ─── posts index (`/posts`) ────────────────── */
 
 .posts-index__header {
