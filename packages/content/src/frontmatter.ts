@@ -81,6 +81,12 @@ export const FrontmatterSchema = z.object({
         .optional(),
     })
     .default({}),
+  /**
+   * `true` で `scripts/syndicate.ts:readAllPosts` から除外され Zenn / dev.to に
+   * 連携されない。ryantsuji.dev だけに公開したい post で使う。default `false`
+   * (= 通常通り syndicate される)。
+   */
+  excludeFromSyndication: z.boolean().default(false),
 });
 
 /** @graph-connects none */
