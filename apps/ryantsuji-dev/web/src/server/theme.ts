@@ -6,9 +6,10 @@
  * 2. `null` (= 未設定): system preference (`prefers-color-scheme`) に任せる
  *
  * 出力は `"light" | "dark" | null` で、`null` の時は `<html>` から `data-theme` 属性を
- * 外して CSS の `@media (prefers-color-scheme: dark)` に judging を委ねる。`light` /
- * `dark` 明示時は `data-theme="..."` を付け、tokens.css の `:root[data-theme]` 上書きが
- * 効く (system preference より specificity が高い)。
+ * 外して CSS の `@media (prefers-color-scheme: light)` に judging を委ねる (site baseline
+ * は dark で、system が light を選好する場合のみ light に倒れる)。`light` / `dark` 明示時は
+ * `data-theme="..."` を付け、tokens.css の `:root[data-theme]` 上書きが効く (system
+ * preference より specificity が高い)。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
