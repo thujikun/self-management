@@ -92,6 +92,10 @@ const SHIKI_OPTIONS = {
   },
   defaultColor: false,
   cssVariablePrefix: "--shiki-",
+  // 言語指定なしの code fence (e.g. JA 記事の bare ```...``` ブロック) でも背景色
+  // など shiki style が当たるよう `plaintext` を default に設定する。EN 記事は
+  // ```plaintext / ```markdown / ```sql 等を明示しているので影響なし
+  defaultLanguage: "plaintext",
 } as const;
 
 /**

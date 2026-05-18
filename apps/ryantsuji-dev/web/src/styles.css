@@ -119,7 +119,10 @@ body::after {
   z-index: 0;
   border-radius: 9999px;
   filter: blur(var(--blur-ambient));
-  opacity: 0.5;
+  /* light mode は白背景に対して tiffany blue accent が強く出るので opacity を抑える。
+     dark mode は深い teal bg と馴染ませる狙いで濃度を保つ。下の `prefers-color-scheme:
+     dark` で override する。 */
+  opacity: 0.25;
 }
 
 body::before {
@@ -136,7 +139,16 @@ body::after {
   bottom: -15vmax;
   right: -15vmax;
   background: radial-gradient(closest-side, var(--accent-border), transparent 70%);
-  opacity: 0.35;
+  opacity: 0.18;
+}
+
+@media (prefers-color-scheme: dark) {
+  body::before {
+    opacity: 0.5;
+  }
+  body::after {
+    opacity: 0.35;
+  }
 }
 
 /* UI 層はすべて blob より上に。 */
@@ -653,9 +665,12 @@ main {
   font-size: var(--font-size-sm);
 }
 
+/* `--border-subtle` は dark mode で bg からの差が ~5% しかなく罫線がほぼ消える
+   ので、`--border-default` (~13%) で行間の視認性を確保する。light mode は
+   default でも 4% 差 (0.96 vs 1.0 = +4%) で十分軽く見える */
 .post-body th,
 .post-body td {
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-default);
   padding: var(--space-2) var(--space-3);
   text-align: left;
 }

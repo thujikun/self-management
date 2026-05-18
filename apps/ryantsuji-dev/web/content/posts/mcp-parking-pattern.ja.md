@@ -64,7 +64,7 @@ MCPのツール呼び出しは、結局のところJSON-RPC over HTTPです。AI
 
 [Sandbox MCP](/posts/sandbox-mcp)（非エンジニア向けにアプリを社内公開できるプラットフォーム）は、最初は**MCPツールでファイルを送る**設計でした。
 
-```
+```plaintext
 sandbox_write_file(app_name: "todo-app", path: "index.html", content: "<html>...")
 sandbox_write_file(app_name: "todo-app", path: "app.js", content: "import ...")
 sandbox_publish(app_name: "todo-app")
@@ -78,7 +78,7 @@ sandbox_publish(app_name: "todo-app")
 
 そこで、**MCPではURLだけを返し、実体はgitプッシュに逃がす**方式に変えました。
 
-```
+```plaintext
 # 1. MCPはgit URLを返すだけ（ペイロードに実体は乗らない）
 sandbox_init_repo(app_name: "todo-app")
 # → https://mcp-sandbox.example.com/git/sandbox/ryan/todo-app.git
@@ -185,7 +185,7 @@ URLを返しただけでは、AIはその先のデータにアクセスできま
 
 エアークローゼットでは**Google WorkspaceのAPI（Drive / Sheets / Gmail / Calendar）をラップした専用MCP**を別途立てていて、これと組み合わせることで「結果をSpreadsheetに書き出し → 必要に応じてそのMCPで読みに行く」というフローが完結します。
 
-```
+```plaintext
 DB Graph MCP → Spreadsheet出力 → URLを返す
                                     ↓
               Workspace MCP ← AIが「内容も見たい」と判断したら呼ぶ

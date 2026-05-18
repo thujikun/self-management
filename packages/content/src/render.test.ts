@@ -127,6 +127,28 @@ describe("renderMarkdown", () => {
     expect(out.html).toMatch(/<span style="--shiki-/);
   });
 
+  // SHIKI_OPTIONS.defaultLanguage = "plaintext" の regression: 言語指定なしの bare
+  // ```...``` fence (JA 記事で頻出) でも shiki が plaintext として token 化し、
+  // <pre class="shiki"> + light/dark の CSS variable theme が当たることを保証する。
+  // shiki アップグレード等で defaultLanguage option が deprecate/rename された際、
+  // この test が壊れて「bare fence が背景なし literal に戻る」回帰を CI で検知する。
+  it("言語指定なし fence は defaultLanguage (plaintext) で shiki token 化される", async () => {
+    const source = [
+      "---",
+      'title: "x"',
+      'publishedAt: "2026-05-08"',
+      "---",
+      "",
+      "```",
+      "Claude Code → MCP Server",
+      "```",
+    ].join("\n");
+    const out = await renderMarkdown(source);
+    expect(out.html).toMatch(/<pre class="shiki/);
+    expect(out.html).toMatch(/--shiki-light/);
+    expect(out.html).toMatch(/--shiki-dark/);
+  });
+
   it("frontmatter 不正で throw", async () => {
     const source = `---\ntitle: "x"\npublishedAt: "May 8 2026"\n---\nbody`;
     await expect(renderMarkdown(source)).rejects.toThrow();
