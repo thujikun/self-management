@@ -67,7 +67,7 @@
 }
 
 :root {
-  color-scheme: light dark;
+  color-scheme: dark light;
   font-family: var(--font-family-sans);
   font-size: var(--font-size-base);
   line-height: var(--line-height-normal);
@@ -119,10 +119,8 @@ body::after {
   z-index: 0;
   border-radius: 9999px;
   filter: blur(var(--blur-ambient));
-  /* light mode は白背景に対して tiffany blue accent が強く出るので opacity を抑える。
-     dark mode は深い teal bg と馴染ませる狙いで濃度を保つ。下の `prefers-color-scheme:
-     dark` で override する。 */
-  opacity: 0.25;
+  /* dark がデフォルトなので濃度を保ち、light に倒れた時のみ抑えて主張を弱める */
+  opacity: 0.5;
 }
 
 body::before {
@@ -139,15 +137,15 @@ body::after {
   bottom: -15vmax;
   right: -15vmax;
   background: radial-gradient(closest-side, var(--accent-border), transparent 70%);
-  opacity: 0.18;
+  opacity: 0.35;
 }
 
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   body::before {
-    opacity: 0.5;
+    opacity: 0.25;
   }
   body::after {
-    opacity: 0.35;
+    opacity: 0.18;
   }
 }
 
@@ -626,23 +624,23 @@ main {
   font-size: inherit;
 }
 
-/* shiki: light/dark で CSS variable を切替 */
+/* shiki: dark をデフォルトに、`prefers-color-scheme: light` で light に倒す */
 .post-body pre.shiki {
-  background: var(--shiki-light-bg);
-  color: var(--shiki-light);
+  background: var(--shiki-dark-bg);
+  color: var(--shiki-dark);
 }
 
 .post-body pre.shiki span {
-  color: var(--shiki-light);
+  color: var(--shiki-dark);
 }
 
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   .post-body pre.shiki {
-    background: var(--shiki-dark-bg);
-    color: var(--shiki-dark);
+    background: var(--shiki-light-bg);
+    color: var(--shiki-light);
   }
   .post-body pre.shiki span {
-    color: var(--shiki-dark);
+    color: var(--shiki-light);
   }
 }
 
@@ -715,14 +713,14 @@ main {
    (amber 系、hue ≒ 60) で強調する。design-tokens に semantic warning が入ったら
    `var(--text-warning)` 等に差し替える。 */
 .post-body .callout-alert {
-  border-left-color: oklch(64% 0.16 60);
-  background: oklch(96% 0.04 70);
+  border-left-color: oklch(75% 0.14 60);
+  background: oklch(30% 0.04 60);
 }
 
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   .post-body .callout-alert {
-    border-left-color: oklch(75% 0.14 60);
-    background: oklch(30% 0.04 60);
+    border-left-color: oklch(64% 0.16 60);
+    background: oklch(96% 0.04 70);
   }
 }
 
@@ -1712,21 +1710,21 @@ main {
   height: var(--space-4);
 }
 
-/* default (light): moon を出して「click で dark へ」と示す */
+/* default (dark): sun を出して「click で light へ」と示す */
 .theme-switcher__icon--sun {
-  display: none;
-}
-.theme-switcher__icon--moon {
   display: block;
 }
+.theme-switcher__icon--moon {
+  display: none;
+}
 
-/* system が dark + cookie が light で上書きされてない → 実 render は dark → sun を見せる */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .theme-switcher__icon--sun {
-    display: block;
-  }
-  :root:not([data-theme="light"]) .theme-switcher__icon--moon {
+/* system が light + cookie が dark で上書きされてない → 実 render は light → moon を見せる */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .theme-switcher__icon--sun {
     display: none;
+  }
+  :root:not([data-theme="dark"]) .theme-switcher__icon--moon {
+    display: block;
   }
 }
 

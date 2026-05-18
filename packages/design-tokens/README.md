@@ -6,7 +6,7 @@ ryantsuji.dev の design token SSoT。TypeScript を SSoT として、`tokens.cs
 
 - **2 層構成**: primitive (`gray[500]`, `accent[600]`, `space[4]` 等) と semantic (`bg.surface`, `text.primary`, `glass.bg` 等)
 - **OKLCH ベース**: 知覚均等な色空間。light/dark で同じ step が同じ perceived lightness になるよう調整
-- **light / dark 統合**: `prefers-color-scheme: dark` で semantic だけ上書き (primitive は theme 不変)
+- **light / dark 統合**: site baseline は dark で、`prefers-color-scheme: light` で semantic だけ light に上書き (primitive は theme 不変)
 - **fluid typography**: `clamp(min, vw-based, max)` で 1 set で mobile/desktop 両対応
 - **glass morphism**: 半透明 bg + backdrop-filter blur + 低 alpha border の 3 値を semantic にまとめて提供
 - **CSS variables 出力**: `pnpm build` で `dist/tokens.css` を生成、各 app は `import "@self/design-tokens/css"`
@@ -58,7 +58,7 @@ const bg = light.bg.surface; // light の値
   border-bottom: 1px solid var(--glass-border);
 }
 
-/* dark theme は :root 上書きされるので、component 側は何もしなくて良い */
+/* :root は dark がデフォルト。light は @media (prefers-color-scheme: light) で上書きされるので、component 側は何もしなくて良い */
 ```
 
 ## ファイル構成

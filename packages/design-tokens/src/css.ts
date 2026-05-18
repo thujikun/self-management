@@ -2,8 +2,9 @@
  * design token を CSS variables 文字列に変換する。
  *
  * primitive.ts / semantic.ts を SSoT として、`tokens.css` を build-time に派生させる。
- * `:root` に primitive + light semantic を、`@media (prefers-color-scheme: dark)` で
- * semantic だけを上書きする pattern (primitive は theme で変わらない)。
+ * `:root` に primitive + **dark semantic** を、`@media (prefers-color-scheme: light)` で
+ * semantic だけを上書きする pattern (primitive は theme で変わらない)。site の baseline
+ * は dark で、system が light を選好している場合のみ light に倒れる。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
@@ -54,8 +55,8 @@ export function semanticToVars(tokens: SemanticTokens): string[] {
  * tokens.css 全文を生成。
  *
  * 構成:
- * - `:root` block: 全 primitive + light semantic
- * - `@media (prefers-color-scheme: dark) :root`: cookie 無し時の system default (dark)
+ * - `:root` block: 全 primitive + dark semantic (site baseline)
+ * - `@media (prefers-color-scheme: light) :root`: system が light を選好する場合の override
  * - `:root[data-theme="dark"]`: cookie で dark を明示 (system が light でも dark を強制)
  * - `:root[data-theme="light"]`: cookie で light を明示 (system が dark でも light を強制)
  *
@@ -92,14 +93,14 @@ export function buildCss(): string {
     ":root {",
     ...primitives,
     "",
-    "  /* light theme semantic (default) */",
-    ...lightSemantic,
+    "  /* dark theme semantic (default) — site の baseline は dark */",
+    ...darkSemantic,
     "}",
     "",
-    "/* system prefers dark — cookie 未設定時の自然な default */",
-    "@media (prefers-color-scheme: dark) {",
+    "/* system prefers light — dark default に対する明示的なオプトアウト */",
+    "@media (prefers-color-scheme: light) {",
     "  :root {",
-    ...darkSemantic.map((line) => `  ${line}`),
+    ...lightSemantic.map((line) => `  ${line}`),
     "  }",
     "}",
     "",
