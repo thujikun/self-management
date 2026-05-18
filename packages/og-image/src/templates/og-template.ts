@@ -51,8 +51,8 @@ export function OgTemplate({ title }: { title: string }): VNode {
         display: "flex",
         flexDirection: "column",
         backgroundColor: BG_BASE,
-        // 下に余白を控えめにして footer を image 下辺に寄せる。top は 96 を維持。
-        padding: "96px 96px 56px 96px",
+        // 上下の余白を絞り、ヘッダー / footer を image の上下辺に近づける。
+        padding: "48px 96px 48px 96px",
         position: "relative",
       },
     },
@@ -117,15 +117,15 @@ export function OgTemplate({ title }: { title: string }): VNode {
         "ryantsuji.dev",
       ),
     ),
-    // 中央: title
+    // 中央: title (header 直下に寄せて長 title 用の縦領域を稼ぐ)
     h(
       "div",
       {
         style: {
           flex: 1,
           display: "flex",
-          alignItems: "center",
-          marginTop: 24,
+          alignItems: "flex-start",
+          marginTop: 32,
         },
       },
       h(
