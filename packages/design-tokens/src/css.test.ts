@@ -165,43 +165,43 @@ describe("buildCss", () => {
         --easing-inOut: cubic-bezier(0.65, 0, 0.35, 1);
         --easing-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-        /* light theme semantic (default) */
-        --bg-base: oklch(100% 0 0);
-        --bg-surface: oklch(98.5% 0 0);
-        --bg-elevated: oklch(96% 0 0);
-        --text-primary: oklch(14% 0 0);
-        --text-secondary: oklch(36% 0 0);
-        --text-muted: oklch(60% 0 0);
-        --text-accent: oklch(50% 0.12 188);
-        --border-subtle: oklch(96% 0 0);
-        --border-default: oklch(92% 0 0);
-        --border-strong: oklch(74% 0 0);
-        --accent-bg: oklch(60% 0.13 188);
-        --accent-fg: oklch(100% 0 0);
-        --accent-border: oklch(70% 0.13 188);
-        --glass-bg: oklch(100% 0 0 / 0.45);
-        --glass-border: oklch(0% 0 0 / 0.06);
+        /* dark theme semantic (default) — site の baseline は dark */
+        --bg-base: oklch(17% 0.018 188);
+        --bg-surface: oklch(22% 0.014 188);
+        --bg-elevated: oklch(28% 0.01 188);
+        --text-primary: oklch(98.5% 0 0);
+        --text-secondary: oklch(92% 0 0);
+        --text-muted: oklch(74% 0 0);
+        --text-accent: oklch(81% 0.1 188);
+        --border-subtle: oklch(22% 0.014 188);
+        --border-default: oklch(30% 0.012 188);
+        --border-strong: oklch(60% 0 0);
+        --accent-bg: oklch(70% 0.13 188);
+        --accent-fg: oklch(14% 0 0);
+        --accent-border: oklch(75% 0.12 188);
+        --glass-bg: oklch(22% 0.02 188 / 0.4);
+        --glass-border: oklch(100% 0 0 / 0.08);
         --glass-blur: 24px;
       }
 
-      /* system prefers dark — cookie 未設定時の自然な default */
-      @media (prefers-color-scheme: dark) {
+      /* system prefers light — dark default に対する明示的なオプトアウト */
+      @media (prefers-color-scheme: light) {
         :root {
-          --bg-base: oklch(17% 0.018 188);
-          --bg-surface: oklch(22% 0.014 188);
-          --bg-elevated: oklch(28% 0.01 188);
-          --text-primary: oklch(98.5% 0 0);
-          --text-secondary: oklch(92% 0 0);
-          --text-muted: oklch(74% 0 0);
-          --text-accent: oklch(81% 0.1 188);
-          --border-subtle: oklch(22% 0.014 188);
-          --border-default: oklch(30% 0.012 188);
-          --border-strong: oklch(60% 0 0);
-          --accent-bg: oklch(70% 0.13 188);
-          --accent-fg: oklch(14% 0 0);
-          --accent-border: oklch(75% 0.12 188);
-          --glass-bg: oklch(22% 0.02 188 / 0.4);
-          --glass-border: oklch(100% 0 0 / 0.08);
+          --bg-base: oklch(100% 0 0);
+          --bg-surface: oklch(98.5% 0 0);
+          --bg-elevated: oklch(96% 0 0);
+          --text-primary: oklch(14% 0 0);
+          --text-secondary: oklch(36% 0 0);
+          --text-muted: oklch(60% 0 0);
+          --text-accent: oklch(50% 0.12 188);
+          --border-subtle: oklch(96% 0 0);
+          --border-default: oklch(92% 0 0);
+          --border-strong: oklch(74% 0 0);
+          --accent-bg: oklch(60% 0.13 188);
+          --accent-fg: oklch(100% 0 0);
+          --accent-border: oklch(70% 0.13 188);
+          --glass-bg: oklch(100% 0 0 / 0.45);
+          --glass-border: oklch(0% 0 0 / 0.06);
           --glass-blur: 24px;
         }
       }
