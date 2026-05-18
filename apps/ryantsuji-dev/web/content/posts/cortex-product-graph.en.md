@@ -10,6 +10,7 @@ tags:
   - "typescript"
   - "mcp"
   - "graphrag"
+  - "jsdoc"
 lang: "en"
 series: "building-ai-harness"
 seriesOrder: 2
