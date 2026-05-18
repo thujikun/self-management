@@ -124,6 +124,45 @@ describe("syndicateForZenn", () => {
     expect(out).not.toContain(":::message");
     expect(out).not.toContain("English Version is here");
   });
+
+  it("now を forward して publishAt 境界判定を builder まで通す (publishAt 未来 / draft 扱い)", () => {
+    // Arrange: zenn 側で publishAt を未来に置き、now をその直前に freeze
+    const future: Frontmatter = {
+      ...meta,
+      syndication: { zenn: { id: "z1", publishAt: "2099-01-01T00:00:00Z" } },
+    };
+
+    // Act
+    const out = syndicateForZenn({
+      meta: future,
+      body: "x",
+      resolver,
+      canonicalHost: "https://ryantsuji.dev",
+      enUrl: null,
+      footerMarkdown: null,
+      now: new Date("2026-05-18T00:00:00Z"),
+    });
+
+    // Assert: now が builder まで forward され published: false で出る
+    expect(out).toContain("published: false");
+  });
+
+  it("now を forward して publishAt 過去なら published: true", () => {
+    const past: Frontmatter = {
+      ...meta,
+      syndication: { zenn: { id: "z1", publishAt: "2020-01-01T00:00:00Z" } },
+    };
+    const out = syndicateForZenn({
+      meta: past,
+      body: "x",
+      resolver,
+      canonicalHost: "https://ryantsuji.dev",
+      enUrl: null,
+      footerMarkdown: null,
+      now: new Date("2026-05-18T00:00:00Z"),
+    });
+    expect(out).toContain("published: true");
+  });
 });
 
 describe("syndicateForDevto", () => {
@@ -170,5 +209,37 @@ describe("syndicateForDevto", () => {
       "![alt](https://ryantsuji.dev/images/posts/db-graph/a.png)",
     );
     expect(out.body_markdown).not.toMatch(/\]\(\/images\//);
+  });
+
+  it("now を forward して publishAt 境界判定を builder まで通す (publishAt 未来 → published: false)", () => {
+    const future: Frontmatter = {
+      ...meta,
+      syndication: { devto: { id: 1, slug: "x", publishAt: "2099-01-01T00:00:00Z" } },
+    };
+    const out = syndicateForDevto({
+      meta: future,
+      body: "x",
+      slug: "db-graph",
+      resolver,
+      canonicalHost: "https://ryantsuji.dev",
+      now: new Date("2026-05-18T00:00:00Z"),
+    });
+    expect(out.published).toBe(false);
+  });
+
+  it("now を forward して publishAt 過去なら published: true", () => {
+    const past: Frontmatter = {
+      ...meta,
+      syndication: { devto: { id: 1, slug: "x", publishAt: "2020-01-01T00:00:00Z" } },
+    };
+    const out = syndicateForDevto({
+      meta: past,
+      body: "x",
+      slug: "db-graph",
+      resolver,
+      canonicalHost: "https://ryantsuji.dev",
+      now: new Date("2026-05-18T00:00:00Z"),
+    });
+    expect(out.published).toBe(true);
   });
 });

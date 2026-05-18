@@ -11,7 +11,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { VNode } from "./h.js";
-import { OgTemplate } from "./og-template.js";
+import { OgTemplate, sanitizeOgText } from "./og-template.js";
 
 function flatten(node: VNode | string | undefined): (VNode | string)[] {
   if (node === undefined) return [];
@@ -50,6 +50,23 @@ describe("OgTemplate", () => {
     const all = flatten(root).filter((n): n is VNode => typeof n !== "string");
     const tealNode = all.find((n) => n.props.style?.backgroundColor === "#0abab5");
     expect(tealNode).toBeDefined();
+  });
+
+  it("Box Drawing block 全域 (U+2500–U+257F) は em-dash に sanitize される (Noto Serif JP の glyph 欠落で tofu になるのを回避)", () => {
+    const root = OgTemplate({ title: "前段 ── 後段" });
+    const strings = flatten(root).filter((n): n is string => typeof n === "string");
+    expect(strings).toContain("前段 —— 後段");
+    // sanitize 直接呼びの境界も freeze
+    expect(sanitizeOgText("a─b")).toBe("a—b"); // U+2500 LIGHT HORIZONTAL
+    expect(sanitizeOgText("──")).toBe("——");
+    expect(sanitizeOgText("a-b")).toBe("a-b"); // ASCII hyphen は触らない
+    // 同 block の variant glyph (heavy / dashed / vertical) も同じ tofu になるので
+    // まとめて置換されること。1 度踏んだ bug を 2 度踏まないための回帰 freeze。
+    expect(sanitizeOgText("━─╌┃")).toBe("————"); // U+2501, U+2500, U+254C, U+2503
+    // block の両端 (U+2500 / U+257F) も含まれる
+    expect(sanitizeOgText("─╿")).toBe("——");
+    // block 直前後 (U+24FF / U+2580) は置換しない (U+2580 は Block Elements 側)
+    expect(sanitizeOgText("⓿▀")).toBe("⓿▀");
   });
 
   it("ambient blob 2 つ (左上 + 右下) が radial-gradient で配置される", () => {

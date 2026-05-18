@@ -17,7 +17,11 @@ describe("@self/og-image barrel", () => {
     expect(typeof mod.renderOgImage).toBe("function");
   });
 
+  it("renderSiteOgImage を export する", () => {
+    expect(typeof mod.renderSiteOgImage).toBe("function");
+  });
+
   it("公開 export keys snapshot", () => {
-    expect(Object.keys(mod).sort()).toStrictEqual(["renderOgImage"]);
+    expect(Object.keys(mod).sort()).toStrictEqual(["renderOgImage", "renderSiteOgImage"]);
   });
 });

@@ -27,8 +27,21 @@ const TEXT_MUTED = "#a3a8af";
 /** @graph-connects none */
 const BG_BASE = "#0c1417";
 
+/**
+ * Noto Serif JP に含まれない Box Drawing block 全域 (U+2500–U+257F) を em-dash
+ * (U+2014) に置き換える。`──` のような horizontal line だけでなく `━` (U+2501) /
+ * `╌` (U+254C) / `┃` (U+2503) 等の variant glyph も同じ tofu になるため、block
+ * 単位で range 置換して将来同じ bug を 2 度踏むのを防ぐ。
+ *
+ * @graph-connects none
+ */
+export function sanitizeOgText(text: string): string {
+  return text.replace(/[─-╿]/gu, "—");
+}
+
 /** @graph-connects og-image [calls] h() factory */
 export function OgTemplate({ title }: { title: string }): VNode {
+  const safeTitle = sanitizeOgText(title);
   return h(
     "div",
     {
@@ -38,7 +51,8 @@ export function OgTemplate({ title }: { title: string }): VNode {
         display: "flex",
         flexDirection: "column",
         backgroundColor: BG_BASE,
-        padding: "96px",
+        // 下に余白を控えめにして footer を image 下辺に寄せる。top は 96 を維持。
+        padding: "96px 96px 56px 96px",
         position: "relative",
       },
     },
@@ -125,7 +139,7 @@ export function OgTemplate({ title }: { title: string }): VNode {
             letterSpacing: "-0.015em",
           },
         },
-        title,
+        safeTitle,
       ),
     ),
     // 下段: tagline

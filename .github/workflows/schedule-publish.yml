@@ -89,14 +89,20 @@ jobs:
           # (将来 path filter trigger が復活した時の保険)。
           git push origin HEAD:main
 
-      # GITHUB_TOKEN で push しても downstream の `on: push` は鳴らない。明示
-      # workflow_dispatch で deploy + syndicate を発火させて公開を伝播する。
-      # `workflow_dispatch` は GITHUB_TOKEN でも発火できる例外ルール (`actions:
-      # write` 権限が要件)。
-      - name: Dispatch downstream workflows (deploy + syndicate)
+      # deploy は draft flip が発生した時だけ呼ぶ (= content 変更を CF Worker に
+      # 反映する)。GITHUB_TOKEN で push しても downstream の `on: push` は鳴らない
+      # 仕様なので明示 dispatch する (`actions: write` 必須)。
+      - name: Dispatch deploy (only when posts flipped)
         if: steps.run.outputs.slugs != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run deploy-ryantsuji-dev.yml --ref main
-          gh workflow run syndicate-posts.yml --ref main
+        run: gh workflow run deploy-ryantsuji-dev.yml --ref main
+
+      # syndicate は毎 tick 走らせる。`syndication.<target>.publishAt` を frontmatter
+      # に設定した post を時刻到達で自動的に `published: true` に flip するため、
+      # 「post が flip されたかどうか」とは独立に poll する必要がある。content 無変更の
+      # 通常 tick でも syndicator が「no change」を出して即 exit するだけなので副作用は薄い。
+      - name: Dispatch syndicate (always — to evaluate per-target publishAt)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run syndicate-posts.yml --ref main

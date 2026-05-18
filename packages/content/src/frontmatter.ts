@@ -71,12 +71,26 @@ export const FrontmatterSchema = z.object({
       zenn: z
         .object({
           id: z.string().min(1),
+          /**
+           * Zenn 公開時刻。未設定なら `publishedAt` と同時に公開。設定時は `publishAt`
+           * 到達まで `published: false` (Zenn 側 draft) のまま保たれる。媒体ごとに公開
+           * 時刻をずらす用途 (= ryantsuji.dev は先行公開、Zenn は後で公開) で使う。
+           */
+          publishAt: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}/, "ISO date prefix (YYYY-MM-DD) required")
+            .optional(),
         })
         .optional(),
       devto: z
         .object({
           id: z.number().int().positive(),
           slug: z.string().min(1),
+          /** dev.to 公開時刻。zenn と同じ意味。 */
+          publishAt: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}/, "ISO date prefix (YYYY-MM-DD) required")
+            .optional(),
         })
         .optional(),
     })

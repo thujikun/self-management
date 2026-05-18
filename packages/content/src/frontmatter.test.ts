@@ -125,6 +125,29 @@ describe("parseFrontmatter", () => {
     expect(only_zenn.syndication.devto).toBeUndefined();
   });
 
+  it("syndication.zenn.publishAt / devto.publishAt を受理 (媒体ごとの遅延公開)", () => {
+    const out = parseFrontmatter({
+      title: "x",
+      publishedAt: "2026-05-08",
+      syndication: {
+        zenn: { id: "abc", publishAt: "2026-05-19T10:00:00+09:00" },
+        devto: { id: 1, slug: "y", publishAt: "2026-05-20" },
+      },
+    });
+    expect(out.syndication.zenn?.publishAt).toBe("2026-05-19T10:00:00+09:00");
+    expect(out.syndication.devto?.publishAt).toBe("2026-05-20");
+  });
+
+  it("publishAt 形式が不正 (YYYY-MM-DD で始まらない) なら throw", () => {
+    expect(() =>
+      parseFrontmatter({
+        title: "x",
+        publishedAt: "2026-05-08",
+        syndication: { devto: { id: 1, slug: "y", publishAt: "tomorrow" } },
+      }),
+    ).toThrow();
+  });
+
   it("series + seriesOrder=1 が parse される", () => {
     const m = parseFrontmatter({
       title: "x",

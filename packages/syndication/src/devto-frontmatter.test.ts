@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest";
 import type { Frontmatter } from "@self/content";
 
-import { buildDevtoArticle } from "./devto-frontmatter.js";
+import { buildDevtoArticle, isPublishedNow } from "./devto-frontmatter.js";
 
 const base: Frontmatter = {
   title: "Hello",
@@ -79,5 +79,77 @@ describe("buildDevtoArticle", () => {
     });
     expect(out.cover_image).toBe("https://ryantsuji.dev/posts/x.cover.png");
     expect(out.series).toBe("ai-harness");
+  });
+
+  it("syndication.devto.publishAt が未来なら published: false (公開保留)", () => {
+    const out = buildDevtoArticle(
+      { ...base, syndication: { devto: { id: 123, slug: "x", publishAt: "2099-01-01" } } },
+      "x",
+      {
+        canonicalHost: "https://ryantsuji.dev",
+        slug: "x",
+        now: new Date("2026-05-18T00:00:00Z"),
+      },
+    );
+    expect(out.published).toBe(false);
+  });
+
+  it("syndication.devto.publishAt が過去なら published: true", () => {
+    const out = buildDevtoArticle(
+      { ...base, syndication: { devto: { id: 123, slug: "x", publishAt: "2020-01-01" } } },
+      "x",
+      {
+        canonicalHost: "https://ryantsuji.dev",
+        slug: "x",
+        now: new Date("2026-05-18T00:00:00Z"),
+      },
+    );
+    expect(out.published).toBe(true);
+  });
+});
+
+describe("isPublishedNow", () => {
+  const now = new Date("2026-05-18T00:00:00Z");
+  it("draft 立っていれば常に false", () => {
+    expect(isPublishedNow({ ...base, draft: true }, "devto", now)).toBe(false);
+  });
+
+  it("publishAt 未指定なら !draft が答え", () => {
+    expect(isPublishedNow(base, "devto", now)).toBe(true);
+  });
+
+  it("publishAt が未来なら false", () => {
+    const meta: Frontmatter = {
+      ...base,
+      syndication: { devto: { id: 1, slug: "x", publishAt: "2099-01-01" } },
+    };
+    expect(isPublishedNow(meta, "devto", now)).toBe(false);
+  });
+
+  it("publishAt が過去・現在なら true", () => {
+    const meta: Frontmatter = {
+      ...base,
+      syndication: { devto: { id: 1, slug: "x", publishAt: "2020-01-01" } },
+    };
+    expect(isPublishedNow(meta, "devto", now)).toBe(true);
+  });
+
+  it("publishAt が parse 不能なら fallback で true (= !draft)", () => {
+    const meta: Frontmatter = {
+      ...base,
+      syndication: { devto: { id: 1, slug: "x", publishAt: "not-a-date" } },
+    };
+    expect(isPublishedNow(meta, "devto", now)).toBe(true);
+  });
+
+  it("target が違えば対象 publishAt は無視", () => {
+    const meta: Frontmatter = {
+      ...base,
+      syndication: { zenn: { id: "x", publishAt: "2099-01-01" } },
+    };
+    // devto の publishAt は未設定 → !draft の true
+    expect(isPublishedNow(meta, "devto", now)).toBe(true);
+    // zenn は未来 → false
+    expect(isPublishedNow(meta, "zenn", now)).toBe(false);
   });
 });

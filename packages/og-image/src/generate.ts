@@ -14,6 +14,7 @@ import { Resvg } from "@resvg/resvg-js";
 import satori from "satori";
 
 import { OgTemplate } from "./templates/og-template.js";
+import { SiteOgTemplate } from "./templates/site-og-template.js";
 
 /** @graph-connects none */
 export type OgLang = "ja" | "en";
@@ -44,15 +45,28 @@ export interface OgImageInput {
  */
 export async function renderOgImage(input: OgImageInput): Promise<Buffer> {
   const node = OgTemplate({ title: input.title });
+  return await renderNodeToPng(node, input.fonts);
+}
 
+/**
+ * site default の og:image (`public/og-image.png`) を 1200x630 PNG として render。
+ *
+ * @graph-connects og-image [calls] SiteOgTemplate
+ */
+export async function renderSiteOgImage(fonts: OgFonts): Promise<Buffer> {
+  return await renderNodeToPng(SiteOgTemplate(), fonts);
+}
+
+/** @graph-connects og-image [calls] satori → resvg pipeline */
+async function renderNodeToPng(node: unknown, fonts: OgFonts): Promise<Buffer> {
   // satori の型は React element を要求するが、構造的には `{ type, props }` shape
   // (= 本 package の VNode) で動く。型 narrowing のため satori 側型に合わせて cast。
-  const svg = await satori(node as unknown as Parameters<typeof satori>[0], {
+  const svg = await satori(node as Parameters<typeof satori>[0], {
     width: 1200,
     height: 630,
     fonts: [
-      { name: "serif", data: input.fonts.serif, weight: 700, style: "normal" },
-      { name: "sans", data: input.fonts.sans, weight: 500, style: "normal" },
+      { name: "serif", data: fonts.serif, weight: 700, style: "normal" },
+      { name: "sans", data: fonts.sans, weight: 500, style: "normal" },
     ],
   });
 
