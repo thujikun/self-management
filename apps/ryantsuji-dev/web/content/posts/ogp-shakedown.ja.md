@@ -1,6 +1,6 @@
 ---
 title: "OGP 動作確認用 post"
-publishedAt: "2026-05-18"
+publishedAt: "2026-05-18T16:25:00+09:00"
 slug: "ogp-shakedown"
 summary: "RSS 経由で Slack に流れた時に、サイト全体の og-image ではなく post 固有の cover image が unfurl されるかを確認するためのサイト内限定 post。"
 tags:
