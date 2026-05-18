@@ -22,7 +22,6 @@ describe("parseFrontmatter", () => {
       tags: [],
       draft: false,
       syndication: {},
-      excludeFromSyndication: false,
     });
   });
 
@@ -40,7 +39,6 @@ describe("parseFrontmatter", () => {
       tags: [],
       draft: false,
       syndication: {},
-      excludeFromSyndication: false,
     });
   });
 
