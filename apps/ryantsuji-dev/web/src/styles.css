@@ -701,12 +701,14 @@ main {
    callout-info|alert">` として render される (`packages/content/zenn-directives.ts` 参照)。
    info は blockquote と差別化、alert は warning 系の色で強調。本文と縦リズムは
    blockquote と揃える */
+/* token scale `--space-{1,2,3,4,6,8,12,16,24}` (5 / 7 は未定義) と
+   `--radius-{none,sm,md,lg,full}` の範囲内で記述する */
 .post-body .callout {
   margin: var(--space-4) 0;
-  padding: var(--space-3) var(--space-5);
-  border-radius: var(--radius-2);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-md);
   border-left: 3px solid var(--border-strong);
-  background: var(--surface-subtle);
+  background: var(--bg-elevated);
 }
 
 /* warning palette が design-tokens に未整備のため、alert は inline の oklch 警告色
