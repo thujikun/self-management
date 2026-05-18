@@ -10,11 +10,8 @@
 import { describe, expect, it } from "vitest";
 import type { Frontmatter } from "@self/content";
 
-import {
-  buildZennFrontmatter,
-  isZennPublishedNow,
-  stringifyZennFrontmatter,
-} from "./zenn-frontmatter.js";
+import { isPublishedNow } from "./devto-frontmatter.js";
+import { buildZennFrontmatter, stringifyZennFrontmatter } from "./zenn-frontmatter.js";
 
 const base: Frontmatter = {
   title: "テスト記事",
@@ -83,34 +80,41 @@ describe("buildZennFrontmatter", () => {
   });
 });
 
-describe("isZennPublishedNow", () => {
+describe("isPublishedNow(target=zenn)", () => {
+  // `buildZennFrontmatter` の published 判定経路を、共通 helper `isPublishedNow` の
+  // zenn target 版として freeze。zenn 専用 wrapper を廃止して devto 版と同一実装を
+  // 共有するための回帰 test (`devto-frontmatter.ts:isPublishedNow` 側で同じ pure
+  // 関数を呼ぶ).
   const now = new Date("2026-05-18T00:00:00Z");
   it("draft 立っていれば常に false", () => {
-    expect(isZennPublishedNow({ ...base, draft: true }, now)).toBe(false);
+    expect(isPublishedNow({ ...base, draft: true }, "zenn", now)).toBe(false);
   });
   it("publishAt 未指定なら true", () => {
-    expect(isZennPublishedNow(base, now)).toBe(true);
+    expect(isPublishedNow(base, "zenn", now)).toBe(true);
   });
   it("publishAt 未来 → false", () => {
     expect(
-      isZennPublishedNow(
+      isPublishedNow(
         { ...base, syndication: { zenn: { id: "x", publishAt: "2099-01-01" } } },
+        "zenn",
         now,
       ),
     ).toBe(false);
   });
   it("publishAt 過去 → true", () => {
     expect(
-      isZennPublishedNow(
+      isPublishedNow(
         { ...base, syndication: { zenn: { id: "x", publishAt: "2020-01-01" } } },
+        "zenn",
         now,
       ),
     ).toBe(true);
   });
   it("publishAt parse 不能 → true fallback", () => {
     expect(
-      isZennPublishedNow(
+      isPublishedNow(
         { ...base, syndication: { zenn: { id: "x", publishAt: "garbage" } } },
+        "zenn",
         now,
       ),
     ).toBe(true);

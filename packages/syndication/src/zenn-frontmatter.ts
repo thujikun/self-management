@@ -15,6 +15,8 @@
 
 import type { Frontmatter } from "@self/content";
 
+import { isPublishedNow } from "./devto-frontmatter.js";
+
 /**
  * Zenn frontmatter の TS 表現。生成後 YAML.stringify するため shape を厳密化。
  *
@@ -58,26 +60,11 @@ export function buildZennFrontmatter(
     emoji: options.emoji ?? "🤖",
     type: "tech",
     topics: meta.tags.slice(0, 5),
-    published: isZennPublishedNow(meta, options.now ?? new Date()),
+    published: isPublishedNow(meta, "zenn", options.now ?? new Date()),
     ...(options.publicationName !== null
       ? { publication_name: options.publicationName ?? "aircloset" }
       : {}),
   };
-}
-
-/**
- * `meta.draft` と `meta.syndication.zenn.publishAt` を合わせて Zenn 側 `published`
- * を判定する pure 関数。`devto-frontmatter.ts:isPublishedNow` の zenn 版。
- *
- * @graph-connects none
- */
-export function isZennPublishedNow(meta: Frontmatter, now: Date): boolean {
-  if (meta.draft) return false;
-  const publishAt = meta.syndication?.zenn?.publishAt;
-  if (!publishAt) return true;
-  const t = new Date(publishAt);
-  if (Number.isNaN(t.getTime())) return true;
-  return t.getTime() <= now.getTime();
 }
 
 /**

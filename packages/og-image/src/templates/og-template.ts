@@ -28,14 +28,15 @@ const TEXT_MUTED = "#a3a8af";
 const BG_BASE = "#0c1417";
 
 /**
- * Noto Serif JP に含まれない box-drawing horizontal (U+2500) を em-dash (U+2014) に
- * 置き換える。`──` を 2 連ねるソース表記が `―` 1 文字 (em-dash) に置換される形で、
- * 視覚的に近いダッシュとして render される。
+ * Noto Serif JP に含まれない Box Drawing block 全域 (U+2500–U+257F) を em-dash
+ * (U+2014) に置き換える。`──` のような horizontal line だけでなく `━` (U+2501) /
+ * `╌` (U+254C) / `┃` (U+2503) 等の variant glyph も同じ tofu になるため、block
+ * 単位で range 置換して将来同じ bug を 2 度踏むのを防ぐ。
  *
  * @graph-connects none
  */
 export function sanitizeOgText(text: string): string {
-  return text.replace(/─/gu, "—");
+  return text.replace(/[─-╿]/gu, "—");
 }
 
 /** @graph-connects og-image [calls] h() factory */

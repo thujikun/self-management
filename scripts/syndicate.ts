@@ -230,6 +230,10 @@ export interface EmitZennArgs {
   repoDir?: string;
   /** source post の dir。writeback 時の `.ja.md` path を解決する。test では tmpdir を渡す。default: {@link POSTS_DIR}。 */
   postsDir?: string;
+  /** `syndication.zenn.publishAt` 評価時刻。CLI 経路では loop 開始前に 1 回 fix し、
+   *  全 post に同一 Date を渡すことで process 内で publishAt 境界をまたぐ race を防ぐ。
+   *  未指定なら loop 内で 1 度 fix する。 */
+  now?: Date;
 }
 
 /** Zenn 変換: 全 .ja.md を Zenn 用に書き出す + 任意で repo に commit/push。 */
@@ -241,6 +245,8 @@ export async function emitZenn(args: EmitZennArgs): Promise<void> {
   // dev.to は canonical_url で原典を出せるが Zenn には無いので、Zenn だけ header で
   // 「English version on ryantsuji.dev」を表示する。
   const slugsWithEn = new Set(args.posts.filter((q) => q.lang === "en").map((q) => q.slug));
+  // publishAt 境界 race 防止のため、loop 開始前に 1 度だけ now を fix する
+  const now = args.now ?? new Date();
 
   for (const p of args.posts) {
     if (p.lang !== "ja") continue;
@@ -266,6 +272,7 @@ export async function emitZenn(args: EmitZennArgs): Promise<void> {
       canonicalHost: RYANTSUJI_DEV_BASE,
       enUrl,
       footerMarkdown: args.footer,
+      now,
     });
     const outPath = resolve(args.outDir, `${zennId}.md`);
     await writeFile(outPath, markdown, "utf8");
@@ -299,6 +306,10 @@ export interface EmitDevtoArgs {
   apiKey?: string;
   /** source post の dir。writeback 時の `.en.md` path を解決する。test では tmpdir を渡す。default: {@link POSTS_DIR}。 */
   postsDir?: string;
+  /** `syndication.devto.publishAt` 評価時刻。CLI 経路では loop 開始前に 1 回 fix し、
+   *  全 post に同一 Date を渡すことで process 内で publishAt 境界をまたぐ race を防ぐ。
+   *  未指定なら loop 内で 1 度 fix する。 */
+  now?: Date;
 }
 
 /** dev.to 変換: 全 .en.md を API article attributes として JSON で書き出す + 任意で PUT publish。 */
@@ -312,6 +323,8 @@ export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
   if (args.publish && !apiKey) {
     throw new Error("--publish requires DEV_TO_API_KEY env");
   }
+  // publishAt 境界 race 防止のため、loop 開始前に 1 度だけ now を fix する
+  const now = args.now ?? new Date();
 
   for (const p of args.posts) {
     if (p.lang !== "en") continue;
@@ -325,6 +338,7 @@ export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
       resolver,
       canonicalHost: RYANTSUJI_DEV_BASE,
       coverImageUrl: p.meta.cover ? `${RYANTSUJI_DEV_BASE}${p.meta.cover}` : undefined,
+      now,
     });
 
     if (!devto) {

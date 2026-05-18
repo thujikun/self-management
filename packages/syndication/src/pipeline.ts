@@ -39,6 +39,10 @@ export interface SyndicateForZennArgs {
   emoji?: string;
   /** publication_name。null で omit (個人 publish)、default `"aircloset"` */
   publicationName?: string | null;
+  /** `syndication.zenn.publishAt` 評価時刻。未指定なら builder 側で `new Date()`。
+   *  CLI で loop の外に 1 回 fix して全 post に同一 Date を渡すと、process 内で
+   *  publishAt 境界をまたぐ race を防げる。test では境界 freeze 用に注入する。 */
+  now?: Date;
 }
 
 /**
@@ -69,6 +73,7 @@ export function syndicateForZenn(args: SyndicateForZennArgs): string {
   const fm = buildZennFrontmatter(args.meta, {
     emoji: args.emoji,
     publicationName: args.publicationName,
+    now: args.now,
   });
   const fmYaml = stringifyZennFrontmatter(fm);
   return `${fmYaml}\n\n${withHeader}`;
@@ -88,6 +93,10 @@ export interface SyndicateForDevtoArgs {
   coverImageUrl?: string;
   /** dev.to series 名 */
   series?: string;
+  /** `syndication.devto.publishAt` 評価時刻。未指定なら builder 側で `new Date()`。
+   *  CLI で loop の外に 1 回 fix して全 post に同一 Date を渡すと、process 内で
+   *  publishAt 境界をまたぐ race を防げる。test では境界 freeze 用に注入する。 */
+  now?: Date;
 }
 
 /**
@@ -104,5 +113,6 @@ export function syndicateForDevto(args: SyndicateForDevtoArgs): DevtoArticleAttr
     slug: args.slug,
     coverImageUrl: args.coverImageUrl,
     series: args.series,
+    now: args.now,
   });
 }

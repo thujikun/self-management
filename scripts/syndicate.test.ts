@@ -296,6 +296,37 @@ describe("emitZenn", () => {
     expect(await readdir(outDir)).toStrictEqual(["def456.md"]);
     expect(warnSpy).toHaveBeenCalledWith("  [skip] alpha.ja.md: no syndication.zenn.id (dry-run)");
   });
+
+  it("args.now を全 post に forward して publishAt 境界判定を loop 全体で freeze", async () => {
+    // Arrange: 同 now を共有する 2 post (publishAt 未来 / 過去)
+    const future = makePost({ slug: "alpha", lang: "ja", zennId: "abc123" });
+    future.meta = parseFrontmatter({
+      title: "alpha",
+      publishedAt: "2026-01-01",
+      syndication: { zenn: { id: "abc123", publishAt: "2099-01-01T00:00:00Z" } },
+    });
+    const past = makePost({ slug: "beta", lang: "ja", zennId: "def456" });
+    past.meta = parseFrontmatter({
+      title: "beta",
+      publishedAt: "2026-01-01",
+      syndication: { zenn: { id: "def456", publishAt: "2020-01-01T00:00:00Z" } },
+    });
+
+    // Act: now を境界に置く
+    await emitZenn({
+      posts: [future, past],
+      outDir,
+      footer: "",
+      publish: false,
+      now: new Date("2026-05-18T00:00:00Z"),
+    });
+
+    // Assert: future → published: false, past → published: true
+    const alpha = await readFile(resolve(outDir, "abc123.md"), "utf8");
+    const beta = await readFile(resolve(outDir, "def456.md"), "utf8");
+    expect(alpha).toContain("published: false");
+    expect(beta).toContain("published: true");
+  });
 });
 
 describe("emitDevto", () => {
@@ -393,6 +424,40 @@ describe("emitDevto", () => {
     } finally {
       if (prev !== undefined) process.env.DEV_TO_API_KEY = prev;
     }
+  });
+
+  it("args.now を全 post に forward して publishAt 境界判定を loop 全体で freeze", async () => {
+    // Arrange: 同 now を共有する 2 post (publishAt 未来 / 過去)
+    const future = makePost({ slug: "alpha", lang: "en", devto: { id: 1, slug: "alpha-dev" } });
+    future.meta = parseFrontmatter({
+      title: "alpha",
+      publishedAt: "2026-01-01",
+      syndication: { devto: { id: 1, slug: "alpha-dev", publishAt: "2099-01-01T00:00:00Z" } },
+    });
+    const past = makePost({ slug: "beta", lang: "en", devto: { id: 2, slug: "beta-dev" } });
+    past.meta = parseFrontmatter({
+      title: "beta",
+      publishedAt: "2026-01-01",
+      syndication: { devto: { id: 2, slug: "beta-dev", publishAt: "2020-01-01T00:00:00Z" } },
+    });
+
+    // Act: now を境界に置く
+    await emitDevto({
+      posts: [future, past],
+      outDir,
+      publish: false,
+      now: new Date("2026-05-18T00:00:00Z"),
+    });
+
+    // Assert: future → published: false, past → published: true
+    const alphaJson = JSON.parse(await readFile(resolve(outDir, "alpha.json"), "utf8")) as {
+      article: { published: boolean };
+    };
+    const betaJson = JSON.parse(await readFile(resolve(outDir, "beta.json"), "utf8")) as {
+      article: { published: boolean };
+    };
+    expect(alphaJson.article.published).toBe(false);
+    expect(betaJson.article.published).toBe(true);
   });
 });
 
