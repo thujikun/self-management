@@ -18,6 +18,7 @@ const base: Frontmatter = {
   tags: ["ai", "mcp", "graphrag"],
   draft: false,
   syndication: {},
+  excludeFromSyndication: false,
 };
 
 describe("buildZennFrontmatter", () => {

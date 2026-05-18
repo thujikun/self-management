@@ -101,7 +101,10 @@ describe("listPosts(lang)", () => {
 
 describe("getRenderedPost(slug, lang)", () => {
   it("既存 published slug + en で pre-rendered HTML + frontmatter を返す", () => {
-    const slug = listPosts("en")[0]?.slug ?? "";
+    // ja-only post が最新になると `listPosts("en")[0]` は ja fallback variant を
+    // 返し、続く `getRenderedPost(slug, "en")` の servedLang が 'ja' に落ちる。
+    // en variant を持つ post に絞って lookup する。
+    const slug = listPosts("en").find((p) => p.availableLangs.includes("en"))?.slug ?? "";
     const result = getRenderedPost(slug, "en");
     expect(result).not.toBeNull();
     expect(result?.rendered.html).toContain("<");

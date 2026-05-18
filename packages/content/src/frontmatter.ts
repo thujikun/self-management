@@ -81,6 +81,15 @@ export const FrontmatterSchema = z.object({
         .optional(),
     })
     .default({}),
+  /**
+   * `true` で `scripts/syndicate.ts:readAllPosts` から除外され Zenn / dev.to に
+   * 連携されない。ryantsuji.dev だけに公開したい post で使う。未指定 = 通常通り
+   * syndicate される (= 呼び出し側は truthy check で判定する)。`.default(false)`
+   * にすると `Frontmatter` の output 型が必須 boolean になり、`Frontmatter` を
+   * extends する downstream の test fixture (apps/ryantsuji-dev/web 等) を全て
+   * 同時更新する必要が出るため、optional で `boolean | undefined` に倒している。
+   */
+  excludeFromSyndication: z.boolean().optional(),
 });
 
 /** @graph-connects none */
