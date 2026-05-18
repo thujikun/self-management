@@ -177,6 +177,56 @@ const SITE_URL = "https://ryantsuji.dev";
 type HeadMeta = { title: string } | { name?: string; property?: string; content: string };
 
 /**
+ * post slug の en/ja URL を組む helper。`?lang=ja` は ja variant にのみ付き、en は
+ * 無印 (default lang)。canonical / hreflang / og:url 全部で同じ URL 規約に揃える
+ * ため pure 関数に切り出す。
+ *
+ * @graph-connects none
+ */
+export function postUrlFor(slug: string, lang: Lang): string {
+  return `${SITE_URL}/posts/${slug}${lang === "ja" ? "?lang=ja" : ""}`;
+}
+
+/**
+ * post 詳細 page の `<link rel="canonical">` + `<link rel="alternate" hreflang>`
+ * 列を組む pure 関数。Route.head() から呼ばれる。
+ *
+ * - canonical: 現在 serve している variant の URL (en は無印、ja は `?lang=ja`)
+ * - alternate hreflang: `availableLangs` に含まれる lang のみ emit
+ * - x-default: en があれば en URL に倒し、無ければ「使える唯一の lang」の URL に
+ *   倒す (= sitemap 側 `server/sitemap.ts:buildPostUrlEntry` と同 logic)。head と
+ *   sitemap の hreflang 集合を Google が cross-check するため、ja-only 等の片言
+ *   case でも両者で x-default 有無を揃える
+ *
+ * GSC の「重複しています。ユーザーにより、正規ページとして選択されていません」
+ * 警告は、ja と en の canonical が path 同一 + query 違いで、Google から見て
+ * 「同じ page の query 差分」に見えていたのが原因。reciprocal な hreflang
+ * alternate で「これは互いに翻訳関係にある別 page」と明示する。
+ *
+ * @graph-connects none
+ */
+export function buildPostLinks(input: {
+  slug: string;
+  servedLang: Lang;
+  availableLangs: ReadonlyArray<Lang>;
+}): Array<{ rel: string; href: string; hreflang?: string }> {
+  const links: Array<{ rel: string; href: string; hreflang?: string }> = [
+    { rel: "canonical", href: postUrlFor(input.slug, input.servedLang) },
+  ];
+  if (input.availableLangs.includes("en")) {
+    links.push({ rel: "alternate", hreflang: "en", href: postUrlFor(input.slug, "en") });
+    links.push({ rel: "alternate", hreflang: "x-default", href: postUrlFor(input.slug, "en") });
+  }
+  if (input.availableLangs.includes("ja")) {
+    links.push({ rel: "alternate", hreflang: "ja", href: postUrlFor(input.slug, "ja") });
+    if (!input.availableLangs.includes("en")) {
+      links.push({ rel: "alternate", hreflang: "x-default", href: postUrlFor(input.slug, "ja") });
+    }
+  }
+  return links;
+}
+
+/**
  * 1 post 分の HTML <head> meta tag 列を組む。Route.head() から呼ばれ、og:title /
  * og:description / og:image / twitter:* を per-post に上書きする (root の default は
  * blog 全体向け meta なので、詳細 page は自前 meta で塗り直す)。
@@ -283,7 +333,6 @@ export const Route = createFileRoute("/posts/$slug")({
   },
   head: ({ loaderData, params }) => {
     if (!loaderData) return {};
-    const url = `${SITE_URL}/posts/${params.slug}${loaderData.servedLang === "ja" ? "?lang=ja" : ""}`;
     return {
       meta: buildPostMeta({
         slug: params.slug,
@@ -292,7 +341,11 @@ export const Route = createFileRoute("/posts/$slug")({
         cover: loaderData.frontmatter.cover,
         lang: loaderData.servedLang,
       }),
-      links: [{ rel: "canonical", href: url }],
+      links: buildPostLinks({
+        slug: params.slug,
+        servedLang: loaderData.servedLang,
+        availableLangs: loaderData.availableLangs,
+      }),
       scripts: [
         {
           type: "application/ld+json",

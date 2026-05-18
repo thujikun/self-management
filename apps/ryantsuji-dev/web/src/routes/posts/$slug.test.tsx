@@ -25,17 +25,20 @@ import { renderMarkdown } from "@self/content";
 
 import { getRouter } from "../../router.js";
 import { listPosts } from "../../server/posts.js";
+import { buildPostUrlEntry } from "../../server/sitemap.js";
 import * as authClient from "../../lib/auth-client.js";
 
 import {
   EngagementSection,
   PostShareRail,
+  buildPostLinks,
   buildPostMeta,
   buildPostJsonLd,
   dispatchCommentSubmit,
   dispatchLikeClick,
   executeAddCommentAction,
   executeLikeAction,
+  postUrlFor,
 } from "./$slug.js";
 import { runAddComment, runLoadEngagement, runToggleLike } from "./$slug.server.js";
 
@@ -1418,5 +1421,99 @@ describe("buildPostJsonLd", () => {
     // parse して JSON 構造が壊れていないことを確認
     const doc = JSON.parse(json);
     expect(doc.headline).toBe("</script><img src=x>");
+  });
+});
+
+describe("postUrlFor", () => {
+  it("en post は無印 URL", () => {
+    expect(postUrlFor("hello", "en")).toBe("https://ryantsuji.dev/posts/hello");
+  });
+  it("ja post は ?lang=ja 付き", () => {
+    expect(postUrlFor("hello", "ja")).toBe("https://ryantsuji.dev/posts/hello?lang=ja");
+  });
+});
+
+describe("buildPostLinks", () => {
+  it("en/ja 両方ある post — canonical + 3 つの alternate (en/ja/x-default) を emit", () => {
+    const links = buildPostLinks({
+      slug: "hello",
+      servedLang: "en",
+      availableLangs: ["en", "ja"],
+    });
+    expect(links).toStrictEqual([
+      { rel: "canonical", href: "https://ryantsuji.dev/posts/hello" },
+      { rel: "alternate", hreflang: "en", href: "https://ryantsuji.dev/posts/hello" },
+      { rel: "alternate", hreflang: "x-default", href: "https://ryantsuji.dev/posts/hello" },
+      { rel: "alternate", hreflang: "ja", href: "https://ryantsuji.dev/posts/hello?lang=ja" },
+    ]);
+  });
+
+  it("ja を serve していても alternate set は同一 (reciprocal 関係を保つ)", () => {
+    const links = buildPostLinks({
+      slug: "hello",
+      servedLang: "ja",
+      availableLangs: ["en", "ja"],
+    });
+    expect(links).toStrictEqual([
+      { rel: "canonical", href: "https://ryantsuji.dev/posts/hello?lang=ja" },
+      { rel: "alternate", hreflang: "en", href: "https://ryantsuji.dev/posts/hello" },
+      { rel: "alternate", hreflang: "x-default", href: "https://ryantsuji.dev/posts/hello" },
+      { rel: "alternate", hreflang: "ja", href: "https://ryantsuji.dev/posts/hello?lang=ja" },
+    ]);
+  });
+
+  it("en だけある post — ja alternate は emit しない (x-default は en に倒す)", () => {
+    const links = buildPostLinks({
+      slug: "en-only",
+      servedLang: "en",
+      availableLangs: ["en"],
+    });
+    expect(links).toStrictEqual([
+      { rel: "canonical", href: "https://ryantsuji.dev/posts/en-only" },
+      { rel: "alternate", hreflang: "en", href: "https://ryantsuji.dev/posts/en-only" },
+      { rel: "alternate", hreflang: "x-default", href: "https://ryantsuji.dev/posts/en-only" },
+    ]);
+  });
+
+  it("ja だけある post — en alternate は emit せず、x-default は ja URL に倒す (sitemap と alternate 集合一致)", () => {
+    const links = buildPostLinks({
+      slug: "ja-only",
+      servedLang: "ja",
+      availableLangs: ["ja"],
+    });
+    expect(links).toStrictEqual([
+      { rel: "canonical", href: "https://ryantsuji.dev/posts/ja-only?lang=ja" },
+      { rel: "alternate", hreflang: "ja", href: "https://ryantsuji.dev/posts/ja-only?lang=ja" },
+      {
+        rel: "alternate",
+        hreflang: "x-default",
+        href: "https://ryantsuji.dev/posts/ja-only?lang=ja",
+      },
+    ]);
+  });
+
+  it("ja-only の buildPostLinks と sitemap の buildPostUrlEntry で hreflang 集合 (lang + href) が一致する", () => {
+    // GSC が head と sitemap の hreflang を cross-check する仕様。両者がズレると warning 出る
+    const links = buildPostLinks({
+      slug: "ja-only",
+      servedLang: "ja",
+      availableLangs: ["ja"],
+    });
+    const headHreflangSet = links
+      .filter((l) => l.rel === "alternate")
+      .map((l) => `${l.hreflang}|${l.href}`)
+      .sort();
+    const entry = buildPostUrlEntry({
+      baseUrl: "https://ryantsuji.dev",
+      slug: "ja-only",
+      servedLang: "ja",
+      availableLangs: ["ja"],
+      lastmod: "2026-05-15",
+    });
+    const sitemapHreflangSet = Array.from(
+      entry.matchAll(/hreflang="([^"]+)" href="([^"]+)"/g),
+      (m) => `${m[1]}|${m[2]}`,
+    ).sort();
+    expect(headHreflangSet).toStrictEqual(sitemapHreflangSet);
   });
 });
