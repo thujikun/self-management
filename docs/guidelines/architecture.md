@@ -4,7 +4,9 @@
 
 ## 根本思想: Composable Architecture
 
-**「小さな機能単位を設計し、それらを組み合わせる」** Composable を採用。
+**「小さな機能単位を設計し、それらを組み合わせる」** Composable を採用。リポジトリ構造 (packages / apps / infra) だけでなく、**関数 / フック / state の粒度でも同じ原則を適用する**。
+
+### 構造レベル (repo / package)
 
 - `packages/` に**再利用可能な部品**を配置 (BQ / embedding wrapper、graph schema、design tokens、共通型)
 - `apps/` の各サービスは `packages/` を組み合わせて構成
@@ -19,6 +21,51 @@
 - [ ] `packages/` への切り出し判断: 2 つ以上の app で使う or 使う可能性があるなら `packages/` へ
 - [ ] `apps/` 間の直接 import (`../../apps/other/`) が無いか
 - [ ] 1 ファイルのコード行が 500 行以下か (CLAUDE.md rule 4、`scripts/hooks/check-line-count.ts` で機械強制)
+
+### 関数 / フックレベル (state → 副作用)
+
+UI / 状態管理コードでも同じ原則を適用する。**state を更新する 1 つの primitive を設け、URL / cookie / store / loader 再評価などの副作用はその中で完結させる**。caller (button onClick 等) は「write cookie → strip URL → invalidate」のような手続きを並べない。state ↔ side effect の 1:N 対応を primitive 側に閉じ込めるのが composability。
+
+**アンチパターン:**
+
+- button onClick が複数の副作用 (cookie write / URL 書換 / store invalidate / fetch) を順次直叩きする
+- 1 つの state (例: 現在の言語) を画面同期させるために caller が `history.replaceState` + `router.navigate` + `router.invalidate` を**手で並べる**
+- 複数のソースを持つ state (URL + cookie + header) を imperative にコーディネートする
+
+**目指す形:**
+
+- caller は state を変える関数を 1 回呼ぶだけ (`setLang('ja')` / `setTheme('dark')` 等)
+- 副作用 (URL 更新 / cookie write / loader 再評価) は primitive の中で atomic に走る。URL は state から派生する従属物として、宣言的 API (`router.navigate` 等) 経由で更新する
+- 副作用は引数注入可能な shape にして純粋 logic を test できるようにする
+
+**レビューチェック:**
+
+- [ ] state を変える操作が UI コンポーネント内で複数の副作用呼び出しに分解されていないか
+- [ ] state 更新と URL / persistent store / loader 再評価の同期が「1 つの primitive」に閉じているか
+- [ ] URL 更新が `history.replaceState` 等の生 DOM API を裸で叩いていないか (router の宣言的 API 経由になっているか)
+- [ ] 副作用 (cookie write / navigate / invalidate 等) が引数注入されており test で spy できるか
+
+## コードコメントの方針
+
+コメントは**現状の意図 (What this code intends right now)** だけを書く。**bug-cause / 変更経緯 / 過去の実装との対比は書かない**。後者は PR description / commit body に残し、コードからは引かれないようにする。
+
+理由: コメントの bug-cause / 過去経緯は時間と共に陳腐化し、コードを読み直す人が「現状の意図」と「歴史」を切り分けるコストを払うことになる。git history と PR は履歴の SoT としてすでに存在しているので、コメントを 2 つ目の劣化版履歴にしない。
+
+**アンチパターン (避ける):**
+
+- ```// 旧実装で xxx が起きていた問題が解消する```
+- ```// 以前は yyy していたが、それだと zzz になるため```
+- ```// bug #123 の対応として / fix for the issue where ...```
+
+**目指す形 (書く):**
+
+- 「**いま** この値が必要な理由」「**いま** この分岐が存在する理由」「**いま** この制約があることによる API への影響」
+
+**レビューチェック:**
+
+- [ ] コードコメントが bug の経緯 / 過去実装との対比 / fix 履歴を含んでいないか
+- [ ] 「現状の意図」だけで読めるコメントになっているか
+- [ ] bug-cause の背景は PR description / commit body 側に残しているか
 
 ## 現在のスタック構成
 
