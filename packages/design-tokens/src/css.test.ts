@@ -39,14 +39,14 @@ describe("semanticToVars", () => {
         "  --bg-elevated: oklch(96% 0 0);",
         "  --text-primary: oklch(14% 0 0);",
         "  --text-secondary: oklch(36% 0 0);",
-        "  --text-muted: oklch(60% 0 0);",
+        "  --text-muted: oklch(48% 0 0);",
         "  --text-accent: oklch(50% 0.12 188);",
         "  --border-subtle: oklch(96% 0 0);",
         "  --border-default: oklch(92% 0 0);",
         "  --border-strong: oklch(74% 0 0);",
-        "  --accent-bg: oklch(60% 0.13 188);",
+        "  --accent-bg: oklch(50% 0.12 188);",
         "  --accent-fg: oklch(100% 0 0);",
-        "  --accent-border: oklch(70% 0.13 188);",
+        "  --accent-border: oklch(60% 0.13 188);",
         "  --glass-bg: oklch(100% 0 0 / 0.45);",
         "  --glass-border: oklch(0% 0 0 / 0.06);",
         "  --glass-blur: 24px;",
@@ -192,14 +192,14 @@ describe("buildCss", () => {
           --bg-elevated: oklch(96% 0 0);
           --text-primary: oklch(14% 0 0);
           --text-secondary: oklch(36% 0 0);
-          --text-muted: oklch(60% 0 0);
+          --text-muted: oklch(48% 0 0);
           --text-accent: oklch(50% 0.12 188);
           --border-subtle: oklch(96% 0 0);
           --border-default: oklch(92% 0 0);
           --border-strong: oklch(74% 0 0);
-          --accent-bg: oklch(60% 0.13 188);
+          --accent-bg: oklch(50% 0.12 188);
           --accent-fg: oklch(100% 0 0);
-          --accent-border: oklch(70% 0.13 188);
+          --accent-border: oklch(60% 0.13 188);
           --glass-bg: oklch(100% 0 0 / 0.45);
           --glass-border: oklch(0% 0 0 / 0.06);
           --glass-blur: 24px;
@@ -233,14 +233,14 @@ describe("buildCss", () => {
         --bg-elevated: oklch(96% 0 0);
         --text-primary: oklch(14% 0 0);
         --text-secondary: oklch(36% 0 0);
-        --text-muted: oklch(60% 0 0);
+        --text-muted: oklch(48% 0 0);
         --text-accent: oklch(50% 0.12 188);
         --border-subtle: oklch(96% 0 0);
         --border-default: oklch(92% 0 0);
         --border-strong: oklch(74% 0 0);
-        --accent-bg: oklch(60% 0.13 188);
+        --accent-bg: oklch(50% 0.12 188);
         --accent-fg: oklch(100% 0 0);
-        --accent-border: oklch(70% 0.13 188);
+        --accent-border: oklch(60% 0.13 188);
         --glass-bg: oklch(100% 0 0 / 0.45);
         --glass-border: oklch(0% 0 0 / 0.06);
         --glass-blur: 24px;
