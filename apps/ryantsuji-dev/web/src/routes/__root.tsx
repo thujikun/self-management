@@ -251,17 +251,6 @@ function SiteHeader() {
 }
 
 /**
- * SiteHeader 右上の言語切替。`SUPPORTED_LANGS` を map で iterate するので、対応
- * 言語を増やしたら自動で UI も拡張される。
- *
- * 動作: 押下時に `document.cookie` を直接書いて、`router.invalidate()` で current
- * route の loader 群を再実行 → 全 loader が新 cookie を読んで新 lang で render する。
- * URL に `?lang=` を付ける per-link 伝播は廃止 (cookie で persistent に。 ?lang= は
- * 外部からの override 用に server 側で引き続き受理する)。
- *
- * @graph-connects tanstack-router [calls] router.invalidate で loader を再実行
- */
-/**
  * LangSwitcher / ThemeSwitcher の click handler から呼ぶ pure 関数。
  * `document.cookie` の書き込みは副作用だが、引数で `doc` を受けることで test 時に
  * fake document を渡せる構造にする。`router.invalidate` は別途呼ぶ。
@@ -339,7 +328,19 @@ export function performToggleTheme(args: {
   args.invalidate();
 }
 
-/** @graph-connects tanstack-router [calls] router.navigate / router.invalidate */
+/**
+ * SiteHeader 右上の言語切替。`SUPPORTED_LANGS` を map で iterate するので、対応
+ * 言語を増やしたら自動で UI も拡張される。
+ *
+ * 動作: 押下時に `document.cookie` を直接書いて、`router.navigate({ to: '.', search })`
+ * で URL から `?lang=` を落としつつ router 内部の match state を atomic に更新する。
+ * root loader は search 非依存なので、後追いで `router.invalidate()` を併発させて
+ * cookie 再読み込みを誘発する (navigate + invalidate の合成で旧 history.replaceState
+ * 経路を解体)。URL に `?lang=` を付ける per-link 伝播は廃止 (cookie で persistent に。
+ * ?lang= は外部からの override 用に server 側で引き続き受理する)。
+ *
+ * @graph-connects tanstack-router [calls] router.navigate で URL の lang query を落として match state を更新 / router.invalidate で root loader を再実行
+ */
 function LangSwitcher({ current }: { current: Lang }) {
   const router = useRouter();
   const setLang = (lang: Lang) => {

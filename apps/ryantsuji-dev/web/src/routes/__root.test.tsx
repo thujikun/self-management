@@ -273,16 +273,21 @@ describe("__root route", () => {
       const doc = { cookie: "" };
       const calls: string[] = [];
       const applyLangChange = vi.fn(() => {
-        // applyLangChange が呼ばれた時点で cookie が既に書かれていることを保証
-        // (cookie 書き換え → URL 更新 → loader 再実行、の順序が守られる)
-        calls.push(`apply:cookie=${doc.cookie}`);
+        // applyLangChange が呼ばれた時点で cookie が既に書かれている (= cookie
+        // 書き換え → URL 更新 / loader 再実行、の順序) ことだけを pin する。
+        // cookie format の完全一致は writeLangCookieDom 側のテストで single
+        // source of truth として固定済なので、ここで literal を二重に pin
+        // すると LANG_COOKIE_MAX_AGE 等の独立進化で巻き込み故障する。
+        calls.push(`apply:cookieStartsWithJa=${doc.cookie.startsWith("ryantsuji_lang=ja")}`);
       });
       performSetLang({ docAvailable: true, doc, applyLangChange }, "ja");
-      expect(doc.cookie).toContain("ryantsuji_lang=ja");
-      expect(applyLangChange).toHaveBeenCalledOnce();
-      expect(calls).toStrictEqual([
-        "apply:cookie=ryantsuji_lang=ja; Path=/; Max-Age=31536000; SameSite=Lax",
-      ]);
+      expect({
+        applyCallCount: applyLangChange.mock.calls.length,
+        callsOrder: calls,
+      }).toStrictEqual({
+        applyCallCount: 1,
+        callsOrder: ["apply:cookieStartsWithJa=true"],
+      });
     });
   });
 
@@ -328,6 +333,7 @@ describe("__root route", () => {
         root = createRoot(container);
         root.render(<RouterProvider router={router} />);
       });
+      return router;
     }
 
     it("LangSwitcher の JA button click で cookie に ryantsuji_lang=ja", async () => {
@@ -340,6 +346,37 @@ describe("__root route", () => {
         jaBtn!.click();
       });
       expect(cookieJar).toContain("ryantsuji_lang=ja");
+    });
+
+    it("?lang=en で着地 → JA click で router state の lang search query が消える", async () => {
+      // 回帰検知: PR #122 の本丸は「LangSwitcher click で URL から ?lang= を確実に
+      // 剥がす」こと。LangSwitcher 内 inline closure の search updater
+      // (`prev => { const next = { ...prev }; delete next.lang; return next }`) を
+      // 直接 pin する単体テストが無いと、updater を `prev` をそのまま返す形に
+      // 書き換えても loader 経路の test だけで通ってしまう (cookie 経路は別)。
+      // memory history なので window.location ではなく router.state.location.search を assert。
+      const router = await mountRouter("/?lang=en");
+      // TanStack Router の search は Object.create(null) 由来の bare object なので、
+      // toStrictEqual 用に spread で plain object prototype に正規化する
+      const initialSearch = { ...(router.state.location.search as Record<string, unknown>) };
+      const jaBtn = Array.from(container.querySelectorAll("button.lang-switcher__btn")).find(
+        (b) => b.textContent === "JA",
+      ) as HTMLButtonElement | undefined;
+      expect(jaBtn).toBeDefined();
+      await act(async () => {
+        jaBtn!.click();
+        // setLang 内で `void router.navigate(...)` されており直接 await できないため、
+        // microtask + macrotask を 1 周ずつ flush して router state まで伝播させる
+        await Promise.resolve();
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      });
+      expect({
+        initialSearch,
+        nextSearch: { ...(router.state.location.search as Record<string, unknown>) },
+      }).toStrictEqual({
+        initialSearch: { lang: "en" },
+        nextSearch: {},
+      });
     });
 
     it("ThemeSwitcher の click で cookie に ryantsuji_theme が書かれる", async () => {
