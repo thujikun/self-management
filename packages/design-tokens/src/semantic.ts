@@ -87,7 +87,7 @@ export const light: SemanticTokens = {
   text: {
     primary: gray[900],
     secondary: gray[700],
-    muted: gray[500],
+    muted: gray[600],
     accent: accent[700],
   },
   border: {
@@ -96,9 +96,9 @@ export const light: SemanticTokens = {
     strong: gray[400],
   },
   accent: {
-    bg: accent[600],
+    bg: accent[700],
     fg: gray[0],
-    border: accent[500],
+    border: accent[600],
   },
   // light: 白系 surface にしっかりフロスト。bg は中程度 alpha でガラス感を強める
   // (alpha 0.65 だと不透明すぎて blur 効果が見えなくなるため 0.45 まで下げた)。

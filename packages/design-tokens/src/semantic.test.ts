@@ -31,8 +31,8 @@ describe("semantic tokens — light theme", () => {
     expect(light).toMatchInlineSnapshot(`
       {
         "accent": {
-          "bg": "oklch(60% 0.13 188)",
-          "border": "oklch(70% 0.13 188)",
+          "bg": "oklch(50% 0.12 188)",
+          "border": "oklch(60% 0.13 188)",
           "fg": "oklch(100% 0 0)",
         },
         "bg": {
@@ -52,7 +52,7 @@ describe("semantic tokens — light theme", () => {
         },
         "text": {
           "accent": "oklch(50% 0.12 188)",
-          "muted": "oklch(60% 0 0)",
+          "muted": "oklch(48% 0 0)",
           "primary": "oklch(14% 0 0)",
           "secondary": "oklch(36% 0 0)",
         },

@@ -39,6 +39,17 @@ const landingServer = createServerFn().handler(async ({ context }) => {
 export const Route = createFileRoute("/")({
   loader: () => landingServer(),
   component: IndexPage,
+  head: () => ({
+    links: [
+      {
+        rel: "preload",
+        as: "image",
+        href: "/logo-full.svg",
+        type: "image/svg+xml",
+        fetchPriority: "high",
+      },
+    ],
+  }),
 });
 
 /**
@@ -99,6 +110,7 @@ function IndexPage() {
           width={420}
           height={120}
           className="landing__logo"
+          fetchPriority="high"
         />
         <p className="landing__tagline">{copy.taglineLine1}</p>
         <p className="landing__bio">{copy.taglineLine2}</p>
