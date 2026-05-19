@@ -241,6 +241,12 @@ function SiteHeader() {
         >
           <span className="site-header__link">posts</span>
         </Link>
+        <Link
+          to="/about"
+          activeProps={{ className: "site-header__link site-header__link--active" }}
+        >
+          <span className="site-header__link">about</span>
+        </Link>
       </nav>
       <div className="site-header__prefs">
         <LangSwitcher current={lang} />
