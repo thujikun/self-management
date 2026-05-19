@@ -26,6 +26,7 @@ import {
   performSetLang,
   performToggleTheme,
   readFaroCollectorUrl,
+  stripLangQueryFromWindow,
   writeLangCookieDom,
   writeThemeCookieDom,
 } from "./__root.js";
@@ -264,17 +265,76 @@ describe("__root route", () => {
     it("docAvailable=false なら no-op (SSR early-return)", () => {
       const doc = { cookie: "" };
       const invalidate = vi.fn();
-      performSetLang({ docAvailable: false, doc, invalidate }, "ja");
+      const stripLangQuery = vi.fn();
+      performSetLang({ docAvailable: false, doc, invalidate, stripLangQuery }, "ja");
       expect(doc.cookie).toBe("");
       expect(invalidate).not.toHaveBeenCalled();
+      expect(stripLangQuery).not.toHaveBeenCalled();
     });
 
-    it("docAvailable=true なら cookie 書き + invalidate", () => {
+    it("docAvailable=true なら cookie 書き + stripLangQuery + invalidate (順序固定)", () => {
       const doc = { cookie: "" };
-      const invalidate = vi.fn();
-      performSetLang({ docAvailable: true, doc, invalidate }, "ja");
+      const calls: string[] = [];
+      const invalidate = vi.fn(() => {
+        calls.push("invalidate");
+      });
+      const stripLangQuery = vi.fn(() => {
+        calls.push("strip");
+      });
+      performSetLang({ docAvailable: true, doc, invalidate, stripLangQuery }, "ja");
       expect(doc.cookie).toContain("ryantsuji_lang=ja");
+      expect(stripLangQuery).toHaveBeenCalledOnce();
       expect(invalidate).toHaveBeenCalledOnce();
+      // cookie 反映後の invalidate でなければ router が古い query を再評価してしまう
+      expect(calls).toStrictEqual(["strip", "invalidate"]);
+    });
+  });
+
+  describe("stripLangQueryFromWindow", () => {
+    const originalLocation = window.location;
+    const originalReplaceState = window.history.replaceState;
+
+    afterEach(() => {
+      Object.defineProperty(window, "location", { value: originalLocation, writable: true });
+      window.history.replaceState = originalReplaceState;
+    });
+
+    it("URL に ?lang= が無ければ replaceState を呼ばない (no-op)", () => {
+      Object.defineProperty(window, "location", {
+        value: { href: "https://ryantsuji.dev/posts/foo" },
+        writable: true,
+      });
+      const replaceState = vi.fn();
+      window.history.replaceState = replaceState;
+      stripLangQueryFromWindow();
+      expect(replaceState).not.toHaveBeenCalled();
+    });
+
+    it("?lang=ja を取り除いて replaceState を呼ぶ", () => {
+      Object.defineProperty(window, "location", {
+        value: { href: "https://ryantsuji.dev/posts/foo?lang=ja" },
+        writable: true,
+      });
+      const replaceState = vi.fn();
+      window.history.replaceState = replaceState;
+      stripLangQueryFromWindow();
+      expect(replaceState).toHaveBeenCalledOnce();
+      const [state, title, url] = replaceState.mock.calls[0] ?? [];
+      expect(state).toBeNull();
+      expect(title).toBe("");
+      expect(url).toBe("https://ryantsuji.dev/posts/foo");
+    });
+
+    it("他の query は保持して lang だけ削る", () => {
+      Object.defineProperty(window, "location", {
+        value: { href: "https://ryantsuji.dev/posts?tag=ai&lang=ja" },
+        writable: true,
+      });
+      const replaceState = vi.fn();
+      window.history.replaceState = replaceState;
+      stripLangQueryFromWindow();
+      const [, , url] = replaceState.mock.calls[0] ?? [];
+      expect(url).toBe("https://ryantsuji.dev/posts?tag=ai");
     });
   });
 

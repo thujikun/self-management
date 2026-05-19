@@ -305,12 +305,35 @@ export function performSetLang(
     docAvailable: boolean;
     doc: { cookie: string };
     invalidate: () => void;
+    /**
+     * URL の `?lang=` query を取り除く副作用。`pickLang` の優先順は
+     * `?lang= > cookie > Accept-Language > en` なので、cookie 更新だけでは
+     * URL に query が残った状態で言語切替が画面に反映されない (cookie が
+     * loser になる)。test では fake spy を渡して呼ばれたかだけ確認する。
+     */
+    stripLangQuery: () => void;
   },
   lang: Lang,
 ): void {
   if (!args.docAvailable) return;
   writeLangCookieDom(args.doc, lang);
+  args.stripLangQuery();
   args.invalidate();
+}
+
+/**
+ * `window.location.search` から `lang` key を取り除いて history を replaceState する
+ * 既定実装。callers (LangSwitcher) で `performSetLang` の `stripLangQuery` arg に渡す。
+ * LangSwitcher.setLang が `typeof document === "undefined"` で SSR を弾いた後にしか
+ * 呼ばれないので、本関数は browser globals (`window`) の存在を前提にする。
+ *
+ * @graph-connects none
+ */
+export function stripLangQueryFromWindow(): void {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("lang")) return;
+  url.searchParams.delete("lang");
+  window.history.replaceState(null, "", url.toString());
 }
 
 /**
@@ -344,6 +367,7 @@ function LangSwitcher({ current }: { current: Lang }) {
         docAvailable: true,
         doc: document,
         invalidate: () => void router.invalidate(),
+        stripLangQuery: stripLangQueryFromWindow,
       },
       lang,
     );
