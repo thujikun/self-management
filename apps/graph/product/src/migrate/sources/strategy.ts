@@ -35,7 +35,12 @@ const DEFAULT_PATH = join(REPO_ROOT, "x-account-strategy.md");
  * @graph-connects strategy-doc [reads_from] x-account-strategy.md を読み込み
  */
 export async function parseStrategyDoc(path: string = DEFAULT_PATH): Promise<ParseResult> {
-  const md = await readFile(path, "utf8");
+  // x-account-strategy.md は .gitignored で local-only。public clone / CI では不在のため空 ParseResult を返す
+  // (operations-log.ts の readFile().catch(() => "") と対称)
+  const md = await readFile(path, "utf8").catch(() => "");
+  if (!md) {
+    return { source: SOURCE, nodes: [], edges: [] };
+  }
   const fileStat = await stat(path);
   const decidedAt = fileStat.birthtime.toISOString();
 

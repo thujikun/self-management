@@ -49,7 +49,7 @@ ad-hoc な markdown grep ではなく、graph の自然言語 query (将来 MCP 
 | BQ table schema | `apps/graph/product/src/schema/` (TS 型定義 = SSoT) |
 | X 投稿の history | `ryan.product_graph_nodes` (BQ) + `threads/posted/` (markdown archive) |
 | 思想 / decision | `decisions/<date>-<topic>.md` + `ryan.product_graph_nodes` (decision type) |
-| X 運用戦略 | `x-account-strategy.md` (root) |
+| X 運用戦略 | `x-account-strategy.md` (root、`.gitignored` で local-only) |
 | 過去ブログ記事 | `ryan.product_graph_nodes` (content type, source: zenn/devto) |
 
 ## tooling
