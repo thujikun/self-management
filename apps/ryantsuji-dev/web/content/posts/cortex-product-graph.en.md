@@ -3,7 +3,6 @@ title: "The Heart of the AI Harness: A Knowledge Graph of the AI, by the AI, for
 publishedAt: "2026-05-19T09:00:00+09:00"
 updatedAt: "2026-05-19T09:00:00+09:00"
 slug: "cortex-product-graph"
-draft: true
 summary: "Series Part 2: how we built cortex-product-graph (cpg) — a unified knowledge graph of code, docs, DB schemas, and infrastructure for the cortex AI platform. Build pipeline with JSDoc/Pulumi/docs as SSoT, plus the Runbook tool-design pattern that guides AI through the graph."
 tags:
   - "ai"
