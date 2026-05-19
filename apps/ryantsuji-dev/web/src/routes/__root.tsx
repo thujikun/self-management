@@ -304,36 +304,18 @@ export function performSetLang(
   args: {
     docAvailable: boolean;
     doc: { cookie: string };
-    invalidate: () => void;
     /**
-     * URL の `?lang=` query を取り除く副作用。`pickLang` の優先順は
-     * `?lang= > cookie > Accept-Language > en` なので、cookie 更新だけでは
-     * URL に query が残った状態で言語切替が画面に反映されない (cookie が
-     * loser になる)。test では fake spy を渡して呼ばれたかだけ確認する。
+     * 言語切替を navigation state に反映する単一の副作用。caller は writeCookie
+     * との 2 つを順に呼ぶだけで、URL / router state / loader 再実行 / cookie
+     * 永続化が漏れなく揃う構造にする。test では fake spy を渡せる形に保つ。
      */
-    stripLangQuery: () => void;
+    applyLangChange: () => void;
   },
   lang: Lang,
 ): void {
   if (!args.docAvailable) return;
   writeLangCookieDom(args.doc, lang);
-  args.stripLangQuery();
-  args.invalidate();
-}
-
-/**
- * `window.location.search` から `lang` key を取り除いて history を replaceState する
- * 既定実装。callers (LangSwitcher) で `performSetLang` の `stripLangQuery` arg に渡す。
- * LangSwitcher.setLang が `typeof document === "undefined"` で SSR を弾いた後にしか
- * 呼ばれないので、本関数は browser globals (`window`) の存在を前提にする。
- *
- * @graph-connects none
- */
-export function stripLangQueryFromWindow(): void {
-  const url = new URL(window.location.href);
-  if (!url.searchParams.has("lang")) return;
-  url.searchParams.delete("lang");
-  window.history.replaceState(null, "", url.toString());
+  args.applyLangChange();
 }
 
 /**
@@ -357,7 +339,7 @@ export function performToggleTheme(args: {
   args.invalidate();
 }
 
-/** @graph-connects tanstack-router [calls] router.invalidate */
+/** @graph-connects tanstack-router [calls] router.navigate / router.invalidate */
 function LangSwitcher({ current }: { current: Lang }) {
   const router = useRouter();
   const setLang = (lang: Lang) => {
@@ -366,8 +348,22 @@ function LangSwitcher({ current }: { current: Lang }) {
       {
         docAvailable: true,
         doc: document,
-        invalidate: () => void router.invalidate(),
-        stripLangQuery: stripLangQueryFromWindow,
+        applyLangChange: () => {
+          // search params から `lang` を落とす navigate で URL + router 内部
+          // match state + 該当 route の loader 再実行を 1 つの op に統一する。
+          void router.navigate({
+            to: ".",
+            search: (prev: Record<string, unknown>) => {
+              const next = { ...prev };
+              delete next.lang;
+              return next;
+            },
+            replace: true,
+          });
+          // root loader は search 非依存なので、新 cookie 値を読み直すために
+          // 明示 invalidate も併発させる。
+          void router.invalidate();
+        },
       },
       lang,
     );
