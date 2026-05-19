@@ -1,8 +1,8 @@
 /**
  * `/terms` — terms of service page。
  *
- * OAuth provider (GitHub / X) の app dashboard で **Terms of Service URL** として
- * 登録する公開 URL。X の "Request email from users" 機能の前提条件として必須。
+ * OAuth provider (GitHub / X / Google) の app dashboard で **Terms of Service URL**
+ * として登録する公開 URL。X の "Request email from users" 機能の前提条件として必須。
  *
  * 内容: 個人サイトの最低限の利用規約 (acceptable use, no warranty, governing law,
  * 連絡先)。
@@ -46,7 +46,7 @@ function TermsPage() {
       <section>
         <h2>Account &amp; authentication</h2>
         <p>
-          Sign-in is via GitHub or X (Twitter) OAuth. You are responsible for keeping your
+          Sign-in is via GitHub, X (Twitter), or Google OAuth. You are responsible for keeping your
           third-party account secure. The site operator reserves the right to limit account creation
           to specific email addresses.
         </p>

@@ -224,7 +224,7 @@ function RootDocument({
  * 全 page 共通 header。左に rt logo (home link 兼用)、中央に primary nav、
  * 右上に LangSwitcher + ThemeSwitcher。glass morphism で sticky pill。
  *
- * @graph-connects tanstack-router [calls] Link で / と /posts に飛ばす
+ * @graph-connects tanstack-router [calls] Link で / と /posts と /about に飛ばす
  */
 function SiteHeader() {
   const { lang, theme } = Route.useLoaderData();
@@ -240,6 +240,12 @@ function SiteHeader() {
           activeProps={{ className: "site-header__link site-header__link--active" }}
         >
           <span className="site-header__link">posts</span>
+        </Link>
+        <Link
+          to="/about"
+          activeProps={{ className: "site-header__link site-header__link--active" }}
+        >
+          <span className="site-header__link">about</span>
         </Link>
       </nav>
       <div className="site-header__prefs">

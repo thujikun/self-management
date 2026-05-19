@@ -6,7 +6,7 @@
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business privacy route の SSR contract 保証。連絡先 email / data collection 説明 / Neon / Cloudflare / GitHub / X の third-party 明示 / 削除手順 が壊れていないことを SSR で確認
+ * @graph-business privacy route の SSR contract 保証。連絡先 email / data collection 説明 / Neon / Cloudflare / GitHub / X / Google の third-party 明示 / 削除手順 が壊れていないことを SSR で確認
  * @graph-connects none
  */
 
@@ -34,6 +34,7 @@ describe("/privacy", () => {
     expect(html).toMatch(/Cloudflare Workers/);
     expect(html).toMatch(/GitHub OAuth/);
     expect(html).toMatch(/X OAuth 2\.0/);
+    expect(html).toMatch(/Google OAuth 2\.0/);
     expect(html).toMatch(/Retention/);
     expect(html).toMatch(/← back to home/);
   });
