@@ -6,7 +6,7 @@
  * 分割) は素通しすることを inline snapshot で固定する。
  *
  * @graph-stack core
- * @graph-domain devops
+ * @graph-domain infra
  * @graph-business commitlint-no-skip-ci plugin の境界網羅テスト。subject/body 検知、引用内・大小混在対応、escape 表記の素通しを inline 確認して PR #112 級の merge silently-skip 事故の再発を機械的に潰す
  * @graph-connects none
  */

@@ -22,7 +22,7 @@ CLAUDE.md 違反は全て **Critical** に固定する。
 | 4. 500 行上限 | コード行 (コメント・空行除く) 500 超え | **Critical** (`scripts/hooks/check-line-count.ts` で機械検出) |
 | 5. Pulumi 集約 | `gcloud` / CF dashboard / `wrangler` で resource 直作成して放置 | **Critical** (drift 検出時即座に Pulumi state へ統合) |
 | 6. ADC 不使用 | `gcloud auth application-default login` を業務処理で使用 | **Critical** (実装側で ADC を呼ぶ箇所を SA 経由に直す) |
-| 7. Conventional Commits | type 大文字 / subject 末尾ピリオド / 100 字超え | **Major** (commitlint で機械検出) |
+| 7. Conventional Commits | type 大文字 / subject 末尾ピリオド / 100 字超え / `[skip ci]` 系 skip-ci magic 5 種 literal 混入 | **Major** (commitlint で機械検出。`no-skip-ci-magic` rule、説明用に綴る時は NBSP `[skip ci]` か split `"[skip" + " ci]"` で escape) |
 | 8. ryan-graph 経由優先 | xmcp で過去 post / engagement を取得 | **Major** (コスト直結、ryan-graph search に置換) |
 
 ## 降格禁止ルール

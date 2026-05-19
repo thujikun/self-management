@@ -54,6 +54,7 @@ Conventional Commits 形式 (`feat:` / `fix:` / `chore:` / `docs:` / `refactor:`
 - type は小文字
 - subject 末尾にピリオドなし
 - ヘッダー 100 字以内
+- skip-ci magic 5 種 (`[skip ci]` / `[ci skip]` / `[no ci]` / `[skip actions]` / `[actions skip]`) は commit message に literal 混入禁止 (`no-skip-ci-magic` plugin で機械検出)。説明として綴る必要がある場合は NBSP (`[skip ci]`) か split (`"[skip" + " ci]"`) で escape
 - `commitlint.config.js` で機械強制
 
 詳細運用ガイドは `docs/DESIGN.md` / `docs/guidelines/` 参照。
