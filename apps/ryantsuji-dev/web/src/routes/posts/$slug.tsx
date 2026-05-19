@@ -22,7 +22,11 @@
  * @graph-connects better-auth [calls] getSessionFromHeaders で current user を解決して like/comment を gate
  */
 
-import { coverPublicPath } from "@self/og-image";
+// `@self/og-image` barrel は `./generate.js` 経由で `@resvg/resvg-js` (native CJS) /
+// satori を引き、Cloudflare Worker 向け vite build がモジュールグラフ走査時点で fail
+// する。pure path helper だけ欲しい本 route は subpath `@self/og-image/path` 経由で
+// `./path.ts` のみを直 import し、worker bundle に native binding を引き込まない。
+import { coverPublicPath } from "@self/og-image/path";
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn, useServerFn } from "@tanstack/react-start";
 import { useState } from "react";

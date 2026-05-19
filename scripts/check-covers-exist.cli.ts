@@ -11,9 +11,14 @@
  * covers:generate` を手動で踏まずに content を merge する事故 (og:image 404)
  * を merge 前に弾く。
  *
+ * 注: `@self/content` には依存しない (= dist build を要求しない)。CI matrix で
+ * `gate (build)` と並列に走らせるため、`@self/content/dist` 不在でも単体起動できる
+ * 経路を保つ。post 列挙は `scripts/posts-files.ts` の lightweight 層に閉じ込め、
+ * 本 CLI は filesystem 述語 (existsSync) と stdout 整形だけを担う。
+ *
  * @graph-stack core
  * @graph-domain infra
- * @graph-business check-covers-exist の filesystem 実行 entry。pnpm covers:generate 未実行で content を merge する事故 (og:image 404) を gate で防ぐ
+ * @graph-business check-covers-exist の filesystem 実行 entry。pnpm covers:generate 未実行で content を merge する事故 (og:image 404) を gate で防ぐ。`@self/content` 非依存で CI build 並列起動に対応
  * @graph-connects none
  */
 
@@ -21,8 +26,8 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { findMissingCovers, type PostEntry } from "./check-covers-exist.js";
-import { readAllPosts } from "./syndicate.js";
+import { findMissingCovers } from "./check-covers-exist.js";
+import { listPublishedPostFiles } from "./posts-files.js";
 
 const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPTS_DIR, "..");
@@ -30,10 +35,10 @@ const PUBLIC_POSTS_DIR = resolve(REPO_ROOT, "apps/ryantsuji-dev/web/public/posts
 
 async function main(): Promise<void> {
   // covers は syndication 可否に関わらず全 post 必要 (ryantsuji.dev は独自 cover で
-  // unfurl するため)。`includeExcluded: true` で `excludeFromSyndication: true` の
-  // post も拾う。draft (default で除外) は public 露出しないので check 対象外で OK。
-  const posts = await readAllPosts(undefined, { includeExcluded: true });
-  const entries: PostEntry[] = posts.map((p) => ({ slug: p.slug, lang: p.lang }));
+  // unfurl するため)。draft 除外は `listPublishedPostFiles` 側で gray-matter から
+  // `draft` フラグだけ読んで実施 (= `excludeFromSyndication` は cover 要求と無関係
+  // なので参照しない)。
+  const entries = await listPublishedPostFiles();
 
   const missing = findMissingCovers(entries, (publicPath) =>
     existsSync(resolve(PUBLIC_POSTS_DIR, publicPath.replace(/^\/posts\//, ""))),

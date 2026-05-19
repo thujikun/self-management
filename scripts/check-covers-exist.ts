@@ -14,13 +14,17 @@
  * - pure logic は本ファイル (副作用は引数で受け取る existsSync 同等の述語のみ)
  * - filesystem I/O / process.exit / stdout の glue は `check-covers-exist.cli.ts`
  *
+ * 「PNG を吐く対象 (`generateAllCovers`)」と「PNG 存在を要求する対象 (`findMissingCovers`)」
+ * の skip 判定は `@self/og-image/path` の `shouldHaveCover` 1 つを SoT として共有する
+ * (= `_` 始まり規約変更時に複数 file 同時更新を要求しない double-source-of-truth 防止)。
+ *
  * @graph-stack core
  * @graph-domain infra
- * @graph-business covers-exist gate の pure logic 層。posts list と存在述語を受け取り、欠落 (slug, lang) を列挙する。`_` 始まり fixture は skip
- * @graph-connects none
+ * @graph-business covers-exist gate の pure logic 層。posts list と存在述語を受け取り、欠落 (slug, lang) を列挙する。skip 判定は `@self/og-image/path` の shouldHaveCover に委譲し generator と SoT を共有する
+ * @graph-connects og-image [calls] shouldHaveCover / OgLang を @self/og-image/path から取得
  */
 
-import { coverPublicPath, type OgLang } from "@self/og-image";
+import { coverPublicPath, shouldHaveCover, type OgLang } from "@self/og-image/path";
 
 /** content/posts から拾った 1 entry。slug + lang のみで十分。 */
 export interface PostEntry {
@@ -39,8 +43,9 @@ export interface MissingCover {
 /**
  * `posts` に対応する PNG が存在するかを `exists` 述語で確認、欠落を返す。
  *
- * `_` 始まり slug は test fixture (e.g. `_minimal-fixture` / `_draft-example`)。
- * production 露出も syndication 露出もしないので、PNG 生成も要求しない (= skip)。
+ * skip 判定 (`_` 始まり fixture 等) は `shouldHaveCover` 1 つに集約。production /
+ * syndication に露出しない slug は `exists` を呼ばずに pass する (= I/O 無駄打ち防止
+ * + generator との skip 規約完全一致)。
  *
  * `exists` は CLI 側が `existsSync(publicDir/...)` 等で実装する。logic は I/O に
  * 触らない pure 関数。
@@ -53,7 +58,7 @@ export function findMissingCovers(
 ): MissingCover[] {
   const missing: MissingCover[] = [];
   for (const p of posts) {
-    if (p.slug.startsWith("_")) continue;
+    if (!shouldHaveCover(p.slug)) continue;
     const publicPath = coverPublicPath(p.slug, p.lang);
     if (!exists(publicPath)) {
       missing.push({ slug: p.slug, lang: p.lang, publicPath });
