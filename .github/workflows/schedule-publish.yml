@@ -117,6 +117,11 @@ jobs:
         run: |
           # 1) submodule 内側で content repo に push (deploy key, SSH 経由)
           pushd apps/ryantsuji-dev/web/content
+          # syndicate-posts.yml は別 concurrency group (`syndicate-${{ github.ref }}`)
+          # で並走し得るため、submodule 側の origin/main に競合 push が着地している
+          # 可能性に備えて autostash + rebase で追従してから push する。
+          # cli.ts が posts/ を dirty にしているので `--autostash` 必須。
+          git pull --rebase --autostash origin main
           git add posts/
           # subject は固定文字列にして commitlint の 100 字 header cap を踏まない
           # (複数 slug が同 tick で flip すると slug 列挙だけで 100 字を超え得る)。
@@ -127,6 +132,9 @@ jobs:
           git push origin HEAD:main
           popd
           # 2) 親 repo の submodule pointer を bump
+          # 親 repo (self-management) の main も syndicate-posts の `[skip ci]` writeback
+          # commit が並行に着地し得るので同じく autostash + rebase で吸収する。
+          git pull --rebase --autostash origin main
           git add apps/ryantsuji-dev/web/content
           git commit \
             -m "chore(content): bump submodule pointer (scheduled publish)" \
