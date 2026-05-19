@@ -28,6 +28,7 @@ import { Buffer } from "node:buffer";
 import { instrument, type ResolveConfigFn } from "@microlabs/otel-cf-workers";
 import { createStartHandler, defaultStreamHandler } from "@tanstack/react-start/server";
 
+import { canonicalRedirectTarget } from "./server-canonical.js";
 import { serveImage } from "./server-images.js";
 import type { Env } from "./start.js";
 
@@ -58,6 +59,17 @@ const handler = createStartHandler(defaultStreamHandler);
  */
 const baseHandler: ExportedHandler<Env> = {
   async fetch(request, env, ctx): Promise<Response> {
+    // 正準ホスト以外 (`www.` / `http://`) で着地した request は 301 で
+    // `https://ryantsuji.dev` に倒す。SoT を 1 つに集約して GSC の重複 canonical
+    // 警告を消す。custom_domain は `ryantsuji.dev` + `www.ryantsuji.dev` の 2 つを
+    // bind しているため、Worker entry でこの正規化を担う。
+    const canonical = canonicalRedirectTarget(request.url);
+    if (canonical !== null) {
+      return new Response(null, {
+        status: 301,
+        headers: { Location: canonical },
+      });
+    }
     // `/images/*` route は TanStack Start に届く前に R2 binding (`env.IMAGES`) から
     // 直接 serve する。markdown 添付画像の配信を Worker route で完結させ、SSR /
     // hydration / RSC stream の bundle に画像 file が混ざらないようにする (assets
