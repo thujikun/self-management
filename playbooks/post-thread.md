@@ -78,7 +78,7 @@ source: threads/<name>.md
 ---
 ```
 
-`/Users/ryan/Workspace/self-management/operations/log.md` に追記:
+`/Users/ryan/Workspace/self-management/operations/log.md` (local-only / .gitignored、Ryan ローカル環境にのみ存在) に追記:
 
 ```
 ## <YYYY-MM-DD HH:MM JST> - thread posted: <short-name>
@@ -89,7 +89,7 @@ source: threads/<name>.md
 
 ### 6. 失敗時
 
-- HTTP 4xx/5xx が返った場合は中断、`operations/log.md` にエラー記録、人間に通知
+- HTTP 4xx/5xx が返った場合は中断、`operations/log.md` (local-only / .gitignored、Ryan ローカル環境にのみ存在) にエラー記録、人間に通知
 - chain 途中で失敗した場合、すでに投稿済みの tweet は残る → 削除するか手動で続けるか人間判断
 - 投稿成功したが構造検証で失敗 (branch 状態) → 該当 tweet を delete + 再 chain post
 

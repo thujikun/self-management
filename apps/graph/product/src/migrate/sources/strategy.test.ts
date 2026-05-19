@@ -70,4 +70,14 @@ describe("parseStrategyDoc", () => {
     const result = await parseStrategyDoc(path);
     expect(result.nodes[0].fields.rationale_md).toBe(md);
   });
+
+  it("file 不在時は throw せず空 ParseResult を返す (local-only 退避との対称)", async () => {
+    const path = join(dir, "does-not-exist.md");
+    const result = await parseStrategyDoc(path);
+    expect(result).toStrictEqual({
+      source: "strategy-doc",
+      nodes: [],
+      edges: [],
+    });
+  });
 });
