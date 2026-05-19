@@ -289,22 +289,24 @@ export function writeThemeCookieDom(doc: { cookie: string }, theme: Theme): void
  *
  * @graph-connects none
  */
-export function performSetLang(
+export async function performSetLang(
   args: {
     docAvailable: boolean;
     doc: { cookie: string };
     /**
      * 言語切替を navigation state に反映する単一の副作用。caller は writeCookie
      * との 2 つを順に呼ぶだけで、URL / router state / loader 再実行 / cookie
-     * 永続化が漏れなく揃う構造にする。test では fake spy を渡せる形に保つ。
+     * 永続化が漏れなく揃う構造にする。Promise を返し、性能上は不要でも primitive
+     * 内部での順序保証 (URL 更新 → loader 再評価) のため await して扱う。test では
+     * fake spy を渡せる形に保つ。
      */
-    applyLangChange: () => void;
+    applyLangChange: () => Promise<void> | void;
   },
   lang: Lang,
-): void {
+): Promise<void> {
   if (!args.docAvailable) return;
   writeLangCookieDom(args.doc, lang);
-  args.applyLangChange();
+  await args.applyLangChange();
 }
 
 /**
@@ -345,14 +347,15 @@ function LangSwitcher({ current }: { current: Lang }) {
   const router = useRouter();
   const setLang = (lang: Lang) => {
     if (typeof document === "undefined") return;
-    performSetLang(
+    void performSetLang(
       {
         docAvailable: true,
         doc: document,
-        applyLangChange: () => {
+        applyLangChange: async () => {
           // search params から `lang` を落とす navigate で URL + router 内部
           // match state + 該当 route の loader 再実行を 1 つの op に統一する。
-          void router.navigate({
+          // await で URL update が router state に commit されるのを待ってから次へ。
+          await router.navigate({
             to: ".",
             search: (prev: Record<string, unknown>) => {
               const next = { ...prev };
@@ -362,8 +365,8 @@ function LangSwitcher({ current }: { current: Lang }) {
             replace: true,
           });
           // root loader は search 非依存なので、新 cookie 値を読み直すために
-          // 明示 invalidate も併発させる。
-          void router.invalidate();
+          // 明示 invalidate も走らせ、loader 再評価の完了まで await する。
+          await router.invalidate();
         },
       },
       lang,
