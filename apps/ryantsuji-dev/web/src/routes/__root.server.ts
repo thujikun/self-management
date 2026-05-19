@@ -8,7 +8,7 @@
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business root loader が全 page で current lang を共通解決する SoT。LangSwitcher の active state や header の lang 表示で route loader data を奪い合わず、cookie 1 元管理に揃える。priority は pickLang と同じ (cookie > Accept-Language > en)
+ * @graph-business root loader が全 page で current lang を共通解決する SoT。LangSwitcher の active state や header の lang 表示で route loader data を奪い合わず、cookie 1 元管理に揃える。priority は pickLang と同じ (?lang= override > cookie > Accept-Language > en)
  * @graph-connects content [calls] pickLang で current lang を確定
  */
 
