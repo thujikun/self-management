@@ -382,6 +382,9 @@ importers:
       '@self/design-tokens':
         specifier: workspace:*
         version: link:../../../packages/design-tokens
+      '@self/og-image':
+        specifier: workspace:*
+        version: link:../../../packages/og-image
       '@tailwindcss/vite':
         specifier: ^4.3.0
         version: 4.3.0(vite@7.3.3(@types/node@24.12.2)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0))

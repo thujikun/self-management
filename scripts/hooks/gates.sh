@@ -28,6 +28,7 @@ GATES_STAGED=(
   graph-tags
   css-tokens
   log-check
+  covers-exist
   lint
   format-check
   coverage-staged
@@ -113,6 +114,13 @@ cmd_run() {
     log-check)
       # operations/log.md の compaction check (whole-repo state、staged/full 共通)
       pnpm exec tsx scripts/compact-log.cli.ts --check
+      ;;
+    covers-exist)
+      # content/posts/*.{ja,en}.md 全てに対して public/posts/<slug>.<lang>.cover.png
+      # が存在することを check (whole-repo state、staged/full 共通)。`generate-covers`
+      # は手動運用なので、PNG 未生成 + cover frontmatter 未記入の post を merge する
+      # と og:image / twitter:image / JSON-LD image が 404 を指す事故が起き得る。
+      pnpm exec tsx scripts/check-covers-exist.cli.ts
       ;;
     lint)
       if [ "$mode" = staged ]; then

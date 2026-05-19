@@ -22,6 +22,11 @@
  * @graph-connects better-auth [calls] getSessionFromHeaders で current user を解決して like/comment を gate
  */
 
+// `@self/og-image` barrel は `./generate.js` 経由で `@resvg/resvg-js` (native CJS) /
+// satori を引き、Cloudflare Worker 向け vite build がモジュールグラフ走査時点で fail
+// する。pure path helper だけ欲しい本 route は subpath `@self/og-image/path` 経由で
+// `./path.ts` のみを直 import し、worker bundle に native binding を引き込まない。
+import { coverPublicPath } from "@self/og-image/path";
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn, useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -188,6 +193,22 @@ export function postUrlFor(slug: string, lang: Lang): string {
 }
 
 /**
+ * frontmatter `cover` を絶対 URL に解決。未指定なら `@self/og-image` の
+ * `coverPublicPath` convention (`/posts/<slug>.<lang>.cover.png`) に fallback。
+ *
+ * `buildPostMeta` (og:image / twitter:image) と `buildPostJsonLd` (JSON-LD image)
+ * の両方が同 helper を経由することで、絶対 URL 組み立てと convention fallback の
+ * 二重定義を排除する。convention 本体は `@self/og-image` 側に SoT があり、generator
+ * (`scripts/generate-covers.ts`) も同 export を import している。
+ *
+ * @graph-connects og-image [calls] coverPublicPath で site-relative convention を解決
+ */
+export function resolveCoverUrl(input: { cover?: string; slug: string; lang: Lang }): string {
+  const path = input.cover ?? coverPublicPath(input.slug, input.lang);
+  return `${SITE_URL}${path}`;
+}
+
+/**
  * post 詳細 page の `<link rel="canonical">` + `<link rel="alternate" hreflang>`
  * 列を組む pure 関数。Route.head() から呼ばれる。
  *
@@ -233,8 +254,11 @@ export function buildPostLinks(input: {
  * og:description / og:image / twitter:* を per-post に上書きする (root の default は
  * blog 全体向け meta なので、詳細 page は自前 meta で塗り直す)。
  *
- * cover が無い post (例: 旧 post で generator 未実行) は root の default
- * og-image.png に fallback させるため `image` を null にして omit する。
+ * `cover` 未指定時は `@self/og-image` の `coverPublicPath` convention に fallback
+ * (`resolveCoverUrl` 経由)。`generate-covers` script が同 helper を経由して PNG を
+ * 同 path に吐く前提で、frontmatter に `cover:` を書き忘れても自動で per-post cover
+ * が og:image / twitter:image に乗る。convention 不在 → 404 の事故は `covers-exist`
+ * gate (= public/posts/*.cover.png の存在確認) で merge 前に弾く。
  *
  * @graph-connects none
  */
@@ -247,22 +271,19 @@ export function buildPostMeta(input: {
 }): HeadMeta[] {
   const url = `${SITE_URL}/posts/${input.slug}${input.lang === "ja" ? "?lang=ja" : ""}`;
   const description = input.summary ?? `${input.title} — ryantsuji.dev`;
-  const image = input.cover ? `${SITE_URL}${input.cover}` : null;
+  const image = resolveCoverUrl({ cover: input.cover, slug: input.slug, lang: input.lang });
 
-  const meta: HeadMeta[] = [
+  return [
     { title: `${input.title} — ryantsuji.dev` },
     { name: "description", content: description },
     { property: "og:title", content: input.title },
     { property: "og:description", content: description },
     { property: "og:url", content: url },
     { property: "og:type", content: "article" },
+    { property: "og:image", content: image },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:image", content: image },
   ];
-  if (image) {
-    meta.push({ property: "og:image", content: image });
-    meta.push({ name: "twitter:card", content: "summary_large_image" });
-    meta.push({ name: "twitter:image", content: image });
-  }
-  return meta;
 }
 
 /**
@@ -285,7 +306,7 @@ export function buildPostJsonLd(input: {
 }): string {
   const url = `${SITE_URL}/posts/${input.slug}${input.lang === "ja" ? "?lang=ja" : ""}`;
   const description = input.summary ?? `${input.title} — ryantsuji.dev`;
-  const image = input.cover ? `${SITE_URL}${input.cover}` : undefined;
+  const image = resolveCoverUrl({ cover: input.cover, slug: input.slug, lang: input.lang });
   const author = {
     "@type": "Person",
     name: "Ryan Tsuji",
@@ -308,8 +329,8 @@ export function buildPostJsonLd(input: {
     author,
     publisher: author,
     mainEntityOfPage: { "@type": "WebPage", "@id": url },
+    image: [image],
   };
-  if (image) doc.image = [image];
   // `<script type="application/ld+json">` の中身は HTML parser に対しては raw text。
   // 値に `</script>` が混じった瞬間に script tag が早期終了し以降が HTML として
   // render されるため、output 側で `</` だけエスケープして安全にする。

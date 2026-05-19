@@ -18,10 +18,11 @@ import { tmpdir } from "node:os";
 
 import { describe, expect, it } from "vitest";
 
+import { coverPublicPath } from "@self/og-image/path";
+
 import {
   PUBLIC_POSTS_DIR,
   coverFilePath,
-  coverPublicPath,
   generateAllCovers,
   generateCoverForPost,
   injectCoverLine,
@@ -116,16 +117,20 @@ describe("injectCoverLine", () => {
   });
 });
 
-describe("coverFilePath / coverPublicPath", () => {
+describe("coverFilePath", () => {
   it("filesystem path は public/posts/ 配下 (絶対)", () => {
     const p = coverFilePath("foo", "ja");
     expect(p.startsWith(PUBLIC_POSTS_DIR)).toBe(true);
     expect(p.endsWith("/foo.ja.cover.png")).toBe(true);
   });
 
-  it("public path は site-relative (/posts/...)", () => {
-    expect(coverPublicPath("foo", "en")).toBe("/posts/foo.en.cover.png");
-    expect(coverPublicPath("foo", "ja")).toBe("/posts/foo.ja.cover.png");
+  it("filesystem path は coverPublicPath と同じ basename (`/posts/` → public dir 配下)", () => {
+    // SoT は `@self/og-image/path` の `coverPublicPath` 側にあり、本 helper は同 path
+    // を public dir 配下に絶対解決した filesystem 版を返す。両者の format drift が起き
+    // ないことを inline assertion で固定する。
+    const fsPath = coverFilePath("foo", "en");
+    const sitePath = coverPublicPath("foo", "en");
+    expect(fsPath.endsWith(sitePath)).toStrictEqual(true);
   });
 });
 

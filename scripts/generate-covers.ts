@@ -19,6 +19,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { renderOgImage, type OgFonts } from "@self/og-image";
+import { coverPublicPath, shouldHaveCover } from "@self/og-image/path";
 
 import { POSTS_DIR, parseFileName, readAllPosts, type ParsedPost } from "./syndicate.js";
 
@@ -75,17 +76,12 @@ export async function loadOgFonts(): Promise<OgFonts> {
 }
 
 /**
- * og:image の出力先 path (public/posts/ 配下の絶対 path)。
+ * og:image の出力先 path (public/posts/ 配下の絶対 path)。site-relative path
+ * (`/posts/<slug>.<lang>.cover.png`) の SoT は `@self/og-image` の `coverPublicPath`
+ * 側で、本 helper は public dir 配下に absolute 解決した filesystem path を返す。
  */
 export function coverFilePath(slug: string, lang: "ja" | "en"): string {
   return resolve(PUBLIC_POSTS_DIR, `${slug}.${lang}.cover.png`);
-}
-
-/**
- * frontmatter.cover に書き込む site-relative path。
- */
-export function coverPublicPath(slug: string, lang: "ja" | "en"): string {
-  return `/posts/${slug}.${lang}.cover.png`;
 }
 
 /**
@@ -211,8 +207,11 @@ export async function generateAllCovers(args: GenerateArgs): Promise<CoverResult
   const results: CoverResult[] = [];
   for (const p of args.posts) {
     if (args.slug && p.slug !== args.slug) continue;
-    // `_` 始まりは test fixture (`_minimal-fixture.en.md` 等) なので og:image は出さない
-    if (!args.slug && p.slug.startsWith("_")) continue;
+    // `_` 始まり等の fixture skip は `@self/og-image/path` の `shouldHaveCover` を
+    // SoT として参照 (gate 側 `findMissingCovers` と完全に同じ判定で「PNG を吐く対象」
+    // と「PNG 存在を要求する対象」が機械的に一致する)。slug 指定は明示要求なので skip
+    // を override する。
+    if (!args.slug && !shouldHaveCover(p.slug)) continue;
     const r = await generateCoverForPost(p, args.fonts, {
       writeFrontmatter: args.writeFrontmatter,
     });

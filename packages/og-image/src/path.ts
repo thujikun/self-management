@@ -1,0 +1,56 @@
+/**
+ * og:image の public path convention。`coverPublicPath(slug, lang)` が **唯一の SoT**
+ * で、generator (scripts/generate-covers.ts) と consumer (route の og:image meta /
+ * JSON-LD / sitemap) が同じ helper を経由することで convention 差異による silent
+ * 404 を構造的に排除する。
+ *
+ * 純粋 string helper のみで、I/O や生成依存 (satori / resvg) には触れない。
+ * `./generate.ts` への import 経路を 1 つでも持つと、consumer (Cloudflare Worker bundle
+ * 等) の vite build が `@resvg/resvg-js` の native binding まで module graph で
+ * 辿って `[commonjs--resolver] Parse error` で fail する (= PR #111 で実観測)。
+ * そのため `OgLang` の type 定義も本ファイルに置き、`./generate.ts` 側から逆 import する。
+ *
+ * @graph-stack ryantsuji-dev
+ * @graph-domain publishing
+ * @graph-business og:image の public path convention の SoT。`/posts/<slug>.<lang>.cover.png` を pure helper で固定し、generator と consumer (route head / JSON-LD) の double-source-of-truth による 404 drift を排除する。worker bundle が satori/resvg を pull しないよう、`./generate.ts` への import を 0 件に保つ
+ * @graph-connects none
+ */
+
+/**
+ * og:image の lang。`ja` / `en` の二値。`./generate.ts` の `OgImageInput.lang` でも
+ * 同 type を使うため、本 file (= 純粋 helper 層) を SoT に置き `./generate.ts` 側で
+ * 再 export する。
+ *
+ * @graph-connects none
+ */
+export type OgLang = "ja" | "en";
+
+/**
+ * post の og:image (cover PNG) を `/posts/...` 配下に site-relative で返す。
+ *
+ * generator (`scripts/generate-covers.ts`) は本 path に PNG を書き、consumer
+ * (`apps/ryantsuji-dev/web/src/routes/posts/$slug.tsx` の og:image / twitter:image /
+ * JSON-LD image) は本 path を absolute URL で参照する。両者が同じ helper を経由する
+ * ことで convention 差異による silent 404 を構造的に排除する。
+ *
+ * @graph-connects none
+ */
+export function coverPublicPath(slug: string, lang: OgLang): string {
+  return `/posts/${slug}.${lang}.cover.png`;
+}
+
+/**
+ * 本 slug の og:image (cover PNG) を生成・存在要求の対象に含めるかを返す。
+ *
+ * `_` 始まり slug は test fixture (e.g. `_minimal-fixture` / `_draft-example`)。
+ * production / syndication に露出しないので PNG 生成も存在要求もしない。
+ *
+ * generator (`generateAllCovers`) と gate (`findMissingCovers`) の両方が本 helper を
+ * 経由することで、「PNG を吐く対象」と「PNG 存在を要求する対象」が機械的に一致する。
+ * 規約変更 (`_` → `__` / `draft:` frontmatter 化 等) が 1 箇所更新で済む。
+ *
+ * @graph-connects none
+ */
+export function shouldHaveCover(slug: string): boolean {
+  return !slug.startsWith("_");
+}

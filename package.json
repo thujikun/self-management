@@ -28,6 +28,7 @@
     "log:compact": "tsx scripts/compact-log.cli.ts",
     "log:check": "tsx scripts/compact-log.cli.ts --check",
     "covers:generate": "tsx scripts/generate-covers.cli.ts",
+    "covers:check": "tsx scripts/check-covers-exist.cli.ts",
     "auto-review": "bash scripts/auto-review/loop.sh",
     "auto-review:once": "tsx scripts/auto-review/poll.cli.ts",
     "check:line-count": "tsx scripts/hooks/check-line-count.cli.ts",
