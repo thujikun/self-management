@@ -207,9 +207,9 @@ describe("/posts/$slug — detail (SSR)", () => {
     // hub link + 当該 series title が出る (連載 trunk への動線)
     expect(html).toMatch(/href="\/series\/building-ai-harness"[^>]*>Building AI Harness</);
     expect(html).toMatch(/all parts/);
-    // 1 件しか無い series なので prev/next link は無し (端点)
+    // ai-harness-intro は Part 1 (= 左端点) なので previous は無く、next が Part 2 の cortex-product-graph
     expect(html).not.toMatch(/← previous/);
-    expect(html).not.toMatch(/next →/);
+    expect(html).toMatch(/href="\/posts\/cortex-product-graph"[^>]*>next →/);
   });
 
   it("series 所属 post を ?lang=ja で踏むと series box の文言が日本語", async () => {

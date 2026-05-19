@@ -82,8 +82,8 @@ describe("/series/$slug — series hub", () => {
     });
     await router.load();
     const html = renderToString(<RouterProvider router={router} />);
-    // React の SSR が text node 間に `<!-- -->` を挟むので、`>1...post<` の包括 match で確認
-    expect(html).toMatch(/<p class="series__count">1(?:<!-- -->| )+post<\/p>/);
+    // React の SSR が text node 間に `<!-- -->` を挟むので、`>2...posts<` の包括 match で確認
+    expect(html).toMatch(/<p class="series__count">2(?:<!-- -->| )+posts<\/p>/);
   });
 
   it("head に canonical / og:type / og:image / twitter:card が出る", async () => {
