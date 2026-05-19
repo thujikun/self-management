@@ -12,3 +12,5 @@
 
 export { renderOgImage, renderSiteOgImage } from "./generate.js";
 export type { OgImageInput, OgLang, OgFonts } from "./generate.js";
+
+export { coverPublicPath } from "./path.js";

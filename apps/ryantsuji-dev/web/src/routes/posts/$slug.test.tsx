@@ -39,6 +39,7 @@ import {
   executeAddCommentAction,
   executeLikeAction,
   postUrlFor,
+  resolveCoverUrl,
 } from "./$slug.js";
 import { runAddComment, runLoadEngagement, runToggleLike } from "./$slug.server.js";
 
@@ -1451,6 +1452,36 @@ describe("postUrlFor", () => {
   });
   it("ja post は ?lang=ja 付き", () => {
     expect(postUrlFor("hello", "ja")).toBe("https://ryantsuji.dev/posts/hello?lang=ja");
+  });
+});
+
+describe("resolveCoverUrl", () => {
+  it("cover 指定あり → そのまま SITE_URL に prepend", () => {
+    expect(
+      resolveCoverUrl({ cover: "/posts/custom.png", slug: "hello", lang: "en" }),
+    ).toStrictEqual("https://ryantsuji.dev/posts/custom.png");
+  });
+
+  it("cover 未指定 (en) → convention path に fallback", () => {
+    expect(resolveCoverUrl({ slug: "hello", lang: "en" })).toStrictEqual(
+      "https://ryantsuji.dev/posts/hello.en.cover.png",
+    );
+  });
+
+  it("cover 未指定 (ja) → convention path に lang=ja を埋める", () => {
+    expect(resolveCoverUrl({ slug: "hello", lang: "ja" })).toStrictEqual(
+      "https://ryantsuji.dev/posts/hello.ja.cover.png",
+    );
+  });
+
+  it("cover が空文字列 → 空文字列を honor (`??` の semantics、null/undefined のみ fallback)", () => {
+    // `??` は `null` / `undefined` のみ fallback、空文字列は fallback しない契約。
+    // 「frontmatter で `cover: ""` と空 string を渡せば convention を無効化できる」
+    // という挙動を意図しているわけではないが、`?? coverPublicPath(...)` の semantics
+    // を regression として固定 (将来 `??` を `||` に変更すると壊れる)。
+    expect(resolveCoverUrl({ cover: "", slug: "hello", lang: "en" })).toStrictEqual(
+      "https://ryantsuji.dev",
+    );
   });
 });
 

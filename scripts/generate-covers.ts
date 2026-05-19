@@ -18,7 +18,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { renderOgImage, type OgFonts } from "@self/og-image";
+import { coverPublicPath, renderOgImage, type OgFonts } from "@self/og-image";
 
 import { POSTS_DIR, parseFileName, readAllPosts, type ParsedPost } from "./syndicate.js";
 
@@ -75,18 +75,18 @@ export async function loadOgFonts(): Promise<OgFonts> {
 }
 
 /**
- * og:image の出力先 path (public/posts/ 配下の絶対 path)。
+ * og:image の出力先 path (public/posts/ 配下の絶対 path)。site-relative path
+ * (`/posts/<slug>.<lang>.cover.png`) の SoT は `@self/og-image` の `coverPublicPath`
+ * 側で、本 helper は public dir 配下に absolute 解決した filesystem path を返す。
  */
 export function coverFilePath(slug: string, lang: "ja" | "en"): string {
   return resolve(PUBLIC_POSTS_DIR, `${slug}.${lang}.cover.png`);
 }
 
-/**
- * frontmatter.cover に書き込む site-relative path。
- */
-export function coverPublicPath(slug: string, lang: "ja" | "en"): string {
-  return `/posts/${slug}.${lang}.cover.png`;
-}
+// `coverPublicPath` は `@self/og-image` で定義済み。test と consumer の後方互換のため
+// 同名で再 export する (generator と consumer が同 helper を経由していることを保証
+// する double-source-of-truth 防止)。
+export { coverPublicPath };
 
 /**
  * markdown ファイルの frontmatter に `cover: <path>` を surgical に注入する。

@@ -22,6 +22,7 @@
  * @graph-connects better-auth [calls] getSessionFromHeaders で current user を解決して like/comment を gate
  */
 
+import { coverPublicPath } from "@self/og-image";
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn, useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -188,6 +189,22 @@ export function postUrlFor(slug: string, lang: Lang): string {
 }
 
 /**
+ * frontmatter `cover` を絶対 URL に解決。未指定なら `@self/og-image` の
+ * `coverPublicPath` convention (`/posts/<slug>.<lang>.cover.png`) に fallback。
+ *
+ * `buildPostMeta` (og:image / twitter:image) と `buildPostJsonLd` (JSON-LD image)
+ * の両方が同 helper を経由することで、絶対 URL 組み立てと convention fallback の
+ * 二重定義を排除する。convention 本体は `@self/og-image` 側に SoT があり、generator
+ * (`scripts/generate-covers.ts`) も同 export を import している。
+ *
+ * @graph-connects og-image [calls] coverPublicPath で site-relative convention を解決
+ */
+export function resolveCoverUrl(input: { cover?: string; slug: string; lang: Lang }): string {
+  const path = input.cover ?? coverPublicPath(input.slug, input.lang);
+  return `${SITE_URL}${path}`;
+}
+
+/**
  * post 詳細 page の `<link rel="canonical">` + `<link rel="alternate" hreflang>`
  * 列を組む pure 関数。Route.head() から呼ばれる。
  *
@@ -233,9 +250,11 @@ export function buildPostLinks(input: {
  * og:description / og:image / twitter:* を per-post に上書きする (root の default は
  * blog 全体向け meta なので、詳細 page は自前 meta で塗り直す)。
  *
- * `cover` 未指定時は `/posts/<slug>.<lang>.cover.png` の convention path を採用する。
- * `generate-covers` script が同 path に PNG を吐く前提で、frontmatter に `cover:` を
- * 書き忘れても自動で per-post cover が og:image / twitter:image に乗る。
+ * `cover` 未指定時は `@self/og-image` の `coverPublicPath` convention に fallback
+ * (`resolveCoverUrl` 経由)。`generate-covers` script が同 helper を経由して PNG を
+ * 同 path に吐く前提で、frontmatter に `cover:` を書き忘れても自動で per-post cover
+ * が og:image / twitter:image に乗る。convention 不在 → 404 の事故は `covers-exist`
+ * gate (= public/posts/*.cover.png の存在確認) で merge 前に弾く。
  *
  * @graph-connects none
  */
@@ -248,8 +267,7 @@ export function buildPostMeta(input: {
 }): HeadMeta[] {
   const url = `${SITE_URL}/posts/${input.slug}${input.lang === "ja" ? "?lang=ja" : ""}`;
   const description = input.summary ?? `${input.title} — ryantsuji.dev`;
-  const coverPath = input.cover ?? `/posts/${input.slug}.${input.lang}.cover.png`;
-  const image = `${SITE_URL}${coverPath}`;
+  const image = resolveCoverUrl({ cover: input.cover, slug: input.slug, lang: input.lang });
 
   return [
     { title: `${input.title} — ryantsuji.dev` },
@@ -284,8 +302,7 @@ export function buildPostJsonLd(input: {
 }): string {
   const url = `${SITE_URL}/posts/${input.slug}${input.lang === "ja" ? "?lang=ja" : ""}`;
   const description = input.summary ?? `${input.title} — ryantsuji.dev`;
-  const coverPath = input.cover ?? `/posts/${input.slug}.${input.lang}.cover.png`;
-  const image = `${SITE_URL}${coverPath}`;
+  const image = resolveCoverUrl({ cover: input.cover, slug: input.slug, lang: input.lang });
   const author = {
     "@type": "Person",
     name: "Ryan Tsuji",
