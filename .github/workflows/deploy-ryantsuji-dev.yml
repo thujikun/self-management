@@ -50,9 +50,8 @@ on:
       - "packages/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/deploy-ryantsuji-dev.yml"
-  # schedule-publish.yml が draft flip 後に `gh workflow run --ref main` で叩く経路。
-  # GITHUB_TOKEN で push しても他 workflow の `on: push` は鳴らない仕様 (例外:
-  # workflow_dispatch / repository_dispatch) のため、明示 dispatch で発火させる。
+  # bump-submodule.yml が PR を auto-merge した後の `on: push` で間接的に鳴る。
+  # 手動 retry / 強制再 deploy 用に残す。
   workflow_dispatch:
 
 # 同一 branch では先行 run を cancel して最新のみ deploy する。pulumi.yml と違って

@@ -67,13 +67,20 @@ ad-hoc な markdown grep ではなく、graph の自然言語 query (将来 MCP 
 ## submodule 構成
 
 `apps/ryantsuji-dev/web/content/` は別 repo `thujikun/ryantsuji-dev-content` を
-submodule mount している (`.gitmodules` 参照、`branch = main`)。content を本 repo
-の main branch protection と切り離して直接 push したい (= 連載執筆中の差分や
-schedule-publish / syndicate-posts の自動 writeback を main 直 push で済ませる)
-ため。書き込み認証は GCP Secret Manager の `ryantsuji-dev-content-deploy-key`
-(Ed25519、write 有効) を SSoT に、Zenn sync / schedule-publish / syndicate-posts
-の 3 経路で再利用する。詳細は `apps/ryantsuji-dev/web/README.md` の「content/ は
-submodule」section 参照。
+submodule mount している (`.gitmodules` 参照、`branch = main`)。**content repo
+を本 monorepo の main branch protection から切り離して自由に push できる**
+ようにするため (連載執筆中の小刻みな差分や、後述の writeback を主 repo の
+review gate に通さずに進めたい)。
+
+書き込み認証は GCP Secret Manager の `ryantsuji-dev-content-deploy-key`
+(Ed25519、write 有効) を SSoT に再利用する (Zenn sync / syndicate-posts 系)。
+schedule-publish (draft → publish cron) は content repo 側に移送済で、本
+monorepo の workflow には残っていない。
+
+submodule pointer の bump は **`repository_dispatch` → `bump-submodule.yml` の
+PR auto-merge chain** で main protection を尊重した形で着地する。具体的な
+writeback 経路は `apps/ryantsuji-dev/web/README.md` の「writeback 経路 (CI)」
+section 参照。
 
 ## レビュー時の最小チェック
 

@@ -39,9 +39,13 @@ on:
       - "scripts/syndicate.ts"
       - "scripts/syndicate.cli.ts"
       - ".github/workflows/syndicate-posts.yml"
-  # schedule-publish.yml が draft flip 後に `gh workflow run --ref main` で叩く経路。
-  # GITHUB_TOKEN で push しても他 workflow の `on: push` は鳴らない仕様 (例外:
-  # workflow_dispatch / repository_dispatch) のため、明示 dispatch で発火させる。
+  # 15 分間隔で再評価する目的: post 本体の merge 後も `syndication.<target>.publishAt`
+  # が未来日付の post は target に push されていない。時刻到達で publish を flip する
+  # ためだけに cron を回す (no-op tick は syndicator が即 exit するので副作用は薄い)。
+  schedule:
+    - cron: "*/15 * * * *"
+  # bump-submodule.yml が PR を auto-merge した後の発火経路 (`on: push` で間接的に
+  # 鳴るが、手動 retry 用にも残す)。
   workflow_dispatch:
 
 # - contents: write は frontmatter writeback 用の git commit + push
@@ -163,15 +167,12 @@ jobs:
           # ケースでも safe に rebase できる。
           git pull --rebase --autostash origin main
           git add posts/
-          git commit -m "chore(syndication): writeback syndication IDs [skip ci]"
+          # `[skip ci]` 風文字列は無し: content repo の dispatch-on-push.yml がこの push
+          # を拾って parent monorepo の bump-submodule.yml を kick する設計
+          # (= submodule pointer bump は PR 経由で main protection を通る)
+          git commit -m "chore(syndication): writeback syndication IDs"
           git push origin HEAD:main
           popd
-          # 親 repo (self-management) の main も schedule-publish.yml の pointer bump
-          # や他の main 直 push が並行に着地し得るので、submodule 側と対称に autostash
-          # + rebase で吸収してから pointer bump を push する。これが無いと parent 側
-          # だけ non-fast-forward で reject され、submodule HEAD と parent pointer の
-          # 乖離窓 (ryantsuji.dev deploy が古い submodule を見続ける) が発生する。
-          git pull --rebase --autostash origin main
-          git add apps/ryantsuji-dev/web/content
-          git commit -m "chore(content): bump submodule pointer (syndication writeback) [skip ci]"
-          git push origin HEAD:main
+          # 親 repo の submodule pointer 直 push は branch protection で reject される
+          # ため除去。content repo 側 dispatch-on-push.yml → monorepo bump-submodule.yml
+          # の PR auto-merge chain に委ねる。
