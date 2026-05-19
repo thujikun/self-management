@@ -1706,16 +1706,6 @@ main {
   color: var(--accent-bg);
 }
 
-/* `__root.tsx` の nav Link は `<a><span class="site-header__link">posts</span></a>`
-   構造で、active 時に TanStack Router の `activeProps` が outer `<a>` にも
-   `.site-header__link` を付ける。結果 outer + inner で padding が二重に適用され、
-   active link が 16px 余分に太くなって header 全体の width が page 間でズレる
-   (top 275 / detail 291 等)。nested 時に inner padding を 0 に倒して二重適用を
-   解消する (color / hover 等の visual 表現は outer 側で維持されるので副作用無し)。 */
-.site-header__link .site-header__link {
-  padding: 0;
-}
-
 /* ─── header preferences (lang + theme switcher を束ねる) ─── */
 
 .site-header__prefs {
