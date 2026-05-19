@@ -5,6 +5,13 @@
    合成する形に置き換えていく。 */
 @import "tailwindcss";
 @import "@self/design-tokens/css";
+/* Inter (sans family の先頭) を self-host で bundle して `<html lang>` による
+   system-font fallback (JA で Hiragino、EN で SF 等) を回避する。font-display:swap
+   は @fontsource パッケージの default で付与される。 */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
 
 @theme {
   /* color: design-tokens の semantic variable を Tailwind の `bg-*` / `text-*` /
