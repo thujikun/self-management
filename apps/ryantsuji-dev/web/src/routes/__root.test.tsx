@@ -261,15 +261,15 @@ describe("__root route", () => {
   });
 
   describe("performSetLang (pure)", () => {
-    it("docAvailable=false なら no-op (SSR early-return)", () => {
+    it("docAvailable=false なら no-op (SSR early-return)", async () => {
       const doc = { cookie: "" };
       const applyLangChange = vi.fn();
-      performSetLang({ docAvailable: false, doc, applyLangChange }, "ja");
+      await performSetLang({ docAvailable: false, doc, applyLangChange }, "ja");
       expect(doc.cookie).toBe("");
       expect(applyLangChange).not.toHaveBeenCalled();
     });
 
-    it("docAvailable=true なら cookie 書き → applyLangChange の順で 1 回ずつ呼ぶ", () => {
+    it("docAvailable=true なら cookie 書き → applyLangChange の順で 1 回ずつ呼ぶ", async () => {
       const doc = { cookie: "" };
       const calls: string[] = [];
       const applyLangChange = vi.fn(() => {
@@ -280,7 +280,7 @@ describe("__root route", () => {
         // すると LANG_COOKIE_MAX_AGE 等の独立進化で巻き込み故障する。
         calls.push(`apply:cookieStartsWithJa=${doc.cookie.startsWith("ryantsuji_lang=ja")}`);
       });
-      performSetLang({ docAvailable: true, doc, applyLangChange }, "ja");
+      await performSetLang({ docAvailable: true, doc, applyLangChange }, "ja");
       expect({
         applyCallCount: applyLangChange.mock.calls.length,
         callsOrder: calls,
@@ -288,6 +288,24 @@ describe("__root route", () => {
         applyCallCount: 1,
         callsOrder: ["apply:cookieStartsWithJa=true"],
       });
+    });
+
+    it("applyLangChange が Promise を返すと cookie 書き → await applyLangChange → return の順を保つ", async () => {
+      const doc = { cookie: "" };
+      const order: string[] = [];
+      const applyLangChange = vi.fn(async () => {
+        order.push("apply-start");
+        await Promise.resolve();
+        order.push("apply-end");
+      });
+      const ret = performSetLang({ docAvailable: true, doc, applyLangChange }, "ja");
+      order.push("after-sync-call");
+      await ret;
+      order.push("after-await");
+      // cookie 書き (同期) → applyLangChange 開始 → 同期 path 終了 → microtask で完走 →
+      // performSetLang の Promise 完走、の順序。URL/loader 操作の race を防ぐ async
+      // primitive であることを inline で固定する。
+      expect(order).toStrictEqual(["apply-start", "after-sync-call", "apply-end", "after-await"]);
     });
   });
 
