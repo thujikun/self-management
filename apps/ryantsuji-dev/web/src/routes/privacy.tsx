@@ -1,15 +1,15 @@
 /**
  * `/privacy` — privacy policy page。
  *
- * OAuth provider (GitHub / X) の app dashboard で **Privacy Policy URL** として
- * 登録する公開 URL。X の "Request email from users" 機能の前提条件として必須。
+ * OAuth provider (GitHub / X / Google) の app dashboard で **Privacy Policy URL**
+ * として登録する公開 URL。X の "Request email from users" 機能の前提条件として必須。
  *
  * 内容: 個人サイトの最低限の disclosure (誰が運用してて、何のデータを取って、
  * どこに置いて、いつ消すか、連絡先)。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business OAuth provider が要求する Privacy Policy URL の実体。何の data を集めて (auth user info, comments/likes, view counter)、どの third-party (Cloudflare, Neon, GitHub, X) に流れているか、保管期間と削除手順を明示する個人サイト用の最小開示
+ * @graph-business OAuth provider が要求する Privacy Policy URL の実体。何の data を集めて (auth user info, comments/likes, view counter)、どの third-party (Cloudflare, Neon, GitHub, X, Google) に流れているか、保管期間と削除手順を明示する個人サイト用の最小開示
  * @graph-connects tanstack-router [provides] /privacy route
  */
 
@@ -47,8 +47,8 @@ function PrivacyPage() {
         <h2>What data is collected</h2>
         <ul>
           <li>
-            <strong>Authentication info</strong> from your OAuth provider (GitHub or X): user ID,
-            display name, primary email, avatar URL. Stored when you sign in.
+            <strong>Authentication info</strong> from your OAuth provider (GitHub, X, or Google):
+            user ID, display name, primary email, avatar URL. Stored when you sign in.
           </li>
           <li>
             <strong>Engagement actions</strong> you take: comments you post (text + your name) and
@@ -101,8 +101,9 @@ function PrivacyPage() {
             user data stored here.
           </li>
           <li>
-            <strong>GitHub OAuth</strong> / <strong>X OAuth 2.0</strong> — handle initial sign-in
-            handshake. Their respective privacy policies apply on those services.
+            <strong>GitHub OAuth</strong> / <strong>X OAuth 2.0</strong> /{" "}
+            <strong>Google OAuth 2.0</strong> — handle initial sign-in handshake. Their respective
+            privacy policies apply on those services.
           </li>
         </ul>
       </section>
