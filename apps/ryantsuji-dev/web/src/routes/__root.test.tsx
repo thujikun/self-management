@@ -26,7 +26,6 @@ import {
   performSetLang,
   performToggleTheme,
   readFaroCollectorUrl,
-  stripLangQueryFromWindow,
   writeLangCookieDom,
   writeThemeCookieDom,
 } from "./__root.js";
@@ -264,77 +263,31 @@ describe("__root route", () => {
   describe("performSetLang (pure)", () => {
     it("docAvailable=false なら no-op (SSR early-return)", () => {
       const doc = { cookie: "" };
-      const invalidate = vi.fn();
-      const stripLangQuery = vi.fn();
-      performSetLang({ docAvailable: false, doc, invalidate, stripLangQuery }, "ja");
+      const applyLangChange = vi.fn();
+      performSetLang({ docAvailable: false, doc, applyLangChange }, "ja");
       expect(doc.cookie).toBe("");
-      expect(invalidate).not.toHaveBeenCalled();
-      expect(stripLangQuery).not.toHaveBeenCalled();
+      expect(applyLangChange).not.toHaveBeenCalled();
     });
 
-    it("docAvailable=true なら cookie 書き + stripLangQuery + invalidate (順序固定)", () => {
+    it("docAvailable=true なら cookie 書き → applyLangChange の順で 1 回ずつ呼ぶ", () => {
       const doc = { cookie: "" };
       const calls: string[] = [];
-      const invalidate = vi.fn(() => {
-        calls.push("invalidate");
+      const applyLangChange = vi.fn(() => {
+        // applyLangChange が呼ばれた時点で cookie が既に書かれている (= cookie
+        // 書き換え → URL 更新 / loader 再実行、の順序) ことだけを pin する。
+        // cookie format の完全一致は writeLangCookieDom 側のテストで single
+        // source of truth として固定済なので、ここで literal を二重に pin
+        // すると LANG_COOKIE_MAX_AGE 等の独立進化で巻き込み故障する。
+        calls.push(`apply:cookieStartsWithJa=${doc.cookie.startsWith("ryantsuji_lang=ja")}`);
       });
-      const stripLangQuery = vi.fn(() => {
-        calls.push("strip");
+      performSetLang({ docAvailable: true, doc, applyLangChange }, "ja");
+      expect({
+        applyCallCount: applyLangChange.mock.calls.length,
+        callsOrder: calls,
+      }).toStrictEqual({
+        applyCallCount: 1,
+        callsOrder: ["apply:cookieStartsWithJa=true"],
       });
-      performSetLang({ docAvailable: true, doc, invalidate, stripLangQuery }, "ja");
-      expect(doc.cookie).toContain("ryantsuji_lang=ja");
-      expect(stripLangQuery).toHaveBeenCalledOnce();
-      expect(invalidate).toHaveBeenCalledOnce();
-      // cookie 反映後の invalidate でなければ router が古い query を再評価してしまう
-      expect(calls).toStrictEqual(["strip", "invalidate"]);
-    });
-  });
-
-  describe("stripLangQueryFromWindow", () => {
-    const originalLocation = window.location;
-    const originalReplaceState = window.history.replaceState;
-
-    afterEach(() => {
-      Object.defineProperty(window, "location", { value: originalLocation, writable: true });
-      window.history.replaceState = originalReplaceState;
-    });
-
-    it("URL に ?lang= が無ければ replaceState を呼ばない (no-op)", () => {
-      Object.defineProperty(window, "location", {
-        value: { href: "https://ryantsuji.dev/posts/foo" },
-        writable: true,
-      });
-      const replaceState = vi.fn();
-      window.history.replaceState = replaceState;
-      stripLangQueryFromWindow();
-      expect(replaceState).not.toHaveBeenCalled();
-    });
-
-    it("?lang=ja を取り除いて replaceState を呼ぶ", () => {
-      Object.defineProperty(window, "location", {
-        value: { href: "https://ryantsuji.dev/posts/foo?lang=ja" },
-        writable: true,
-      });
-      const replaceState = vi.fn();
-      window.history.replaceState = replaceState;
-      stripLangQueryFromWindow();
-      expect(replaceState).toHaveBeenCalledOnce();
-      const [state, title, url] = replaceState.mock.calls[0] ?? [];
-      expect(state).toBeNull();
-      expect(title).toBe("");
-      expect(url).toBe("https://ryantsuji.dev/posts/foo");
-    });
-
-    it("他の query は保持して lang だけ削る", () => {
-      Object.defineProperty(window, "location", {
-        value: { href: "https://ryantsuji.dev/posts?tag=ai&lang=ja" },
-        writable: true,
-      });
-      const replaceState = vi.fn();
-      window.history.replaceState = replaceState;
-      stripLangQueryFromWindow();
-      const [, , url] = replaceState.mock.calls[0] ?? [];
-      expect(url).toBe("https://ryantsuji.dev/posts?tag=ai");
     });
   });
 
@@ -380,6 +333,7 @@ describe("__root route", () => {
         root = createRoot(container);
         root.render(<RouterProvider router={router} />);
       });
+      return router;
     }
 
     it("LangSwitcher の JA button click で cookie に ryantsuji_lang=ja", async () => {
@@ -392,6 +346,37 @@ describe("__root route", () => {
         jaBtn!.click();
       });
       expect(cookieJar).toContain("ryantsuji_lang=ja");
+    });
+
+    it("?lang=en で着地 → JA click で router state の lang search query が消える", async () => {
+      // 回帰検知: PR #122 の本丸は「LangSwitcher click で URL から ?lang= を確実に
+      // 剥がす」こと。LangSwitcher 内 inline closure の search updater
+      // (`prev => { const next = { ...prev }; delete next.lang; return next }`) を
+      // 直接 pin する単体テストが無いと、updater を `prev` をそのまま返す形に
+      // 書き換えても loader 経路の test だけで通ってしまう (cookie 経路は別)。
+      // memory history なので window.location ではなく router.state.location.search を assert。
+      const router = await mountRouter("/?lang=en");
+      // TanStack Router の search は Object.create(null) 由来の bare object なので、
+      // toStrictEqual 用に spread で plain object prototype に正規化する
+      const initialSearch = { ...(router.state.location.search as Record<string, unknown>) };
+      const jaBtn = Array.from(container.querySelectorAll("button.lang-switcher__btn")).find(
+        (b) => b.textContent === "JA",
+      ) as HTMLButtonElement | undefined;
+      expect(jaBtn).toBeDefined();
+      await act(async () => {
+        jaBtn!.click();
+        // setLang 内で `void router.navigate(...)` されており直接 await できないため、
+        // microtask + macrotask を 1 周ずつ flush して router state まで伝播させる
+        await Promise.resolve();
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      });
+      expect({
+        initialSearch,
+        nextSearch: { ...(router.state.location.search as Record<string, unknown>) },
+      }).toStrictEqual({
+        initialSearch: { lang: "en" },
+        nextSearch: {},
+      });
     });
 
     it("ThemeSwitcher の click で cookie に ryantsuji_theme が書かれる", async () => {
