@@ -57,19 +57,23 @@ export const BUG_CAUSE_PATTERNS: ReadonlyArray<{ pattern: RegExp; description: s
       description: "'was failing because' は bug-cause 説明。",
     },
     {
-      pattern: /\bused\s+to\s+\w+\b/iu,
-      description: "'used to …' は過去経緯の対比。",
+      // 過去経緯ニュアンスを持つ基本動詞のみを enum 列挙。`used to validate / format /
+      // normalize` 等の purpose 用法を巻き込まない。新規語彙は test 同時更新で SoT 固定。
+      pattern:
+        /\bused\s+to\s+(?:throw|return|fail|crash|hang|loop|swallow|silently|be|do|use|call|set|reset|store)\b/iu,
+      description: "'used to <past-behavior>' は過去経緯の対比。",
     },
   ]);
 
 /**
- * 1 行分の文字列が comment 行かどうか (line `//`、block 開始 `/` + `*`、block 中
- * の `*` 行、block 終了 `*` + `/` のいずれか) を判定する。
+ * 1 行分の文字列が comment 行かどうかを判定する。行頭 `//` の line comment、
+ * slash-star で始まる block 開始、`*` で始まる block 継続 (block 終了 star-slash
+ * や、空白なしの `*foo` 形を含む) のいずれかなら true。
  *
  * @graph-connects none
  */
 export function isCommentLine(line: string): boolean {
-  return /^\s*(?:\/\/|\/\*|\*\/?|\*\s)/u.test(line);
+  return /^\s*(?:\/\/|\/\*|\*)/u.test(line);
 }
 
 /**
