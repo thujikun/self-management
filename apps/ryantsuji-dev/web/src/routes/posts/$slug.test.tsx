@@ -1301,15 +1301,36 @@ describe("buildPostMeta", () => {
     });
   });
 
-  it("cover 無し post: og:image / twitter:image を出さない (root の default に fallback)", () => {
+  it("cover 未指定 post: `/posts/<slug>.<lang>.cover.png` の convention に fallback", () => {
     const meta = buildPostMeta({
       slug: "no-cover",
       title: "No Cover",
       lang: "en",
     });
-    expect(meta.find((m) => "property" in m && m.property === "og:image")).toBeUndefined();
-    expect(meta.find((m) => "name" in m && m.name === "twitter:image")).toBeUndefined();
-    expect(meta.find((m) => "name" in m && m.name === "twitter:card")).toBeUndefined();
+    expect(meta.find((m) => "property" in m && m.property === "og:image")).toStrictEqual({
+      property: "og:image",
+      content: "https://ryantsuji.dev/posts/no-cover.en.cover.png",
+    });
+    expect(meta.find((m) => "name" in m && m.name === "twitter:image")).toStrictEqual({
+      name: "twitter:image",
+      content: "https://ryantsuji.dev/posts/no-cover.en.cover.png",
+    });
+    expect(meta.find((m) => "name" in m && m.name === "twitter:card")).toStrictEqual({
+      name: "twitter:card",
+      content: "summary_large_image",
+    });
+  });
+
+  it("cover 未指定 JA post: convention に lang=ja を埋め込む", () => {
+    const meta = buildPostMeta({
+      slug: "no-cover",
+      title: "No Cover",
+      lang: "ja",
+    });
+    expect(meta.find((m) => "property" in m && m.property === "og:image")).toStrictEqual({
+      property: "og:image",
+      content: "https://ryantsuji.dev/posts/no-cover.ja.cover.png",
+    });
   });
 
   it("summary 無し post は title から description を組み立てる", () => {
@@ -1374,7 +1395,7 @@ describe("buildPostJsonLd", () => {
     });
   });
 
-  it("cover 無し → image field 自体を omit", () => {
+  it("cover 未指定 → image は convention path に fallback", () => {
     const json = buildPostJsonLd({
       slug: "x",
       title: "X",
@@ -1382,7 +1403,7 @@ describe("buildPostJsonLd", () => {
       lang: "en",
     });
     const doc = JSON.parse(json);
-    expect(doc.image).toBeUndefined();
+    expect(doc.image).toStrictEqual(["https://ryantsuji.dev/posts/x.en.cover.png"]);
   });
 
   it("updatedAt 無し → dateModified は publishedAt と同値 fallback", () => {
