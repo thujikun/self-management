@@ -16,7 +16,12 @@
  * @graph-connects tanstack-start [calls] getRequestHeaders で request header を読む
  */
 
-import { getCookie, getRequestHeaders, setCookie } from "@tanstack/react-start/server";
+import {
+  getCookie,
+  getRequestHeaders,
+  getRequestUrl,
+  setCookie,
+} from "@tanstack/react-start/server";
 
 import { isAdminRequest } from "./auth-session.js";
 import { LANG_COOKIE, LANG_COOKIE_MAX_AGE, isLang, type Lang } from "./i18n.js";
@@ -34,6 +39,26 @@ import type { Env } from "../start.js";
 export function safeAcceptLanguage(): string | null {
   try {
     return getRequestHeaders().get("accept-language");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 現在 request URL の `?lang=` query を読み valid な Lang のみ返す。invalid / 未設定
+ * / runtime 外 (= vitest 等で getRequestUrl が throw) なら null。
+ *
+ * `pickLang` の override path に流して全 page で「URL query が cookie / Accept-Language
+ * より優先」を効かせる。これが無いと `?lang=en` で着地した JA accept-language ユーザ
+ * の LangSwitcher が JA highlight になる (= UI 状態 ↔ 実 lang の乖離) ことが起きる。
+ *
+ * @graph-connects tanstack-start [calls] getRequestUrl で URL ?lang= を読む
+ */
+export function safeUrlLang(): Lang | null {
+  try {
+    const url = getRequestUrl();
+    const value = url.searchParams.get("lang");
+    return isLang(value) ? value : null;
   } catch {
     return null;
   }
