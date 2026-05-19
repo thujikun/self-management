@@ -235,16 +235,10 @@ function SiteHeader() {
         <span className="site-header__brand-text">ryantsuji.dev</span>
       </Link>
       <nav className="site-header__nav" aria-label="primary">
-        <Link
-          to="/posts"
-          activeProps={{ className: "site-header__link site-header__link--active" }}
-        >
+        <Link to="/posts" activeProps={{ className: "site-header__link--active" }}>
           <span className="site-header__link">posts</span>
         </Link>
-        <Link
-          to="/about"
-          activeProps={{ className: "site-header__link site-header__link--active" }}
-        >
+        <Link to="/about" activeProps={{ className: "site-header__link--active" }}>
           <span className="site-header__link">about</span>
         </Link>
       </nav>
