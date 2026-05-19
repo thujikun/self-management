@@ -1,3 +1,4 @@
 [submodule "apps/ryantsuji-dev/web/content"]
 	path = apps/ryantsuji-dev/web/content
 	url = https://github.com/thujikun/ryantsuji-dev-content.git
+	branch = main

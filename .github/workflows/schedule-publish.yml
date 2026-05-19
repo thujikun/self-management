@@ -3,7 +3,9 @@
 # 仕組み:
 # - `apps/ryantsuji-dev/web/content/posts/` 内の `draft: true` で `publishedAt`
 #   が現在時刻以下になった post の frontmatter から `draft:` 行を物理的に消す
-# - 削除後の diff があれば github-actions[bot] が main に push
+# - 削除対象は **submodule (`thujikun/ryantsuji-dev-content`) 内側のファイル** な
+#   ので、(1) submodule 内で deploy key 経由で commit + push → (2) 親 repo 側で
+#   submodule pointer を bump して push、の二段 commit にする
 # - 続けて `gh workflow run --ref main` で `deploy-ryantsuji-dev.yml` と
 #   `syndicate-posts.yml` を `workflow_dispatch` 経由で発火させ、ryantsuji.dev /
 #   Zenn / dev.to に公開を伝播する
@@ -18,9 +20,9 @@
 # で指定すれば公開時刻の最大 15 分遅延で flip される。
 #
 # permissions:
-# - `contents: write` — bot commit + push 用
+# - `contents: write` — 親 repo 側 (= submodule pointer bump) の bot commit + push 用
 # - `actions: write` — `gh workflow run` で downstream を dispatch するため
-# - `id-token: write` — 不要 (本 workflow は GCP 等の OIDC を使わない)
+# - `id-token: write` — WIF (GCP Secret Manager で deploy key を取得) 用
 name: Schedule publish
 
 on:
@@ -31,6 +33,7 @@ on:
 permissions:
   contents: write
   actions: write
+  id-token: write
 
 concurrency:
   group: schedule-publish-${{ github.ref }}
@@ -53,10 +56,40 @@ jobs:
 
       - uses: ./.github/actions/setup
 
+      # submodule (ryantsuji-dev-content) への push に SSH deploy key を使う。
+      # syndicate-posts.yml と同じ key (`ryantsuji-dev-content-deploy-key`、SSoT
+      # は GCP Secret Manager) を再利用する。詳細は apps/ryantsuji-dev/web/README.md。
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions/providers/github-actions
+          service_account: ${{ vars.PULUMI_CI_SA_EMAIL }}
+
+      - name: Setup SSH deploy key for ryantsuji-dev-content
+        run: |
+          key=$(gcloud secrets versions access latest \
+            --secret=ryantsuji-dev-content-deploy-key \
+            --project=${{ vars.GCP_PROJECT_ID }})
+          mkdir -p ~/.ssh
+          printf '%s\n' "$key" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+      # `--global` 必須: 親 repo / submodule 双方で identity を効かせる
+      # (submodule clone は parent の config を継承しない経路がある)。
       - name: Configure git identity (bot)
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # submodule の origin URL を SSH に切替えて、deploy key で push できるように
+      # する。`actions/checkout` は `submodules: true` でも parent の HTTPS+
+      # GITHUB_TOKEN credential を継承するので、submodule 側へ push しようとすると
+      # 403 になる (deploy key は SSH 専用)。
+      - name: Switch submodule remote to SSH
+        run: |
+          git -C apps/ryantsuji-dev/web/content remote set-url origin \
+            git@github.com:thujikun/ryantsuji-dev-content.git
 
       # schedule-publish.cli.ts は対象 post の frontmatter を上書きし、
       # `PUBLISHED <filename>` を 1 行ずつ stdout に書く。何も無ければ exit 0
@@ -74,16 +107,29 @@ jobs:
           slugs=$(echo "$out" | grep -E "^PUBLISHED " | sed -E 's/^PUBLISHED ([^.]+)\.(en|ja)\.md$/\1/' | sort -u | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g' || true)
           echo "slugs=$slugs" >> "$GITHUB_OUTPUT"
 
+      # 二段 commit: (1) submodule 内側で content repo に push → (2) 親 repo の
+      # submodule pointer を bump して push。親 repo の `git add posts/` を打って
+      # も submodule 内部のパスは pathspec として届かない (`fatal: ... is in
+      # submodule` または空 stage) ので、submodule 内 commit を経由して pointer を
+      # 進める必要がある。
       - name: Commit & push if any post flipped
         if: steps.run.outputs.slugs != ''
         run: |
-          git add apps/ryantsuji-dev/web/content/posts/
-          # `--allow-empty` は付けない: changed が無いのに commit 走るのは bug。
+          # 1) submodule 内側で content repo に push (deploy key, SSH 経由)
+          pushd apps/ryantsuji-dev/web/content
+          git add posts/
           # subject は固定文字列にして commitlint の 100 字 header cap を踏まない
           # (複数 slug が同 tick で flip すると slug 列挙だけで 100 字を超え得る)。
           # slug 一覧は本文側に残して audit trail を保つ。
           git commit \
             -m "chore(content): publish scheduled posts" \
+            -m "slugs: ${{ steps.run.outputs.slugs }}"
+          git push origin HEAD:main
+          popd
+          # 2) 親 repo の submodule pointer を bump
+          git add apps/ryantsuji-dev/web/content
+          git commit \
+            -m "chore(content): bump submodule pointer (scheduled publish)" \
             -m "slugs: ${{ steps.run.outputs.slugs }}"
           # syndicate / deploy workflow は GITHUB_TOKEN 経由の push では発火しない
           # ので、push 後に下の dispatch step で明示的に叩く。`[skip ci]` も付けない

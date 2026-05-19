@@ -12,8 +12,10 @@
 # **frontmatter writeback**:
 #   `scripts/syndicate.ts` は新規記事に `syndication.zenn.id` (= randomBytes(7) hex) と
 #   `syndication.devto.{id,slug}` (= dev.to POST レスポンスから) を frontmatter に書き
-#   戻す。CI 経路ではこの書き戻しが必ず main repo 上で発生し、変更があれば bot user
-#   で commit + push する (= 次回 sync で同 ID が再利用される)。
+#   戻す。content/posts/ は submodule (`thujikun/ryantsuji-dev-content`) なので、
+#   書き戻し後に (1) submodule 内側で deploy key 経由で commit + push → (2) 親 repo
+#   の submodule pointer を bump、の二段 commit にする。親 repo から `git add` で
+#   submodule 内部のパスを stage しようとしても pathspec が届かないため。
 #
 # **secret 要件** (GCP Secret Manager に事前投入):
 # - `dev-to-api-key`: dev.to API key (Settings → Extensions → DEV API Keys)
@@ -123,6 +125,15 @@ jobs:
           git config --global user.name "ryantsuji-dev syndication bot"
           git config --global user.email "noreply@github.com"
 
+      # parent repo の `actions/checkout` は submodule の origin URL を HTTPS+
+      # GITHUB_TOKEN credential のまま継承するので、submodule 側 (= ryantsuji-dev-
+      # content) へ push しようとすると 403 になる。deploy key は SSH 専用なので、
+      # submodule 内の origin URL を SSH 形式に張り替える。
+      - name: Switch submodule remote to SSH
+        run: |
+          git -C apps/ryantsuji-dev/web/content remote set-url origin \
+            git@github.com:thujikun/ryantsuji-dev-content.git
+
       # Zenn 側 repo を `$RUNNER_TEMP/ryantsuji-dev-content` に clone (= publishToZenn
       # の `repoDir`)。SSH key 認証で git@github.com:... 経由で push する。
       - name: Run syndication (Zenn + dev.to, include drafts)
@@ -132,20 +143,30 @@ jobs:
         run: pnpm exec tsx scripts/syndicate.cli.ts --target all --publish --include-drafts
 
       # syndicate が frontmatter に `syndication.zenn.id` / `syndication.devto.{id,slug}`
-      # を書き戻していたら、その diff を bot commit で main に push。`[skip ci]` で
-      # workflow の無限 loop を防ぐ (本 workflow は paths filter にも該当しないため
-      # 二重ガードだが、deploy-ryantsuji-dev workflow 等の同 paths trigger が発火
-      # しないよう明示)。
+      # を書き戻していたら二段 commit する:
+      # (1) submodule (ryantsuji-dev-content) 側で `posts/` の diff を commit + push
+      # (2) 親 repo (self-management) 側で submodule pointer を bump して commit + push
+      # 親 repo から `git status --porcelain apps/.../content/posts/` を打っても
+      # submodule 内のパスは pathspec として届かず空応答を返すので、submodule 内に
+      # `pushd` してから検出 → 内側で commit する経路が必須。`[skip ci]` で deploy /
+      # syndicate の二重発火を抑止する。
       - name: Commit & push frontmatter writeback (if any)
         run: |
-          if [ -z "$(git status --porcelain apps/ryantsuji-dev/web/content/posts/)" ]; then
+          pushd apps/ryantsuji-dev/web/content
+          if [ -z "$(git status --porcelain posts/)" ]; then
             echo "no frontmatter changes — skipping commit"
+            popd
             exit 0
           fi
           # syndicate が frontmatter を書き換えた直後で workdir は dirty。`--autostash`
           # 無しだと rebase が abort するので明示。並列 push が同 window に着地した
           # ケースでも safe に rebase できる。
           git pull --rebase --autostash origin main
-          git add apps/ryantsuji-dev/web/content/posts/
+          git add posts/
           git commit -m "chore(syndication): writeback syndication IDs [skip ci]"
+          git push origin HEAD:main
+          popd
+          # 親 repo の submodule pointer を bump
+          git add apps/ryantsuji-dev/web/content
+          git commit -m "chore(content): bump submodule pointer (syndication writeback) [skip ci]"
           git push origin HEAD:main
