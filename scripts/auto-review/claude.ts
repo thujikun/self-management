@@ -13,8 +13,8 @@
  *   - worktree 直下に `.mcp.json` (worktree.ts が repo root から copy) が存在すれば、
  *     `--mcp-config <path>` で明示的に load する。これにより project-scope MCP の trust dialog
  *     (非対話 -p mode でも MCP server 個別承認は通常残る) を bypass し、ryan-graph / xmcp-* /
- *     grafana-personal 等が claude session で使えるようになる。user-scope MCP (cortex-* /
- *     service-product-graph) は `~/.claude.json` から自動的に additive で load される
+ *     grafana-personal 等が claude session で使えるようになる。user-scope MCP (社内 HTTP
+ *     MCP server 群) は `~/.claude.json` から自動的に additive で load される
  *     (`--strict-mcp-config` は付けない)。
  *
  * TURBO_CACHE_DIR:
