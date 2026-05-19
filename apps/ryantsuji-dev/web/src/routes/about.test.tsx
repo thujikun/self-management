@@ -13,11 +13,20 @@
 
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { renderToString } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("./__root.server.js", () => ({
+  runResolveLang: vi.fn(() => ({ lang: "en", theme: null })),
+}));
+import { runResolveLang } from "./__root.server.js";
 
 import { getRouter } from "../router.js";
 
 describe("/about — author profile", () => {
+  beforeEach(() => {
+    vi.mocked(runResolveLang).mockReturnValue({ lang: "en", theme: null });
+  });
+
   it("avatar + h1 (Ryan Tsuji) + airCloset CTO の bio が出る", async () => {
     const router = getRouter({ history: createMemoryHistory({ initialEntries: ["/about"] }) });
     await router.load();
@@ -105,5 +114,35 @@ describe("/about — author profile", () => {
     expect(html).toMatch(
       /<meta[^>]*property="og:image"[^>]*content="https:\/\/ryantsuji\.dev\/avatar\.jpg"/,
     );
+  });
+
+  it("lang=en: '書いていること' ではなく 'What I write about' を出す", async () => {
+    vi.mocked(runResolveLang).mockReturnValue({ lang: "en", theme: null });
+    const router = getRouter({ history: createMemoryHistory({ initialEntries: ["/about"] }) });
+    await router.load();
+    const html = renderToString(<RouterProvider router={router} />);
+    expect(html).toMatch(/What I write about/);
+    expect(html).toMatch(/Recent posts/);
+    expect(html).toMatch(/Elsewhere/);
+    expect(html).not.toMatch(/書いていること/);
+  });
+
+  it("lang=ja: 日本語の見出し / 本文 / リンクラベルを出す (cortex / airCloset 等の固有名は維持)", async () => {
+    vi.mocked(runResolveLang).mockReturnValue({ lang: "ja", theme: null });
+    const router = getRouter({ history: createMemoryHistory({ initialEntries: ["/about"] }) });
+    await router.load();
+    const html = renderToString(<RouterProvider router={router} />);
+    // JA 見出し / ラベル
+    expect(html).toMatch(/書いていること/);
+    expect(html).toMatch(/最近の投稿/);
+    expect(html).toMatch(/ほかの場所/);
+    expect(html).toMatch(/連載中/);
+    expect(html).toMatch(/ホームに戻る/);
+    // 固有名は JA でも維持
+    expect(html).toMatch(/airCloset, Inc\./);
+    expect(html).toMatch(/<strong>cortex<\/strong>/);
+    expect(html).toMatch(/<strong>ハーネスエンジニアリング<\/strong>/);
+    // EN 文言は出ない (lang=en 表記の確認)
+    expect(html).not.toMatch(/What I write about/);
   });
 });
