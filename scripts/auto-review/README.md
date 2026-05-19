@@ -42,16 +42,15 @@ scope 分け方針:
 
 | scope | 対象 MCP | 理由 |
 |---|---|---|
-| user (`~/.claude.json`) | `cortex-auth` / `cortex-product-graph` / `service-product-graph` | 内部 URL を public repo に commit しないため (`.mcp.json` は gitignore のままだが、project-scope は migration 経路がある時のみ便利) |
-| project (`.mcp.json`、gitignored、bot worktree に copy) | `ryan-graph` (stdio、cwd 依存) / `xmcp-en` / `xmcp-jp` / `grafana-personal` / 他 air-closet 系 | stdio で `pnpm exec tsx apps/mcp/ryan-graph/...` を呼ぶ等 cwd 依存のもの + Ryan が個人 machine で常駐させてるもの |
+| user (`~/.claude.json`) | 社内 HTTP MCP server (auth / 内部 product graph 系、複数) | 内部 URL / codename を public repo に commit しないため (具体名 / endpoint は private ops notes 参照) |
+| project (`.mcp.json`、gitignored、bot worktree に copy) | `ryan-graph` (stdio、cwd 依存) / `xmcp-en` / `xmcp-jp` / `grafana-personal` / 他社内 HTTP MCP | stdio で `pnpm exec tsx apps/mcp/ryan-graph/...` を呼ぶ等 cwd 依存のもの + Ryan が個人 machine で常駐させてるもの |
 
 新 machine で setup する手順 (1 回のみ):
 
 ```bash
-# user scope: 3 個を ~/.claude.json に登録
-claude mcp add --scope user --transport http cortex-auth https://mcp-auth.air-closet.ai/mcp
-claude mcp add --scope user --transport http cortex-product-graph https://mcp-cortex-product-graph.air-closet.ai/mcp --header "x-api-key: <KEY>"
-claude mcp add --scope user --transport http service-product-graph https://mcp-service-product-graph.air-closet.ai/mcp --header "x-api-key: <KEY>"
+# user scope: 社内 HTTP MCP server を ~/.claude.json に登録。
+# 具体的な <NAME> / <URL> / <KEY> は private ops notes 参照、ここではコマンド形式のみ。
+claude mcp add --scope user --transport http <NAME> <URL> --header "x-api-key: <KEY>"
 # project scope: .mcp.json.example をベースに .mcp.json を作成、不要 entry を削除
 cp .mcp.json.example .mcp.json
 # 必要に応じて x-api-key 等の secret を埋める
