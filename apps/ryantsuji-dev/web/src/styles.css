@@ -469,10 +469,21 @@ main {
 
 .post-toc__item {
   @apply leading-snug;
+  /* active 時に左 2px teal バーを出す余白を確保 (margin で位置だけ予約し、
+     非 active 時は transparent border にする)。border-left ベースだと
+     data-level=3 の indent と二重 border になるので、`box-shadow inset` で
+     表現する。 */
+  padding-left: var(--space-2);
+  box-shadow: inset 2px 0 0 transparent;
+  transition: box-shadow var(--duration-fast) var(--easing-out);
 }
 
 .post-toc__item[data-level="3"] {
   @apply ml-4 border-l border-border-subtle pl-3;
+}
+
+.post-toc__item--active {
+  box-shadow: inset 2px 0 0 var(--accent-bg);
 }
 
 .post-toc__link {
@@ -481,6 +492,11 @@ main {
 
 .post-toc__link:hover {
   color: var(--accent-bg);
+}
+
+.post-toc__item--active > .post-toc__link {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
 }
 
 /* desktop sticky aside (≥ --breakpoint-toc-float、現状 80rem = 1280px) ─ main

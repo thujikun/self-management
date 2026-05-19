@@ -6,23 +6,63 @@
  * - **mobile (<1280px)**: 右下に floating button、押下で native `<dialog>` が
  *   全画面寄りで開き、項目クリックで close + アンカージャンプ
  *
- * heading の active state highlight は次イテレーション (IntersectionObserver) で
- * 入れる予定、現状は静的リンクのみ。
+ * active heading highlight は `useActiveHeading` フックで IntersectionObserver
+ * を回し、viewport 上部 25-35% の trigger band に入っている heading id を返す。
+ * scroll up / down 双方向で band 内のものが切替わるため、戻り方向の追従もそのまま
+ * 効く。SSR では heading 不確定なので null で render し、hydration 後に observer
+ * が初期 active を確定する。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business 投稿詳細の目次を Zenn 風 floating UI に。desktop は右 sticky aside、mobile は右下フローティングボタン + `<dialog>` で出し入れ、main 本文に被らずスクロール独立
- * @graph-connects react [provides] desktop sticky aside + mobile dialog
+ * @graph-business 投稿詳細の目次を Zenn 風 floating UI に。desktop は右 sticky aside、mobile は右下フローティングボタン + `<dialog>` で出し入れ、main 本文に被らずスクロール独立。active heading を IntersectionObserver でハイライトして 23 分級の長文記事でも現在地が分かる
+ * @graph-connects react [provides] desktop sticky aside + mobile dialog + active heading observer
  */
 
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Heading } from "@self/content";
+
+/** @graph-connects none */
+export const TOC_OBSERVER_ROOT_MARGIN = "-25% 0px -65% 0px";
+
+/**
+ * 表示中の見出しを返すフック。`headings` に渡された id 群を IntersectionObserver
+ * で観測し、viewport 上部の trigger band (25%-35% 帯) に入っている最後の heading id
+ * を active として返す。`headings` 配列が変わると observer を再構築する。
+ *
+ * @graph-connects react [calls] IntersectionObserver で本文 heading の交差を観測
+ */
+export function useActiveHeading(headings: readonly Heading[]): string | null {
+  const [activeId, setActiveId] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof IntersectionObserver === "undefined") return;
+    const elements: HTMLElement[] = [];
+    for (const h of headings) {
+      const el = document.getElementById(h.id);
+      if (el instanceof HTMLElement) elements.push(el);
+    }
+    if (elements.length === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setActiveId(entry.target.id);
+          }
+        }
+      },
+      { rootMargin: TOC_OBSERVER_ROOT_MARGIN, threshold: 0 },
+    );
+    for (const el of elements) observer.observe(el);
+    return () => observer.disconnect();
+  }, [headings]);
+  return activeId;
+}
 
 /** @graph-connects react [provides] floating TOC */
 export function PostToc({ headings }: { headings: readonly Heading[] }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const activeId = useActiveHeading(headings);
   if (headings.length <= 1) return null;
 
   const openMobile = () => dialogRef.current?.showModal();
@@ -33,7 +73,7 @@ export function PostToc({ headings }: { headings: readonly Heading[] }) {
       {/* desktop sticky aside (≥1280px のみ visible、それ未満は display:none で消える) */}
       <aside className="post-toc post-toc--desktop" aria-label="目次">
         <h2 className="post-toc__heading">目次</h2>
-        <TocList headings={headings} />
+        <TocList headings={headings} activeId={activeId} />
       </aside>
 
       {/* mobile floating button (右下) — desktop では display:none */}
@@ -66,7 +106,7 @@ export function PostToc({ headings }: { headings: readonly Heading[] }) {
               ×
             </button>
           </header>
-          <TocList headings={headings} onItemClick={closeMobile} />
+          <TocList headings={headings} activeId={activeId} onItemClick={closeMobile} />
         </div>
       </dialog>
     </>
@@ -76,20 +116,31 @@ export function PostToc({ headings }: { headings: readonly Heading[] }) {
 /** @graph-connects none */
 function TocList({
   headings,
+  activeId,
   onItemClick,
 }: {
   headings: readonly Heading[];
+  activeId: string | null;
   onItemClick?: () => void;
 }) {
   return (
     <ol className="post-toc__list">
-      {headings.map((h) => (
-        <li key={h.id} className="post-toc__item" data-level={h.level}>
-          <a href={`#${h.id}`} onClick={onItemClick} className="post-toc__link">
-            {h.text}
-          </a>
-        </li>
-      ))}
+      {headings.map((h) => {
+        const isActive = h.id === activeId;
+        const itemClass = isActive ? "post-toc__item post-toc__item--active" : "post-toc__item";
+        return (
+          <li key={h.id} className={itemClass} data-level={h.level}>
+            <a
+              href={`#${h.id}`}
+              onClick={onItemClick}
+              className="post-toc__link"
+              aria-current={isActive ? "true" : undefined}
+            >
+              {h.text}
+            </a>
+          </li>
+        );
+      })}
     </ol>
   );
 }
