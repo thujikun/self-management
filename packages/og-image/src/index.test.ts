@@ -21,7 +21,20 @@ describe("@self/og-image barrel", () => {
     expect(typeof mod.renderSiteOgImage).toBe("function");
   });
 
+  it("coverPublicPath を export する", () => {
+    expect(typeof mod.coverPublicPath).toBe("function");
+  });
+
+  it("shouldHaveCover を export する", () => {
+    expect(typeof mod.shouldHaveCover).toBe("function");
+  });
+
   it("公開 export keys snapshot", () => {
-    expect(Object.keys(mod).sort()).toStrictEqual(["renderOgImage", "renderSiteOgImage"]);
+    expect(Object.keys(mod).sort()).toStrictEqual([
+      "coverPublicPath",
+      "renderOgImage",
+      "renderSiteOgImage",
+      "shouldHaveCover",
+    ]);
   });
 });

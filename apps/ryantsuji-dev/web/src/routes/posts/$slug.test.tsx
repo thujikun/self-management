@@ -39,6 +39,7 @@ import {
   executeAddCommentAction,
   executeLikeAction,
   postUrlFor,
+  resolveCoverUrl,
 } from "./$slug.js";
 import { runAddComment, runLoadEngagement, runToggleLike } from "./$slug.server.js";
 
@@ -1301,15 +1302,36 @@ describe("buildPostMeta", () => {
     });
   });
 
-  it("cover 無し post: og:image / twitter:image を出さない (root の default に fallback)", () => {
+  it("cover 未指定 post: `/posts/<slug>.<lang>.cover.png` の convention に fallback", () => {
     const meta = buildPostMeta({
       slug: "no-cover",
       title: "No Cover",
       lang: "en",
     });
-    expect(meta.find((m) => "property" in m && m.property === "og:image")).toBeUndefined();
-    expect(meta.find((m) => "name" in m && m.name === "twitter:image")).toBeUndefined();
-    expect(meta.find((m) => "name" in m && m.name === "twitter:card")).toBeUndefined();
+    expect(meta.find((m) => "property" in m && m.property === "og:image")).toStrictEqual({
+      property: "og:image",
+      content: "https://ryantsuji.dev/posts/no-cover.en.cover.png",
+    });
+    expect(meta.find((m) => "name" in m && m.name === "twitter:image")).toStrictEqual({
+      name: "twitter:image",
+      content: "https://ryantsuji.dev/posts/no-cover.en.cover.png",
+    });
+    expect(meta.find((m) => "name" in m && m.name === "twitter:card")).toStrictEqual({
+      name: "twitter:card",
+      content: "summary_large_image",
+    });
+  });
+
+  it("cover 未指定 JA post: convention に lang=ja を埋め込む", () => {
+    const meta = buildPostMeta({
+      slug: "no-cover",
+      title: "No Cover",
+      lang: "ja",
+    });
+    expect(meta.find((m) => "property" in m && m.property === "og:image")).toStrictEqual({
+      property: "og:image",
+      content: "https://ryantsuji.dev/posts/no-cover.ja.cover.png",
+    });
   });
 
   it("summary 無し post は title から description を組み立てる", () => {
@@ -1374,7 +1396,7 @@ describe("buildPostJsonLd", () => {
     });
   });
 
-  it("cover 無し → image field 自体を omit", () => {
+  it("cover 未指定 → image は convention path に fallback", () => {
     const json = buildPostJsonLd({
       slug: "x",
       title: "X",
@@ -1382,7 +1404,7 @@ describe("buildPostJsonLd", () => {
       lang: "en",
     });
     const doc = JSON.parse(json);
-    expect(doc.image).toBeUndefined();
+    expect(doc.image).toStrictEqual(["https://ryantsuji.dev/posts/x.en.cover.png"]);
   });
 
   it("updatedAt 無し → dateModified は publishedAt と同値 fallback", () => {
@@ -1430,6 +1452,36 @@ describe("postUrlFor", () => {
   });
   it("ja post は ?lang=ja 付き", () => {
     expect(postUrlFor("hello", "ja")).toBe("https://ryantsuji.dev/posts/hello?lang=ja");
+  });
+});
+
+describe("resolveCoverUrl", () => {
+  it("cover 指定あり → そのまま SITE_URL に prepend", () => {
+    expect(
+      resolveCoverUrl({ cover: "/posts/custom.png", slug: "hello", lang: "en" }),
+    ).toStrictEqual("https://ryantsuji.dev/posts/custom.png");
+  });
+
+  it("cover 未指定 (en) → convention path に fallback", () => {
+    expect(resolveCoverUrl({ slug: "hello", lang: "en" })).toStrictEqual(
+      "https://ryantsuji.dev/posts/hello.en.cover.png",
+    );
+  });
+
+  it("cover 未指定 (ja) → convention path に lang=ja を埋める", () => {
+    expect(resolveCoverUrl({ slug: "hello", lang: "ja" })).toStrictEqual(
+      "https://ryantsuji.dev/posts/hello.ja.cover.png",
+    );
+  });
+
+  it("cover が空文字列 → 空文字列を honor (`??` の semantics、null/undefined のみ fallback)", () => {
+    // `??` は `null` / `undefined` のみ fallback、空文字列は fallback しない契約。
+    // 「frontmatter で `cover: ""` と空 string を渡せば convention を無効化できる」
+    // という挙動を意図しているわけではないが、`?? coverPublicPath(...)` の semantics
+    // を regression として固定 (将来 `??` を `||` に変更すると壊れる)。
+    expect(resolveCoverUrl({ cover: "", slug: "hello", lang: "en" })).toStrictEqual(
+      "https://ryantsuji.dev",
+    );
   });
 });
 

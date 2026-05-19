@@ -5,7 +5,8 @@
   "description": "ryantsuji.dev の og:image を frontmatter から build-time 生成する (satori + resvg) — JP/EN 共通の dark brand 横長 template",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./path": "./src/path.ts"
   },
   "scripts": {
     "build": "tsgo",

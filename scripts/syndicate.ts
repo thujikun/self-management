@@ -35,10 +35,16 @@ import {
   type SlugResolver,
 } from "@self/syndication";
 
+import { POSTS_DIR, parseFileName } from "./posts-files.js";
+
+// `POSTS_DIR` / `parseFileName` の SoT は `posts-files.ts` (= `@self/content` 非依存の
+// lightweight 層) に置く。`generate-covers.ts` / `check-covers-exist.cli.ts` 等の caller
+// は本 file 経由でも `posts-files` 直経由でも参照できる二重 import 経路を許容するが、
+// 定義 SoT は 1 つ。
+export { POSTS_DIR, parseFileName };
+
 const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPTS_DIR, "..");
-
-export const POSTS_DIR = resolve(REPO_ROOT, "apps/ryantsuji-dev/web/content/posts");
 export const ZENN_FOOTER_PATH = resolve(
   REPO_ROOT,
   "packages/syndication/config/footers/zenn.ja.md",
@@ -67,19 +73,6 @@ export interface ParsedPost {
   lang: "ja" | "en";
   meta: Frontmatter;
   body: string;
-}
-
-/**
- * `<slug>.<lang>.md` のファイル名を slug + lang に分解。
- *
- * slug は本 repo 規約 `[_a-z0-9-]` のみを許容 (大文字混じりは match させない)。
- * `link-rewriter.ts` の `/g` flag と同じ判断 — 大文字混じり filename を silently
- * 受け入れて resolver map で小文字側と衝突 / miss するのを防ぐ。
- */
-export function parseFileName(name: string): { slug: string; lang: "ja" | "en" } | null {
-  const m = /^([_a-z0-9][_a-z0-9-]*)\.(en|ja)\.md$/u.exec(name);
-  if (!m) return null;
-  return { slug: m[1] as string, lang: m[2] as "ja" | "en" };
 }
 
 /**

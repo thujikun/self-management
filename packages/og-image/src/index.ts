@@ -11,4 +11,11 @@
  */
 
 export { renderOgImage, renderSiteOgImage } from "./generate.js";
-export type { OgImageInput, OgLang, OgFonts } from "./generate.js";
+export type { OgImageInput, OgFonts } from "./generate.js";
+
+// `OgLang` / `coverPublicPath` / `shouldHaveCover` は worker bundle が satori/resvg を
+// pull しないよう `./path.ts` 側に隔離しており、軽量 consumer は `@self/og-image/path`
+// subpath で直 import できる。本 barrel は server-side script 経由の wide import 用
+// として両者を露出する。
+export { coverPublicPath, shouldHaveCover } from "./path.js";
+export type { OgLang } from "./path.js";

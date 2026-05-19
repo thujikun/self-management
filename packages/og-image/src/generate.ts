@@ -13,11 +13,14 @@
 import { Resvg } from "@resvg/resvg-js";
 import satori from "satori";
 
+import type { OgLang } from "./path.js";
 import { OgTemplate } from "./templates/og-template.js";
 import { SiteOgTemplate } from "./templates/site-og-template.js";
 
-/** @graph-connects none */
-export type OgLang = "ja" | "en";
+// `OgLang` の SoT は `./path.ts` (純粋 helper 層)。本 file は satori / resvg を含む
+// 重い module なので、type は `./path.ts` 側に置いて Cloudflare Worker 等の lightweight
+// consumer が `@self/og-image/path` 経由で `OgLang` だけ取れる構造を維持する。
+export type { OgLang };
 
 /** @graph-connects none */
 export interface OgFonts {
