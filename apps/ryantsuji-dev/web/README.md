@@ -236,8 +236,9 @@ content の frontmatter 書き戻しと submodule pointer の bump は別 workfl
 - `ryantsuji-dev-content-deploy-key` (GCP Secret Manager): submodule 側 SSH
   push 用 Ed25519 deploy key (write 有効)。syndicate-posts / Zenn sync で再利用
 - repo 設定: **Settings → General → "Allow auto-merge" を ON**
-- (optional) label: `automation` を repo に作成しておくと bump PR が自動付与
-  される
+- `automation` label は bump-submodule workflow が `gh label create --force` で
+  idempotent に揃えるため、事前作成不要 (label が無くても 1 回目の dispatch で
+  作られる)
 
 `actions/checkout` が submodule の origin URL を HTTPS+GITHUB_TOKEN credential の
 ままにすると submodule 側 push で 403 になるため、syndicate-posts の commit
