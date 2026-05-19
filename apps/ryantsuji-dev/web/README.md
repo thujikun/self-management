@@ -193,6 +193,43 @@ SSoT は GCP Secret Manager なので、値を入れ直したら `gcloud secrets
 - **auth**: Better Auth (GitHub / X / Google OAuth、open sign-up — 第三者検証は OAuth provider に委ねる)
 - **engagement**: `/posts/$slug` に views (+1 per loader call) / likes (toggle、auth 必須) / comments (投稿、auth 必須) を追加
 
+## content/ は submodule
+
+`apps/ryantsuji-dev/web/content/` は別 repo `thujikun/ryantsuji-dev-content` の
+submodule で mount している (`.gitmodules` 参照、`branch = main` 追従)。
+
+- **public read**: 匿名 HTTPS clone が可能 (parent repo の `actions/checkout` が
+  `submodules: true` でそのまま展開する)
+- **write 認証**: GCP Secret Manager の `ryantsuji-dev-content-deploy-key`
+  (Ed25519 deploy key、write 有効) を SSoT に再利用。Zenn sync 経路と同一の key で
+  schedule-publish / syndicate-posts の writeback も賄う
+
+### writeback 経路 (CI)
+
+`schedule-publish.yml` / `syndicate-posts.yml` は content の frontmatter を書き
+戻す。submodule 内のファイルは parent repo の `git add` 経由では stage できない
+ので、両 workflow は二段 commit する:
+
+1. submodule 内側 (`apps/ryantsuji-dev/web/content/`) で `git add posts/` → `git
+   commit` → `git push origin HEAD:main` (deploy key, SSH 経由)
+2. 親 repo (`self-management`) で `git add apps/ryantsuji-dev/web/content` (=
+   submodule pointer) → `git commit` → `git push origin HEAD:main` (GITHUB_TOKEN
+   経由)
+
+`actions/checkout` が submodule の origin URL を HTTPS+GITHUB_TOKEN credential の
+ままにすると submodule 側 push で 403 になるため、commit step の直前に
+`git -C apps/ryantsuji-dev/web/content remote set-url origin
+git@github.com:thujikun/ryantsuji-dev-content.git` で SSH に張り替える。
+
+### local で submodule を最新追従させる
+
+```bash
+git submodule update --remote apps/ryantsuji-dev/web/content
+# pointer を bump したい場合
+git add apps/ryantsuji-dev/web/content
+git commit -m "chore(content): bump submodule pointer"
+```
+
 ## /posts (多言語)
 
 `/posts` 一覧 + `/posts/$slug` 詳細は **en / ja の bilingual** で配信する。 lang 選択は

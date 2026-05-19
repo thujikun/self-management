@@ -64,6 +64,17 @@ ad-hoc な markdown grep ではなく、graph の自然言語 query (将来 MCP 
 | direnv | gcloud config / 個人 secret 切替 |
 | MCP server | (将来) FastMCP-style or hono based |
 
+## submodule 構成
+
+`apps/ryantsuji-dev/web/content/` は別 repo `thujikun/ryantsuji-dev-content` を
+submodule mount している (`.gitmodules` 参照、`branch = main`)。content を本 repo
+の main branch protection と切り離して直接 push したい (= 連載執筆中の差分や
+schedule-publish / syndicate-posts の自動 writeback を main 直 push で済ませる)
+ため。書き込み認証は GCP Secret Manager の `ryantsuji-dev-content-deploy-key`
+(Ed25519、write 有効) を SSoT に、Zenn sync / schedule-publish / syndicate-posts
+の 3 経路で再利用する。詳細は `apps/ryantsuji-dev/web/README.md` の「content/ は
+submodule」section 参照。
+
 ## レビュー時の最小チェック
 
 - [ ] 個人 GCP プロジェクト (`ryan-self-management`) 内のリソースのみ触っている
