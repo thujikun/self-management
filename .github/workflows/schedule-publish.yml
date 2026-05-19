@@ -49,6 +49,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+          submodules: true
 
       - uses: ./.github/actions/setup
 

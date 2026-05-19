@@ -70,6 +70,7 @@ jobs:
           # `git commit + git pull --rebase` で最新を取り込むため shallow ではなく
           # 履歴を持つ (default の fetch-depth: 1 だと rebase が失敗する)。
           fetch-depth: 0
+          submodules: true
 
       - uses: ./.github/actions/setup
 
