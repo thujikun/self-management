@@ -182,24 +182,32 @@ describe("PostToc", () => {
       });
     }
 
-    function fireIntersect(id: string, isIntersecting: boolean): void {
+    function buildEntry(id: string, isIntersecting: boolean): IntersectionObserverEntry {
       const target = document.getElementById(id);
-      if (!target || !lastObserver) throw new Error("no observer");
+      if (!target) throw new Error(`no target: ${id}`);
+      return {
+        isIntersecting,
+        target,
+        intersectionRatio: isIntersecting ? 1 : 0,
+        time: 0,
+        rootBounds: null,
+        boundingClientRect: target.getBoundingClientRect(),
+        intersectionRect: target.getBoundingClientRect(),
+      } as IntersectionObserverEntry;
+    }
+
+    function fireIntersect(id: string, isIntersecting: boolean): void {
+      if (!lastObserver) throw new Error("no observer");
       act(() => {
-        lastObserver!.callback(
-          [
-            {
-              isIntersecting,
-              target,
-              intersectionRatio: isIntersecting ? 1 : 0,
-              time: 0,
-              rootBounds: null,
-              boundingClientRect: target.getBoundingClientRect(),
-              intersectionRect: target.getBoundingClientRect(),
-            } as IntersectionObserverEntry,
-          ],
-          {} as IntersectionObserver,
-        );
+        lastObserver!.callback([buildEntry(id, isIntersecting)], {} as IntersectionObserver);
+      });
+    }
+
+    function fireIntersectBatch(items: ReadonlyArray<[string, boolean]>): void {
+      if (!lastObserver) throw new Error("no observer");
+      const entries = items.map(([id, hit]) => buildEntry(id, hit));
+      act(() => {
+        lastObserver!.callback(entries, {} as IntersectionObserver);
       });
     }
 
@@ -209,32 +217,44 @@ describe("PostToc", () => {
       expect(TOC_OBSERVER_ROOT_MARGIN).toBe("-25% 0px -65% 0px");
     });
 
+    function activeHrefs(): string[] {
+      return Array.from(
+        container.querySelectorAll<HTMLAnchorElement>('a.post-toc__link[aria-current="true"]'),
+      ).map((a) => a.getAttribute("href") ?? "");
+    }
+
     it("intersecting heading に対応する <li> に post-toc__item--active が付き、<a> に aria-current=true", () => {
       mountWithHeadings();
       fireIntersect("section-a", true);
       // desktop aside と dialog の両方の list で同じ id の <li> が active になる
       const activeItems = container.querySelectorAll(".post-toc__item--active[data-level='2']");
-      expect(activeItems.length).toBeGreaterThanOrEqual(2);
-      const activeLinks = container.querySelectorAll('a.post-toc__link[aria-current="true"]');
-      activeLinks.forEach((a) => {
-        expect((a as HTMLAnchorElement).getAttribute("href")).toBe("#section-a");
-      });
+      expect(activeItems).toHaveLength(2);
+      // 全 active link が #section-a を指している (desktop + dialog の 2 件、決定的)
+      expect(activeHrefs()).toStrictEqual(["#section-a", "#section-a"]);
     });
 
     it("別の heading が intersect すると active が切替わる (scroll down 追従)", () => {
       mountWithHeadings();
       fireIntersect("section-a", true);
       fireIntersect("section-a-1", true);
-      const activeLinks = container.querySelectorAll('a.post-toc__link[aria-current="true"]');
-      activeLinks.forEach((a) => {
-        expect((a as HTMLAnchorElement).getAttribute("href")).toBe("#section-a-1");
-      });
+      expect(activeHrefs()).toStrictEqual(["#section-a-1", "#section-a-1"]);
+    });
+
+    it("同一 callback で複数 heading が同時 intersect しても DOM 順で最後の id が active になる", () => {
+      mountWithHeadings();
+      // entries は仕様上 DOM 順を保証しない。逆順 (section-a-1 → intro) で渡しても、
+      // SAMPLE_HEADINGS 内のインデックスで最後 (= section-a-1) が active になる。
+      fireIntersectBatch([
+        ["section-a-1", true],
+        ["intro", true],
+        ["section-a", true],
+      ]);
+      expect(activeHrefs()).toStrictEqual(["#section-a-1", "#section-a-1"]);
     });
 
     it("初期 render (intersect 未発火) では aria-current=true な link は無い", () => {
       mountWithHeadings();
-      const activeLinks = container.querySelectorAll('a.post-toc__link[aria-current="true"]');
-      expect(activeLinks.length).toBe(0);
+      expect(activeHrefs()).toStrictEqual([]);
     });
 
     it("isIntersecting=false の entry では active を更新しない (scroll で band を出ても直前の active を保持)", () => {
@@ -243,10 +263,7 @@ describe("PostToc", () => {
       // scroll で band を抜けた場合、entry は isIntersecting=false で再 fire される。
       // この path で activeId が null に倒れない (= 直前の id を保持) ことを固定する。
       fireIntersect("section-a", false);
-      const activeLinks = container.querySelectorAll('a.post-toc__link[aria-current="true"]');
-      activeLinks.forEach((a) => {
-        expect((a as HTMLAnchorElement).getAttribute("href")).toBe("#section-a");
-      });
+      expect(activeHrefs()).toStrictEqual(["#section-a", "#section-a"]);
     });
 
     it("DOM 上に heading 要素が無い場合は observer を組まない (early return)", () => {
@@ -260,8 +277,7 @@ describe("PostToc", () => {
         root = hydrateRoot(container, <PostToc headings={SAMPLE_HEADINGS} />);
       });
       // observe される要素が無いので、active が決まらず aria-current も付かない
-      const activeLinks = container.querySelectorAll('a.post-toc__link[aria-current="true"]');
-      expect(activeLinks.length).toBe(0);
+      expect(activeHrefs()).toStrictEqual([]);
     });
   });
 

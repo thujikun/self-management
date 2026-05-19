@@ -28,34 +28,51 @@ export const TOC_OBSERVER_ROOT_MARGIN = "-25% 0px -65% 0px";
 
 /**
  * 表示中の見出しを返すフック。`headings` に渡された id 群を IntersectionObserver
- * で観測し、viewport 上部の trigger band (25%-35% 帯) に入っている最後の heading id
- * を active として返す。`headings` 配列が変わると observer を再構築する。
+ * で観測し、viewport 上部の trigger band (25%-35% 帯) に入っている見出しのうち
+ * **DOM 順で最後の** id を active として返す。`IntersectionObserverEntry[]` の
+ * 順序は仕様上 DOM 順を保証しないため、`headings` 配列のインデックスで明示的に
+ * 順序を解決する。observer の dep には heading id を `|` 連結した primitive key
+ * を渡し、loader 等で `headings` 配列の参照同一性だけが変わる re-render で observer
+ * が無駄に disconnect → 再構築されるのを抑える。
  *
  * @graph-connects react [calls] IntersectionObserver で本文 heading の交差を観測
  */
 export function useActiveHeading(headings: readonly Heading[]): string | null {
   const [activeId, setActiveId] = useState<string | null>(null);
+  // heading 配列の identity 変化ではなく id 列の value 変化でのみ effect を再評価。
+  // GithubSlugger 由来の id は URL-safe な ASCII slug で `|` を含まないため、
+  // join separator として安全。
+  const headingsKey = headings.map((h) => h.id).join("|");
   useEffect(() => {
     if (typeof window === "undefined" || typeof IntersectionObserver === "undefined") return;
+    const ids = headingsKey.length === 0 ? [] : headingsKey.split("|");
     const elements: HTMLElement[] = [];
-    for (const h of headings) {
-      const el = document.getElementById(h.id);
+    for (const id of ids) {
+      const el = document.getElementById(id);
       if (el instanceof HTMLElement) elements.push(el);
     }
     if (elements.length === 0) return;
     const observer = new IntersectionObserver(
       (entries) => {
+        // 同 fire 内で複数 heading が同時 intersect した場合、DOM 順で最後 (= 最も
+        // 下にある = ユーザがスクロール先で見ている) の id を active にする。
+        let bestIndex = -1;
+        let bestId: string | null = null;
         for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setActiveId(entry.target.id);
+          if (!entry.isIntersecting) continue;
+          const idx = ids.indexOf(entry.target.id);
+          if (idx > bestIndex) {
+            bestIndex = idx;
+            bestId = entry.target.id;
           }
         }
+        if (bestId !== null) setActiveId(bestId);
       },
       { rootMargin: TOC_OBSERVER_ROOT_MARGIN, threshold: 0 },
     );
     for (const el of elements) observer.observe(el);
     return () => observer.disconnect();
-  }, [headings]);
+  }, [headingsKey]);
   return activeId;
 }
 

@@ -472,7 +472,10 @@ main {
   /* active 時に左 2px teal バーを出す余白を確保 (margin で位置だけ予約し、
      非 active 時は transparent border にする)。border-left ベースだと
      data-level=3 の indent と二重 border になるので、`box-shadow inset` で
-     表現する。 */
+     表現する。`2px` は TOC active marker 専用の one-off 値で、他の component
+     で同じ marker 厚みを再利用する具体予定が無いため `@self/design-tokens`
+     には token 化しない (styling.md「許容される literal: コメントで理由を明示」
+     に該当)。再利用先が出た段階で `--border-width-marker` 等で SSoT 化する。 */
   padding-left: var(--space-2);
   box-shadow: inset 2px 0 0 transparent;
   transition: box-shadow var(--duration-fast) var(--easing-out);
