@@ -14,6 +14,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGetRequestHeaders = vi.fn<() => Headers>();
+const mockGetRequestUrl = vi.fn<() => URL>();
 const mockGetCookie = vi.fn<(name: string) => string | undefined>();
 const mockSetCookie =
   vi.fn<(name: string, value: string, options: Record<string, unknown>) => void>();
@@ -23,6 +24,7 @@ vi.mock("@tanstack/react-start/server", async (importOriginal) => {
   return {
     ...actual,
     getRequestHeaders: () => mockGetRequestHeaders(),
+    getRequestUrl: () => mockGetRequestUrl(),
     getCookie: (name: string) => mockGetCookie(name),
     setCookie: (name: string, value: string, options: Record<string, unknown>) =>
       mockSetCookie(name, value, options),
@@ -42,6 +44,7 @@ import {
   safeCookieLang,
   safeCookieTheme,
   safeRequestHeaders,
+  safeUrlLang,
   writeLangCookie,
   writeThemeCookie,
 } from "./request.server.js";
@@ -66,6 +69,39 @@ describe("safeAcceptLanguage", () => {
       throw new Error("No StartEvent in AsyncLocalStorage");
     });
     expect(safeAcceptLanguage()).toStrictEqual(null);
+  });
+});
+
+describe("safeUrlLang", () => {
+  beforeEach(() => {
+    mockGetRequestUrl.mockReset();
+  });
+
+  it("URL に `?lang=ja` があれば 'ja' を返す", () => {
+    mockGetRequestUrl.mockReturnValue(new URL("https://ryantsuji.dev/posts/foo?lang=ja"));
+    expect(safeUrlLang()).toBe("ja");
+  });
+
+  it("URL に `?lang=en` があれば 'en' を返す", () => {
+    mockGetRequestUrl.mockReturnValue(new URL("https://ryantsuji.dev/posts/foo?lang=en"));
+    expect(safeUrlLang()).toBe("en");
+  });
+
+  it("`?lang=` query が無ければ null", () => {
+    mockGetRequestUrl.mockReturnValue(new URL("https://ryantsuji.dev/posts/foo"));
+    expect(safeUrlLang()).toBeNull();
+  });
+
+  it("`?lang=fr` 等 unsupported 値は null (= cookie / Accept-Language に倒す)", () => {
+    mockGetRequestUrl.mockReturnValue(new URL("https://ryantsuji.dev/?lang=fr"));
+    expect(safeUrlLang()).toBeNull();
+  });
+
+  it("getRequestUrl が throw した場合は catch して null", () => {
+    mockGetRequestUrl.mockImplementation(() => {
+      throw new Error("No StartEvent");
+    });
+    expect(safeUrlLang()).toBeNull();
   });
 });
 
