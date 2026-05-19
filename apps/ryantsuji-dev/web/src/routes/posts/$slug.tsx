@@ -466,7 +466,7 @@ function PostSeriesBox({
           {nav.meta.title}
         </Link>{" "}
         — {labelPart} {nav.currentOrder}
-        {labelPartUnit} / {nav.total}
+        {labelPartUnit}
       </p>
       <p className="post-series-box__nav">
         {nav.prev ? (
