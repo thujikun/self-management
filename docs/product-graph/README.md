@@ -204,7 +204,7 @@ flowchart LR
 | Phase | 内容 |
 |---|---|
 | **P1** ✅ | schema 定義 + BQ table 作成 script (TS) |
-| **P2** | 既存 markdown (operations/log.md, threads/, x-account-strategy.md, memory/) を node 化して BQ load |
+| **P2** | 既存 markdown (operations/log.md *、threads/, x-account-strategy.md *、memory/) を node 化して BQ load (* は `.gitignored` で local-only、ingest は Ryan 環境からのみ) |
 | **P3** | claude -p 用 read CLI (BQ query → JSON 出力) |
 | **P4** | X API ingest pipeline (post / engagement / follower 変化を BQ append) |
 | **P5** | code @graph-* タグ + parser で product-graph を自動生成 |

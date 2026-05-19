@@ -28,7 +28,7 @@ src/
 │   ├── bq-schema.ts    # @google-cloud/bigquery 形式の TableSchema
 │   └── index.ts        # re-exports
 ├── parsers/            # 各種ソースからノード抽出
-│   ├── markdown/       # 既存 markdown (operations/log.md, threads/, decisions/) → nodes
+│   ├── markdown/       # 既存 markdown (operations/log.md *, threads/, decisions/) → nodes (* は .gitignored で local-only)
 │   ├── x/              # X API → nodes/edges
 │   ├── zenn/           # Zenn RSS / API → content nodes
 │   └── devto/          # dev.to API → content nodes

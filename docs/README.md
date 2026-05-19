@@ -22,7 +22,7 @@
 - **手書き doc は概念・原則・ビジョンのみ** に絞る
 - **変化しやすい情報** (アプリ一覧、テーブル一覧、stack 一覧) は generated/ で自動生成
 - **個別アプリの詳細** は `apps/{name}/README.md` に置く
-- **historical context は operations/log.md** に集約 (append-only)
+- **historical context は operations/log.md** に集約 (append-only、`.gitignored` で local-only)
 - **意思決定の why** は `decisions/<date>-<topic>.md` で残す (将来構造化予定)
 
 ## 基盤パターン

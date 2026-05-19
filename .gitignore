@@ -43,3 +43,10 @@ coverage/
 
 # generated cover image fonts (downloaded on first run, cached for reuse)
 .cache/
+
+# private operational notes (named individuals / voice rules / rejected drafts /
+# strategy details — kept local only, never committed). 内容は Ryan ローカルに
+# 残し、graph migrate / compact-log script は file が存在する時のみ動作する。
+operations/log.md
+operations/log.archive.*.md
+x-account-strategy.md
