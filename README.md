@@ -28,8 +28,8 @@ X はその一部でしかない。
 | 設計方針 | [docs/DESIGN.md](./docs/DESIGN.md) |
 | Product Graph (ryan-product-graph) | [docs/product-graph/README.md](./docs/product-graph/README.md) |
 | アーキテクチャ規約 | [docs/guidelines/architecture.md](./docs/guidelines/architecture.md) |
-| X 運用戦略 | [x-account-strategy.md](./x-account-strategy.md) |
-| X 運用ログ | [operations/log.md](./operations/log.md) |
+| X 運用戦略 | `x-account-strategy.md` (local-only、`.gitignored`) |
+| X 運用ログ | `operations/log.md` (local-only、`.gitignored`) |
 
 ## ディレクトリ構成
 
@@ -51,13 +51,15 @@ X はその一部でしかない。
 │   ├── core/               # 共通 infra (BQ dataset, IAM)
 │   └── ryan-product-graph/ # graph 専用 infra (Cloud Run 等)
 ├── threads/                 # X thread drafts + posted archive
-├── operations/log.md        # 運用ログ (人間 narrative)
+├── operations/log.md        # 運用ログ (人間 narrative、local-only / .gitignored)
 ├── playbooks/               # 自動化手順書
 ├── analytics/               # daily metrics
 ├── scripts/                 # 雑多な shell scripts
 ├── config/                  # ローカル env (.gitignored)
-└── x-account-strategy.md    # X 運用戦略 (憲章)
+└── x-account-strategy.md    # X 運用戦略 (憲章、local-only / .gitignored)
 ```
+
+> `operations/log.md` と `x-account-strategy.md` は **`.gitignored` で local-only**。named individuals への label / voice rules / 戦略詳細を public repo に蓄積しないため。clone 時は不在で、graph migrate / compact-log script は file 存在時のみ動作する。
 
 ## quick start (新規環境セットアップ)
 
