@@ -39,6 +39,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: true
       - uses: ./.github/actions/setup
       - name: Restore turbo cache (build / typecheck / test-coverage)
         if: matrix.gate == 'build' || matrix.gate == 'typecheck' || matrix.gate == 'test-coverage'
