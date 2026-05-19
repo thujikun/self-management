@@ -63,6 +63,8 @@ X はその一部でしかない。
 
 ## quick start (新規環境セットアップ)
 
+前提: Node.js >=24、`pnpm@10.33.2` (`packageManager` field 経由で corepack が自動有効化)。
+
 ```bash
 # 1. direnv 有効化
 direnv allow
@@ -70,7 +72,7 @@ direnv allow
 # 2. 個人 gcloud config に切替されることを確認
 gcloud config configurations list  # ryan-personal が ACTIVE
 
-# 3. 依存インストール
+# 3. 依存インストール (Node 24+ 必須、package.json engines で強制)
 pnpm install
 
 # 4. Pulumi で BQ provision (初回のみ)

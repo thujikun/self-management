@@ -27,6 +27,7 @@ GATES_STAGED=(
   line-count
   graph-tags
   css-tokens
+  bug-cause-comments
   log-check
   covers-exist
   lint
@@ -109,6 +110,17 @@ cmd_run() {
       else
         # shellcheck disable=SC2046
         pnpm exec tsx scripts/hooks/check-css-tokens.cli.ts $(git ls-files '*.css')
+      fi
+      ;;
+    bug-cause-comments)
+      # .ts / .tsx の comment 行に bug-cause / 過去経緯系の語句が紛れていないか check。
+      # コメントは現状の意図のみで、bug 経緯は PR description / commit body に書く運用を
+      # 機械強制する (feedback memory: feedback_no_bug_cause_in_code_comments)。
+      if [ "$mode" = staged ]; then
+        pnpm exec tsx scripts/hooks/check-no-bug-cause-comments.cli.ts "${files[@]}"
+      else
+        # shellcheck disable=SC2046
+        pnpm exec tsx scripts/hooks/check-no-bug-cause-comments.cli.ts $(git ls-files '*.ts' '*.tsx')
       fi
       ;;
     log-check)

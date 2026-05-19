@@ -199,18 +199,6 @@ flowchart LR
 
 初期 phase は markdown を migrate → BQ load → claude -p から query。API watcher / MCP server / code parser は後続 phase。
 
-## 実装ロードマップ
-
-| Phase | 内容 |
-|---|---|
-| **P1** ✅ | schema 定義 + BQ table 作成 script (TS) |
-| **P2** | 既存 markdown (operations/log.md *、threads/, x-account-strategy.md *、memory/) を node 化して BQ load (* は `.gitignored` で local-only、ingest は Ryan 環境からのみ) |
-| **P3** | claude -p 用 read CLI (BQ query → JSON 出力) |
-| **P4** | X API ingest pipeline (post / engagement / follower 変化を BQ append) |
-| **P5** | code @graph-* タグ + parser で product-graph を自動生成 |
-| **P6** | MCP server (Cloud Run) を立てる、`.mcp.json` に登録 |
-| **P7** | voice retrieval / corpus 学習 → 自律 draft 生成 |
-
 ## 関連 doc
 
 - [DESIGN.md](../DESIGN.md) — 全体設計方針
