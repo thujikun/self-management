@@ -56,11 +56,26 @@
 
 ### Composable Architecture
 
+構造レベル + 関数 / フックレベルの両方で composability を要求する。
+
+**構造レベル:**
+
 - `packages/` は再利用可能な部品、`apps/` はそれを組み合わせるサービス、`infra/` は Pulumi スタック。
 - `apps/` 同士の直接 import が無く、共有可能ロジックは `packages/` に置かれているか。
 - 新規 app / package は既存カテゴリのパターンと命名 (`@self/<name>`、kebab-case ファイル) に従っているか。
 
-詳細は [guidelines/architecture.md](./guidelines/architecture.md)。
+**関数 / フックレベル (state → 副作用):**
+
+- state を更新する副作用 (cookie write / URL 書換 / loader 再評価 / store invalidate 等) が **1 つの primitive** に閉じているか。caller (button onClick / event handler) が複数の副作用を順次直叩きしていないか。
+- URL は state から派生する従属物として扱われ、`router.navigate` 等の宣言的 API 経由で更新されているか (`history.replaceState` を裸で叩いていないか)。
+- 副作用が引数注入できる shape で、純粋 logic を test で spy できる構造か。
+
+### コードコメント
+
+- コメントが**現状の意図**だけを書いているか。bug-cause / 変更経緯 / 過去実装との対比が紛れていないか (これらは PR description / commit body 側に残す)。
+- 「旧実装で…の問題が解消する」「以前は…していたが」系の歴史を書いたコメントは指摘対象。
+
+詳細は [guidelines/architecture.md](./guidelines/architecture.md) (Composable + コメント方針)。
 
 ### Product Graph 整合性
 
