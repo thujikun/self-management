@@ -206,19 +206,42 @@ submodule で mount している (`.gitmodules` 参照、`branch = main` 追従)
 
 ### writeback 経路 (CI)
 
-`schedule-publish.yml` / `syndicate-posts.yml` は content の frontmatter を書き
-戻す。submodule 内のファイルは parent repo の `git add` 経由では stage できない
-ので、両 workflow は二段 commit する:
+content の frontmatter 書き戻しと submodule pointer の bump は別 workflow に分離
+されており、parent repo の main branch protection に詰まらないよう **直接 push
+は完全に廃止** している。
 
-1. submodule 内側 (`apps/ryantsuji-dev/web/content/`) で `git add posts/` → `git
-   commit` → `git push origin HEAD:main` (deploy key, SSH 経由)
-2. 親 repo (`self-management`) で `git add apps/ryantsuji-dev/web/content` (=
-   submodule pointer) → `git commit` → `git push origin HEAD:main` (GITHUB_TOKEN
-   経由)
+1. **`schedule-publish`** (draft → publish の cron) は **content repo
+   (`thujikun/ryantsuji-dev-content`) 側に移送済**。本 monorepo には存在しない。
+   content repo 内の workflow が submodule の frontmatter を書き換えて main に
+   commit したあと、後段 (3.) を kick する。
+2. **`syndicate-posts.yml`** (dev.to / Zenn syndication) は submodule
+   (`apps/ryantsuji-dev/web/content/`) に対して **deploy key 経由の SSH push を
+   1 段だけ** 行う。parent repo (`self-management`) には触れない。submodule 内
+   commit が main に着地した時点で content repo 側の `dispatch-on-push.yml` が
+   後段 (3.) を kick する。
+3. **`bump-submodule.yml`** (本 monorepo) が `repository_dispatch`
+   (`content-updated`) を受けて、`git submodule update --remote` で pointer を
+   最新 main 追従に上げ、**`bot/content-bump-<sha>` branch で PR を開いて
+   `gh pr merge --auto --squash`** を仕込む。CI が通れば main へ自動 merge
+   される (= main 直 push 経路は無い、branch protection と矛盾しない)。
+
+必要な secrets / 設定:
+
+- `BOT_PAT` (monorepo): bump-submodule workflow が PR を開く + push する fine-
+  grained PAT。default `GITHUB_TOKEN` の push は cascade workflow を発火させない
+  ので auto-merge の status 待ちが永久 hang する。PAT 経由なら `pull_request`
+  trigger が普通に発火する
+- `MONOREPO_DISPATCH_PAT` (content repo 側): content repo workflow が monorepo
+  の `repository_dispatch` を kick するための fine-grained PAT
+- `ryantsuji-dev-content-deploy-key` (GCP Secret Manager): submodule 側 SSH
+  push 用 Ed25519 deploy key (write 有効)。syndicate-posts / Zenn sync で再利用
+- repo 設定: **Settings → General → "Allow auto-merge" を ON**
+- (optional) label: `automation` を repo に作成しておくと bump PR が自動付与
+  される
 
 `actions/checkout` が submodule の origin URL を HTTPS+GITHUB_TOKEN credential の
-ままにすると submodule 側 push で 403 になるため、commit step の直前に
-`git -C apps/ryantsuji-dev/web/content remote set-url origin
+ままにすると submodule 側 push で 403 になるため、syndicate-posts の commit
+step 直前に `git -C apps/ryantsuji-dev/web/content remote set-url origin
 git@github.com:thujikun/ryantsuji-dev-content.git` で SSH に張り替える。
 
 ### local で submodule を最新追従させる

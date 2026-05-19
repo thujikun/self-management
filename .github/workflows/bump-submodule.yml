@@ -74,16 +74,21 @@ jobs:
       - name: Create branch + commit pointer bump
         if: steps.update.outputs.changed == 'true'
         id: branch
+        env:
+          BUMP_REASON: ${{ github.event.client_payload.reason || github.event.inputs.reason || 'unknown' }}
+          BUMP_SLUGS: ${{ github.event.client_payload.slugs || '-' }}
+          BUMP_SHA: ${{ steps.update.outputs.new_sha }}
         run: |
-          branch="bot/content-bump-${{ steps.update.outputs.new_sha }}"
+          branch="bot/content-bump-${BUMP_SHA}"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
           git checkout -b "$branch"
           git add apps/ryantsuji-dev/web/content
           # subject に slugs を載せると 100 字 cap を踏むので固定 subject、本文に payload
+          # client_payload は env 経由で quoted expansion することで shell injection を遮断する
           git commit \
-            -m "chore(content): bump submodule pointer to ${{ steps.update.outputs.new_sha }}" \
-            -m "reason: ${{ github.event.client_payload.reason || github.event.inputs.reason || 'unknown' }}" \
-            -m "slugs: ${{ github.event.client_payload.slugs || '-' }}"
+            -m "chore(content): bump submodule pointer to ${BUMP_SHA}" \
+            -m "reason: ${BUMP_REASON}" \
+            -m "slugs: ${BUMP_SLUGS}"
           git push origin "$branch"
 
       - name: Open PR + enable auto-merge
@@ -101,6 +106,7 @@ jobs:
             --base main \
             --head "$BUMP_BRANCH" \
             --title "chore(content): bump submodule to $BUMP_SHA" \
-            --body "$body")
+            --body "$body" \
+            --label automation)
           echo "Opened: $pr_url"
           gh pr merge "$pr_url" --auto --squash --delete-branch
