@@ -91,6 +91,14 @@ export const FrontmatterSchema = z.object({
             .string()
             .regex(/^\d{4}-\d{2}-\d{2}/, "ISO date prefix (YYYY-MM-DD) required")
             .optional(),
+          /**
+           * 直近の PUT で送った article body の sha256 prefix (16 hex chars)。
+           * `scripts/syndicate.ts:emitDevto` が新規 article 作成時 / 内容変更時に
+           * 書き戻し、以後の cron run で hash 一致なら PUT を skip する idempotency
+           * marker。dev.to の PUT は body 同一でも `edited_at` を bump するため、
+           * 毎 15 分の cron で全 article の更新日が今日になる事故を防ぐ。
+           */
+          contentHash: z.string().min(8).optional(),
         })
         .optional(),
     })

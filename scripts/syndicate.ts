@@ -18,7 +18,7 @@
  * @graph-connects syndication [calls] @self/syndication の syndicateForZenn / syndicateForDevto を呼ぶ
  */
 
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -32,6 +32,7 @@ import {
   publishToZenn,
   syndicateForDevto,
   syndicateForZenn,
+  type DevtoArticleAttributes,
   type SlugResolver,
 } from "@self/syndication";
 
@@ -162,10 +163,70 @@ export async function writebackDevtoToFile(
   file: string,
   devtoId: number,
   devtoSlug: string,
+  devtoContentHash?: string,
 ): Promise<void> {
   const raw = await readFile(file, "utf8");
-  const insertion = `  devto:\n    id: ${devtoId}\n    slug: "${devtoSlug}"\n`;
+  const hashLine = devtoContentHash ? `    contentHash: "${devtoContentHash}"\n` : "";
+  const insertion = `  devto:\n    id: ${devtoId}\n    slug: "${devtoSlug}"\n${hashLine}`;
   await writeFile(file, insertSyndicationBlock(raw, insertion), "utf8");
+}
+
+/**
+ * dev.to article body の sha256 prefix (16 hex chars) を返す。`syndication.devto.
+ * contentHash` の SoT で、PUT idempotency gate に使う。
+ *
+ * 短縮 prefix にする理由: 19 記事 scale で 64-bit collision は事実上ゼロ、frontmatter
+ * noise を抑える、git diff の視認性。
+ *
+ * @graph-connects none
+ */
+export function computeDevtoContentHash(article: DevtoArticleAttributes): string {
+  return createHash("sha256").update(JSON.stringify(article)).digest("hex").slice(0, 16);
+}
+
+/**
+ * source .md の frontmatter `syndication.devto.contentHash` を上書き/挿入する。既に
+ * `devto:` block が存在していて、`id` / `slug` の下に `contentHash:` が有れば 1 行
+ * 置換、無ければ block 末尾に新規行を挿入。
+ *
+ * `devto:` block が無いケースは {@link writebackDevtoToFile} の create 経路から
+ * `devtoContentHash` 引数を渡して同時挿入する想定で、本関数は呼ばれない。
+ *
+ * @graph-connects none
+ */
+export async function writebackDevtoContentHashToFile(
+  file: string,
+  contentHash: string,
+): Promise<void> {
+  const raw = await readFile(file, "utf8");
+  const fmMatch = /^---\n([\s\S]*?)\n---\n/.exec(raw);
+  if (!fmMatch) {
+    throw new Error("frontmatter delimiter `---\\n...\\n---\\n` not found");
+  }
+  const fmContent = fmMatch[1] as string;
+  const afterFm = raw.slice(fmMatch[0].length);
+  const updatedFm = upsertDevtoContentHash(fmContent, contentHash);
+  await writeFile(file, `---\n${updatedFm}\n---\n${afterFm}`, "utf8");
+}
+
+/**
+ * frontmatter content (delimiter 抜きの中身) を受け取り、`syndication.devto`
+ * block 内の `contentHash:` 行を upsert する。
+ *
+ * @graph-connects none
+ */
+export function upsertDevtoContentHash(fmContent: string, contentHash: string): string {
+  const newLine = `    contentHash: "${contentHash}"`;
+  // 既存 contentHash 行 → 値だけ書き換え
+  if (/^ {4}contentHash:/m.test(fmContent)) {
+    return fmContent.replace(/^ {4}contentHash:.*$/m, newLine);
+  }
+  // devto: block の最終 sub-key 直後に挿入。slug の行を anchor として末尾置換。
+  const slugMatch = /^( {4}slug:.*)$/m.exec(fmContent);
+  if (!slugMatch) {
+    throw new Error("syndication.devto.slug line not found; cannot insert contentHash");
+  }
+  return fmContent.replace(/^( {4}slug:.*)$/m, `${slugMatch[1]}\n${newLine}`);
 }
 
 /**
@@ -334,6 +395,8 @@ export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
       now,
     });
 
+    const contentHash = computeDevtoContentHash(article);
+
     if (!devto) {
       if (!apiKey) {
         console.warn(`  [skip] ${p.slug}.en.md: no syndication.devto (dry-run)`);
@@ -342,10 +405,10 @@ export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
       // publish mode で devto entry が無い場合は POST で article 作成 → id + slug を
       // frontmatter に書き戻し → 以後の syndicate で update 経路に乗る。
       const created = await createDevtoArticle({ apiKey, article });
-      devto = { id: created.id, slug: created.slug };
+      devto = { id: created.id, slug: created.slug, contentHash };
       justCreated = true;
       const srcFile = resolve(args.postsDir ?? POSTS_DIR, `${p.slug}.en.md`);
-      await writebackDevtoToFile(srcFile, created.id, created.slug);
+      await writebackDevtoToFile(srcFile, created.id, created.slug, contentHash);
       console.log(
         `  [create] ${p.slug}.en.md: dev.to article created id=${created.id} slug=${created.slug}`,
       );
@@ -357,9 +420,17 @@ export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
 
     // POST 直後の state と PUT body は同一なので、create 経路を踏んだ post は PUT skip。
     // dev.to は 30 req / 30 sec の rate limit + `edited_at` 更新副作用が重なるため二度叩きを避ける。
-    if (apiKey && !justCreated) {
-      const result = await publishToDevto({ apiKey, articleId: devto.id, article });
-      console.log(`    publish: ${result.url}`);
+    if (!apiKey || justCreated) continue;
+    // contentHash idempotency gate: 直近 PUT で送った body の hash が変わってなければ skip。
+    // dev.to PUT は body 同一でも `edited_at` を bump するため、毎 cron tick (15 分) で
+    // 全 article が「今日更新」になる事故をここで止める。
+    if (devto.contentHash === contentHash) {
+      console.log(`    publish: skip (contentHash unchanged)`);
+      continue;
     }
+    const result = await publishToDevto({ apiKey, articleId: devto.id, article });
+    const srcFile = resolve(args.postsDir ?? POSTS_DIR, `${p.slug}.en.md`);
+    await writebackDevtoContentHashToFile(srcFile, contentHash);
+    console.log(`    publish: ${result.url} (contentHash=${contentHash})`);
   }
 }

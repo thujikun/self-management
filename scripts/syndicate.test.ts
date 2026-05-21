@@ -37,12 +37,15 @@ import { createDevtoArticle, publishToDevto, publishToZenn } from "@self/syndica
 import {
   buildDevtoResolver,
   buildZennResolver,
+  computeDevtoContentHash,
   emitDevto,
   emitZenn,
   generateZennId,
   insertSyndicationBlock,
   parseFileName,
   readAllPosts,
+  upsertDevtoContentHash,
+  writebackDevtoContentHashToFile,
   writebackDevtoToFile,
   writebackZennIdToFile,
   type ParsedPost,
@@ -64,7 +67,7 @@ function makePost(p: {
   slug: string;
   lang: "ja" | "en";
   zennId?: string;
-  devto?: { id: number; slug: string };
+  devto?: { id: number; slug: string; contentHash?: string };
   body?: string;
   cover?: string;
 }): ParsedPost {
@@ -744,20 +747,11 @@ describe("emitDevto publish create branch", () => {
       postsDir,
     });
 
-    // writeback で devto.{id, slug} が src file に書かれる
+    // writeback で devto.{id, slug, contentHash} が src file に書かれる
     const after = await readFile(srcFile, "utf8");
-    expect(after).toMatchInlineSnapshot(`
-      "---
-      title: t
-      publishedAt: "2026-01-01"
-      syndication:
-        devto:
-          id: 12345
-          slug: "alpha-en-xxx"
-      ---
-      hello
-      "
-    `);
+    expect(after).toMatch(
+      /syndication:\n {2}devto:\n {4}id: 12345\n {4}slug: "alpha-en-xxx"\n {4}contentHash: "[a-f0-9]{16}"\n/u,
+    );
     // 出力 JSON は新規 id で書かれる
     const written = JSON.parse(await readFile(resolve(outDir, "alpha.json"), "utf8")) as {
       id: number;
@@ -768,11 +762,16 @@ describe("emitDevto publish create branch", () => {
     expect(publishToDevtoMock).not.toHaveBeenCalled();
   });
 
-  it("devto 既存の .en post を publish: createDevtoArticle は呼ばず PUT で update", async () => {
+  it("devto 既存だが contentHash 未設定の .en post を publish: PUT で update して contentHash 書き戻し", async () => {
     publishToDevtoMock.mockResolvedValueOnce({
       url: "https://dev.to/ryantsuji/beta",
       editedAt: "2026-05-17T00:00:00Z",
     });
+    const srcFile = join(postsDir, "beta.en.md");
+    await writeFile(
+      srcFile,
+      `---\ntitle: t\npublishedAt: "2026-01-01"\nsyndication:\n  devto:\n    id: 999\n    slug: "beta-existing"\n---\nworld\n`,
+    );
     const posts = [
       makePost({
         slug: "beta",
@@ -796,5 +795,134 @@ describe("emitDevto publish create branch", () => {
       apiKey: "test-key",
       articleId: 999,
     });
+    const after = await readFile(srcFile, "utf8");
+    expect(after).toMatch(/ {4}contentHash: "[a-f0-9]{16}"/u);
+  });
+
+  it("devto 既存 + contentHash 一致なら PUT を skip (= 毎 cron tick で edited_at が bump しない)", async () => {
+    // Arrange: contentHash を 「いま computeDevtoContentHash で出る hash」に予め設定
+    const posts = [
+      makePost({
+        slug: "gamma",
+        lang: "en",
+        devto: { id: 555, slug: "gamma-existing" },
+        body: "gamma body\n",
+      }),
+    ];
+    // emitDevto と同じ builder で article を構築して hash を逆算
+    const { syndicateForDevto } =
+      await vi.importActual<typeof import("@self/syndication")>("@self/syndication");
+    const article = syndicateForDevto({
+      meta: posts[0]!.meta,
+      body: posts[0]!.body,
+      slug: posts[0]!.slug,
+      resolver: () => null,
+      canonicalHost: "https://ryantsuji.dev",
+      coverImageUrl: undefined,
+      now: new Date("2026-05-21T00:00:00Z"),
+    });
+    const matchingHash = computeDevtoContentHash(article);
+    // contentHash を post に inject (= 「直近 PUT 後の repo 状態」を再現)
+    posts[0]!.meta.syndication.devto!.contentHash = matchingHash;
+
+    await emitDevto({
+      posts,
+      outDir,
+      publish: true,
+      apiKey: "test-key",
+      postsDir,
+      now: new Date("2026-05-21T00:00:00Z"),
+    });
+
+    expect(publishToDevtoMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("computeDevtoContentHash", () => {
+  const baseArticle = {
+    title: "alpha",
+    published: true,
+    body_markdown: "hello world",
+    tags: ["a", "b"],
+    canonical_url: "https://ryantsuji.dev/posts/alpha",
+  };
+
+  it("同 article から決定的に 16 文字の hex prefix を返す", () => {
+    const h = computeDevtoContentHash(baseArticle);
+    expect(h).toMatch(/^[a-f0-9]{16}$/u);
+    expect(computeDevtoContentHash(baseArticle)).toBe(h);
+  });
+
+  it("body が変わると hash も変わる", () => {
+    const a = computeDevtoContentHash(baseArticle);
+    const b = computeDevtoContentHash({ ...baseArticle, body_markdown: "hello world!" });
+    expect(a).not.toBe(b);
+  });
+
+  it("published 切替 (publishAt 境界をまたぐ) で hash が変わる", () => {
+    const a = computeDevtoContentHash({ ...baseArticle, published: false });
+    const b = computeDevtoContentHash({ ...baseArticle, published: true });
+    expect(a).not.toBe(b);
+  });
+});
+
+describe("upsertDevtoContentHash", () => {
+  const fmWithDevto = [
+    "title: t",
+    "syndication:",
+    "  devto:",
+    "    id: 1",
+    '    slug: "alpha-dev"',
+  ].join("\n");
+
+  it("contentHash 未設定なら slug の直後に新規行を挿入", () => {
+    const out = upsertDevtoContentHash(fmWithDevto, "abc1234567890def");
+    expect(out).toContain('    slug: "alpha-dev"\n    contentHash: "abc1234567890def"');
+  });
+
+  it("contentHash 既存なら値だけ書き換え (1 行 + 重複なし)", () => {
+    const fmWithHash = `${fmWithDevto}\n    contentHash: "OLD0000000000000"`;
+    const out = upsertDevtoContentHash(fmWithHash, "NEW1111111111111");
+    expect(out).toContain('    contentHash: "NEW1111111111111"');
+    expect(out).not.toContain("OLD0000000000000");
+    expect(out.match(/contentHash:/gu)).toHaveLength(1);
+  });
+
+  it("devto.slug 行が無い frontmatter には throw (devto: block 自体不在 = 呼ぶ前に gate するべき)", () => {
+    const fmNoDevto = ["title: t", "syndication:", "  zenn:", '    id: "xyz"'].join("\n");
+    expect(() => upsertDevtoContentHash(fmNoDevto, "abc")).toThrowError(
+      /syndication.devto.slug line not found/u,
+    );
+  });
+});
+
+describe("writebackDevtoContentHashToFile", () => {
+  let postsDir: string;
+
+  beforeEach(async () => {
+    postsDir = await mkdtemp(join(tmpdir(), "syndicate-hash-wb-"));
+  });
+  afterEach(async () => {
+    await rm(postsDir, { recursive: true, force: true });
+  });
+
+  it("既存 devto block に contentHash 行を追記", async () => {
+    const file = join(postsDir, "delta.en.md");
+    await writeFile(
+      file,
+      `---\ntitle: t\nsyndication:\n  devto:\n    id: 7\n    slug: "delta-en"\n---\nbody\n`,
+    );
+    await writebackDevtoContentHashToFile(file, "0123456789abcdef");
+    const after = await readFile(file, "utf8");
+    expect(after).toContain('    slug: "delta-en"\n    contentHash: "0123456789abcdef"');
+    expect(after).toContain("body\n");
+  });
+
+  it("frontmatter delimiter が無いファイルでは throw", async () => {
+    const file = join(postsDir, "broken.en.md");
+    await writeFile(file, "no frontmatter here\n");
+    await expect(writebackDevtoContentHashToFile(file, "abc1234567890def")).rejects.toThrowError(
+      /frontmatter delimiter/u,
+    );
   });
 });
