@@ -36,6 +36,7 @@ logs/
 .claude/cache/
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
+.claude/tmp/
 .claude/worktrees/
 
 # vitest coverage output
