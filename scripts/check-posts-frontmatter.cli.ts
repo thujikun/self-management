@@ -1,9 +1,14 @@
 #!/usr/bin/env tsx
 /*
- * check-posts-frontmatter CLI thin entry。content/posts/*.{ja,en}.md を全列挙し、
+ * check-posts-frontmatter CLI thin entry。content/posts/ 配下の全 `.md` を列挙し、
  * `@self/content` の `parseFrontmatter` で frontmatter を検証、schema 違反があれば
  * exit 1 で fail させる。draft も含め全 post を検証する (rendered-posts plugin は
  * build 時に draft も parse するため)。
+ *
+ * 列挙対象は rendered-posts plugin の `renderAllPosts` と同じ「全 `.md`」に揃える。
+ * gate の存在意義は build の parse 失敗を bump PR CI で先回りして弾くことなので、
+ * parse 対象集合が build より狭いと規約外 `.md` (README.md / 大文字混じり / lang 欠落
+ * 等) を取りこぼし、gate green のまま deploy が壊れた pointer を main に通してしまう。
  *
  * 使い方:
  *   pnpm tsx scripts/check-posts-frontmatter.cli.ts   # 全 post を検証
@@ -24,13 +29,15 @@ import matter from "gray-matter";
 import { parseFrontmatter } from "@self/content";
 
 import { collectFrontmatterViolations, type PostFrontmatter } from "./check-posts-frontmatter.js";
-import { POSTS_DIR, parseFileName } from "./posts-files.js";
+import { POSTS_DIR } from "./posts-files.js";
 
 async function main(): Promise<void> {
   const files = await readdir(POSTS_DIR);
   const posts: PostFrontmatter[] = [];
   for (const f of files) {
-    if (!parseFileName(f)) continue;
+    // build (rendered-posts plugin の renderAllPosts) と同じ parse 対象集合に揃える。
+    // parseFileName の slug 規約で絞ると build の方が permissive になり gate が真部分集合化する。
+    if (!f.endsWith(".md")) continue;
     const raw = await readFile(resolve(POSTS_DIR, f), "utf8");
     posts.push({ file: f, data: matter(raw).data });
   }
