@@ -168,8 +168,10 @@ jobs:
       # (2) 親 repo (self-management) 側で submodule pointer を bump して commit + push
       # 親 repo から `git status --porcelain apps/.../content/posts/` を打っても
       # submodule 内のパスは pathspec として届かず空応答を返すので、submodule 内に
-      # `pushd` してから検出 → 内側で commit する経路が必須。`[skip ci]` で deploy /
-      # syndicate の二重発火を抑止する。
+      # `pushd` してから検出 → 内側で commit する経路が必須。writeback commit には
+      # `[skip ci]` 風文字列を入れない (下記 commit step 参照: content repo の
+      # dispatch-on-push.yml がこの push を拾って親 repo の bump-submodule.yml を kick
+      # する設計。発火抑止ではなく PR 経由 bump chain で間接発火させる)。
       - name: Commit & push frontmatter writeback (if any)
         run: |
           pushd apps/ryantsuji-dev/web/content
