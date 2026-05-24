@@ -1,7 +1,7 @@
 # ryantsuji.dev の post markdown を main push 時に Zenn / dev.to に自動同期する workflow。
 #
-# trigger: `apps/ryantsuji-dev/web/content/posts/**` / `packages/syndication/**` /
-# `scripts/syndicate*` の変更を main に push した時。
+# trigger: `apps/ryantsuji-dev/web/content` (content submodule の gitlink bump) /
+# `packages/syndication/**` / `scripts/syndicate*` の変更を main に push した時。
 #
 # 設計:
 # - source markdown の SoT は本 repo (self-management) の `apps/ryantsuji-dev/web/content/posts/`
@@ -39,6 +39,13 @@ on:
       # 親 repo に実ファイルが無いため永久にマッチせず、syndicate が bump で発火しなかった
       # (deploy が `apps/ryantsuji-dev/web/**` で gitlink を拾えていたのと非対称だった)。
       # gitlink path 自体を列挙して content bump で確実に発火させる。
+      #
+      # NOTE: writeback (`chore(syndication): writeback syndication IDs`) 由来の bump も
+      # この gitlink filter にマッチするため syndicate が 1 周だけ再発火する。再 run 時は
+      # 全 post が ID 済で `git status --porcelain posts/` が空になり writeback step が
+      # commit を skip する (= 追加 bump 無し) ため、writeback → bump → writeback の連鎖は
+      # 1 周で止まる。これは syndicate.cli が ID 既存 post の frontmatter を書き換えない
+      # 冪等性に依存する前提。
       - "apps/ryantsuji-dev/web/content"
       - "packages/syndication/**"
       - "scripts/syndicate.ts"
