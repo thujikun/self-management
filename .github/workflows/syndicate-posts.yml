@@ -34,18 +34,21 @@ on:
   push:
     branches: [main]
     paths:
-      - "apps/ryantsuji-dev/web/content/posts/**"
+      # content は submodule。post 編集は親 repo では gitlink `apps/ryantsuji-dev/web/content`
+      # の変更 (= bump-submodule の pointer 更新) としてのみ現れる。`content/posts/**` は
+      # 親 repo に実ファイルが無いため永久にマッチせず、syndicate が bump で発火しなかった
+      # (deploy が `apps/ryantsuji-dev/web/**` で gitlink を拾えていたのと非対称だった)。
+      # gitlink path 自体を列挙して content bump で確実に発火させる。
+      - "apps/ryantsuji-dev/web/content"
       - "packages/syndication/**"
       - "scripts/syndicate.ts"
       - "scripts/syndicate.cli.ts"
       - ".github/workflows/syndicate-posts.yml"
-  # 15 分間隔で再評価する目的: post 本体の merge 後も `syndication.<target>.publishAt`
-  # が未来日付の post は target に push されていない。時刻到達で publish を flip する
-  # ためだけに cron を回す (no-op tick は syndicator が即 exit するので副作用は薄い)。
+  # publishAt 到達による publish flip 用の保険。bump 発火が効くので主経路ではなくなるが、
+  # 「post は変わらず時刻だけ到達」(= 予約投稿の公開) は push が無いので cron でしか拾えない。
   schedule:
     - cron: "*/15 * * * *"
-  # bump-submodule.yml が PR を auto-merge した後の発火経路 (`on: push` で間接的に
-  # 鳴るが、手動 retry 用にも残す)。
+  # 手動 retry / 強制再 syndicate 用。
   workflow_dispatch:
 
 # - contents: write は frontmatter writeback 用の git commit + push
