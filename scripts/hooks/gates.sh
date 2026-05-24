@@ -40,6 +40,7 @@ GATES_FULL_ONLY=(
   typecheck
   test-coverage
   build
+  posts-frontmatter
 )
 
 cmd_list() {
@@ -182,6 +183,17 @@ cmd_run() {
       ;;
     build)
       pnpm build
+      ;;
+    posts-frontmatter)
+      # content/posts の全 frontmatter を @self/content の parseFrontmatter で検証。
+      # rendered-posts plugin が build 時に全 post を parse するので、schema 違反 1 件で
+      # site build / deploy 全体が落ちる。turbo build cache は submodule content を
+      # input hash に含めないため `build` gate が pointer bump 時に cache hit して
+      # frontmatter を再検証しない — 本 gate は post を毎回直接 parse して bump PR の
+      # CI で確実に弾く (= deploy が壊れた pointer を main に通さない)。
+      # parseFrontmatter は @self/content の dist を要するので先に build する。
+      pnpm turbo run build --filter=@self/content >/dev/null
+      pnpm exec tsx scripts/check-posts-frontmatter.cli.ts
       ;;
     *)
       echo "unknown gate: $name" >&2
