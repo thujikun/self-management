@@ -148,6 +148,27 @@ describe("parseFrontmatter", () => {
     ).toThrow();
   });
 
+  it("devto を publishAt だけで指定可 (id/slug 未設定 = 未作成 post の予約) — id/slug は optional", () => {
+    const out = parseFrontmatter({
+      title: "x",
+      publishedAt: "2026-05-26",
+      syndication: { devto: { publishAt: "2026-05-26T07:00:00-07:00" } },
+    });
+    expect(out.syndication.devto?.id).toBeUndefined();
+    expect(out.syndication.devto?.slug).toBeUndefined();
+    expect(out.syndication.devto?.publishAt).toBe("2026-05-26T07:00:00-07:00");
+  });
+
+  it("zenn を publishAt だけで指定可 (id 未設定 = 未作成 post の予約) — id は optional", () => {
+    const out = parseFrontmatter({
+      title: "x",
+      publishedAt: "2026-05-26",
+      syndication: { zenn: { publishAt: "2026-05-26T08:30:00+09:00" } },
+    });
+    expect(out.syndication.zenn?.id).toBeUndefined();
+    expect(out.syndication.zenn?.publishAt).toBe("2026-05-26T08:30:00+09:00");
+  });
+
   it("series + seriesOrder=1 が parse される", () => {
     const m = parseFrontmatter({
       title: "x",

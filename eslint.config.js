@@ -26,6 +26,10 @@ export default tseslint.config(
       // apps/xmcp は Python アプリ。.venv 配下に Python パッケージ同梱の .js があり
       // browser global (document/navigator/...) 前提で no-undef を大量に出すので除外。
       "apps/xmcp/**",
+      // content submodule (thujikun/ryantsuji-dev-content) は別 repo。自前の lint 規約を
+      // 持つので self-management 側からは lint / format しない (.md posts + content repo
+      // 専用 scripts を含む)。
+      "apps/ryantsuji-dev/web/content/**",
       // TanStack Router 自動生成 (commit 済) — ファイル先頭に @ts-nocheck を含むため
       // eslint / format / check-no-ignore の対象外にする。生成内容は機械的なので人手 review しない。
       "**/routeTree.gen.ts",
