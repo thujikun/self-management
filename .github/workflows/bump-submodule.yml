@@ -58,10 +58,16 @@ jobs:
           git config user.name "ryantsuji-dev-content sync bot"
           git config user.email "noreply@github.com"
 
+      # submodule pointer を content repo の最新 main に倒すだけなので merge は不要。
+      # `--merge` を使うと content repo の history rewrite (= 過去 SHA が全置換され、
+      # 親が pin する旧 SHA が現 main 系譜から外れる) 後に「refusing to merge
+      # unrelated histories」で落ちる。fetch + detached checkout なら共通祖先の
+      # 有無に関わらず常に最新 main の SHA を指せる。
       - name: Update submodule to latest main
         id: update
         run: |
-          git submodule update --remote --merge apps/ryantsuji-dev/web/content
+          git -C apps/ryantsuji-dev/web/content fetch origin main
+          git -C apps/ryantsuji-dev/web/content checkout --force --detach origin/main
           if [ -z "$(git status --porcelain apps/ryantsuji-dev/web/content)" ]; then
             echo "no submodule pointer change — exit early"
             echo "changed=false" >> "$GITHUB_OUTPUT"
