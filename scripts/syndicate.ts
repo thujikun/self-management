@@ -139,23 +139,53 @@ export function insertSyndicationBlock(raw: string, blockBody: string): string {
 }
 
 /**
+ * frontmatter content (delimiter 抜き) の既存 `  <key>:` block 先頭に `lines` を挿入する。
+ * block が存在しなければ `null` を返す (= 呼び出し側が新規作成 path に fallback)。
+ *
+ * 用途: post を予約だけして (publishAt のみ設定) id/slug 未設定の `devto:` / `zenn:`
+ * block に、syndicate の create 後に id/slug を後挿入して publishAt 等を温存する。
+ *
+ * @graph-connects none
+ */
+export function insertIntoExistingBlock(
+  fmContent: string,
+  blockKey: "devto" | "zenn",
+  lines: string,
+): string | null {
+  const re = new RegExp(`^( {2}${blockKey}:[ \\t]*\\n)`, "mu");
+  if (!re.test(fmContent)) return null;
+  return fmContent.replace(re, `$1${lines}`);
+}
+
+/**
  * source .md ファイルの frontmatter に `syndication.zenn.id` を書き加える。
  *
- * gray-matter で parse → data 操作 → stringify する代わりに、`insertSyndicationBlock`
- * で frontmatter 領域だけを surgical に編集する (round-trip による format drift を避ける)。
- * 既存 `zenn.id` の上書きは想定しない (= 二重 create の防御として呼び出し側が事前 check する)。
+ * gray-matter で parse → data 操作 → stringify する代わりに frontmatter 領域だけを
+ * surgical に編集する (round-trip による format drift を避ける)。既存の `zenn:` block
+ * (= publishAt だけ予約済) があればその先頭に id を後挿入して publishAt を温存し、
+ * 無ければ {@link insertSyndicationBlock} で新規 block を作る。
  *
  * @graph-connects none
  */
 export async function writebackZennIdToFile(file: string, zennId: string): Promise<void> {
   const raw = await readFile(file, "utf8");
-  const insertion = `  zenn:\n    id: "${zennId}"\n`;
-  await writeFile(file, insertSyndicationBlock(raw, insertion), "utf8");
+  const idLine = `    id: "${zennId}"\n`;
+  const fmMatch = /^---\n([\s\S]*?)\n---\n/u.exec(raw);
+  if (fmMatch) {
+    const updated = insertIntoExistingBlock(fmMatch[1] as string, "zenn", idLine);
+    if (updated !== null) {
+      await writeFile(file, `---\n${updated}\n---\n${raw.slice(fmMatch[0].length)}`, "utf8");
+      return;
+    }
+  }
+  await writeFile(file, insertSyndicationBlock(raw, `  zenn:\n${idLine}`), "utf8");
 }
 
 /**
  * source .md ファイルの frontmatter に `syndication.devto.{id, slug}` を書き加える。
- * 規約は `writebackZennIdToFile` と同じ (frontmatter 領域だけを surgical に書き換える)。
+ * 規約は `writebackZennIdToFile` と同じ。既存の `devto:` block (= publishAt だけ
+ * 予約済) があればその先頭に id/slug を後挿入して publishAt を温存し、無ければ
+ * {@link insertSyndicationBlock} で新規 block を作る。
  *
  * @graph-connects none
  */
@@ -167,8 +197,16 @@ export async function writebackDevtoToFile(
 ): Promise<void> {
   const raw = await readFile(file, "utf8");
   const hashLine = devtoContentHash ? `    contentHash: "${devtoContentHash}"\n` : "";
-  const insertion = `  devto:\n    id: ${devtoId}\n    slug: "${devtoSlug}"\n${hashLine}`;
-  await writeFile(file, insertSyndicationBlock(raw, insertion), "utf8");
+  const lines = `    id: ${devtoId}\n    slug: "${devtoSlug}"\n${hashLine}`;
+  const fmMatch = /^---\n([\s\S]*?)\n---\n/u.exec(raw);
+  if (fmMatch) {
+    const updated = insertIntoExistingBlock(fmMatch[1] as string, "devto", lines);
+    if (updated !== null) {
+      await writeFile(file, `---\n${updated}\n---\n${raw.slice(fmMatch[0].length)}`, "utf8");
+      return;
+    }
+  }
+  await writeFile(file, insertSyndicationBlock(raw, `  devto:\n${lines}`), "utf8");
 }
 
 /**
@@ -262,7 +300,8 @@ export function buildDevtoResolver(posts: ParsedPost[]): SlugResolver {
   for (const p of posts) {
     if (p.lang !== "en") continue;
     const d = p.meta.syndication.devto;
-    if (d) {
+    // slug 不在 (= publishAt だけ予約済で未作成) の post は公開 URL を持たないので map しない。
+    if (d?.slug) {
       map.set(p.slug, `https://dev.to/${DEVTO_USER}/${d.slug}`);
     }
   }
@@ -383,8 +422,7 @@ export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
   for (const p of args.posts) {
     if (p.lang !== "en") continue;
     if (args.slug && p.slug !== args.slug) continue;
-    let devto = p.meta.syndication.devto;
-    let justCreated = false;
+    const devto = p.meta.syndication.devto;
     const article = syndicateForDevto({
       meta: p.meta,
       body: p.body,
@@ -396,26 +434,32 @@ export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
     });
 
     const contentHash = computeDevtoContentHash(article);
+    const srcFile = resolve(args.postsDir ?? POSTS_DIR, `${p.slug}.en.md`);
 
-    if (!devto) {
+    // dev.to article id を解決する。id 不在 = 「devto block 自体が無い」or
+    // 「publishAt だけ予約済で未作成」の両方を含む (schema で id を optional 化済)。
+    let articleId: number;
+    let justCreated = false;
+    if (devto?.id === undefined) {
       if (!apiKey) {
-        console.warn(`  [skip] ${p.slug}.en.md: no syndication.devto (dry-run)`);
+        console.warn(`  [skip] ${p.slug}.en.md: no syndication.devto.id (dry-run)`);
         continue;
       }
-      // publish mode で devto entry が無い場合は POST で article 作成 → id + slug を
-      // frontmatter に書き戻し → 以後の syndicate で update 経路に乗る。
+      // publish mode で id が無い場合は POST で article 作成 → id + slug を frontmatter
+      // に書き戻し (既存 publishAt は温存) → 以後の syndicate で update 経路に乗る。
       const created = await createDevtoArticle({ apiKey, article });
-      devto = { id: created.id, slug: created.slug, contentHash };
+      articleId = created.id;
       justCreated = true;
-      const srcFile = resolve(args.postsDir ?? POSTS_DIR, `${p.slug}.en.md`);
       await writebackDevtoToFile(srcFile, created.id, created.slug, contentHash);
       console.log(
         `  [create] ${p.slug}.en.md: dev.to article created id=${created.id} slug=${created.slug}`,
       );
+    } else {
+      articleId = devto.id;
     }
 
     const outPath = resolve(args.outDir, `${p.slug}.json`);
-    await writeFile(outPath, JSON.stringify({ id: devto.id, article }, null, 2) + "\n", "utf8");
+    await writeFile(outPath, JSON.stringify({ id: articleId, article }, null, 2) + "\n", "utf8");
     console.log(`  devto: ${p.slug} → ${outPath}`);
 
     // POST 直後の state と PUT body は同一なので、create 経路を踏んだ post は PUT skip。
@@ -424,12 +468,11 @@ export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
     // contentHash idempotency gate: 直近 PUT で送った body の hash が変わってなければ skip。
     // dev.to PUT は body 同一でも `edited_at` を bump するため、毎 cron tick (15 分) で
     // 全 article が「今日更新」になる事故をここで止める。
-    if (devto.contentHash === contentHash) {
+    if (devto?.contentHash === contentHash) {
       console.log(`    publish: skip (contentHash unchanged)`);
       continue;
     }
-    const result = await publishToDevto({ apiKey, articleId: devto.id, article });
-    const srcFile = resolve(args.postsDir ?? POSTS_DIR, `${p.slug}.en.md`);
+    const result = await publishToDevto({ apiKey, articleId, article });
     await writebackDevtoContentHashToFile(srcFile, contentHash);
     console.log(`    publish: ${result.url} (contentHash=${contentHash})`);
   }

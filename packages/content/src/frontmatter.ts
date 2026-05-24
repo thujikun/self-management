@@ -70,7 +70,12 @@ export const FrontmatterSchema = z.object({
     .object({
       zenn: z
         .object({
-          id: z.string().min(1),
+          /**
+           * Zenn article id。**optional**: post を予約だけして (publishAt のみ設定)
+           * まだ Zenn に作成していない状態を valid にするため。id 不在の block を
+           * syndicate が検出したら新規 id を生成して書き戻す。
+           */
+          id: z.string().min(1).optional(),
           /**
            * Zenn 公開時刻。未設定なら `publishedAt` と同時に公開。設定時は `publishAt`
            * 到達まで `published: false` (Zenn 側 draft) のまま保たれる。媒体ごとに公開
@@ -84,8 +89,14 @@ export const FrontmatterSchema = z.object({
         .optional(),
       devto: z
         .object({
-          id: z.number().int().positive(),
-          slug: z.string().min(1),
+          /**
+           * dev.to numeric article id。**optional**: post を予約だけして (publishAt
+           * のみ設定) まだ dev.to に作成していない状態を valid にするため。id 不在の
+           * block を syndicate が検出したら POST で作成して id/slug を書き戻す。
+           */
+          id: z.number().int().positive().optional(),
+          /** dev.to URL slug。id と同様 optional (= 未作成 post では不在)。 */
+          slug: z.string().min(1).optional(),
           /** dev.to 公開時刻。zenn と同じ意味。 */
           publishAt: z
             .string()

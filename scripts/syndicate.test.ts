@@ -41,6 +41,7 @@ import {
   emitDevto,
   emitZenn,
   generateZennId,
+  insertIntoExistingBlock,
   insertSyndicationBlock,
   parseFileName,
   readAllPosts,
@@ -413,7 +414,7 @@ describe("emitDevto", () => {
     ];
     await emitDevto({ posts, outDir, publish: false });
     expect(await readdir(outDir)).toStrictEqual(["beta.json"]);
-    expect(warnSpy).toHaveBeenCalledWith("  [skip] alpha.en.md: no syndication.devto (dry-run)");
+    expect(warnSpy).toHaveBeenCalledWith("  [skip] alpha.en.md: no syndication.devto.id (dry-run)");
   });
 
   it("throws when publish=true and no API key is provided", async () => {
@@ -536,6 +537,33 @@ describe("insertSyndicationBlock", () => {
     expect(() => insertSyndicationBlock("plain markdown\n", `  zenn:\n    id: "x"\n`)).toThrow(
       /frontmatter delimiter/,
     );
+  });
+});
+
+describe("insertIntoExistingBlock", () => {
+  it("既存 devto block の先頭に行を挿入 (publishAt を温存)", () => {
+    const fm = `title: t\nsyndication:\n  devto:\n    publishAt: "2026-05-26T07:00:00-07:00"\n`;
+    const out = insertIntoExistingBlock(fm, "devto", `    id: 42\n    slug: "x"\n`);
+    expect(out).toBe(
+      `title: t\nsyndication:\n  devto:\n    id: 42\n    slug: "x"\n    publishAt: "2026-05-26T07:00:00-07:00"\n`,
+    );
+  });
+
+  it("既存 zenn block の先頭に行を挿入 (publishAt を温存)", () => {
+    const fm = `title: t\nsyndication:\n  zenn:\n    publishAt: "2026-05-26T08:30:00+09:00"\n`;
+    const out = insertIntoExistingBlock(fm, "zenn", `    id: "abc123"\n`);
+    expect(out).toBe(
+      `title: t\nsyndication:\n  zenn:\n    id: "abc123"\n    publishAt: "2026-05-26T08:30:00+09:00"\n`,
+    );
+  });
+
+  it("対象 block が無ければ null を返す (= 呼び出し側が新規作成へ fallback)", () => {
+    const fm = `title: t\nsyndication:\n  zenn:\n    id: "x"\n`;
+    expect(insertIntoExistingBlock(fm, "devto", `    id: 1\n`)).toBeNull();
+  });
+
+  it("syndication block 自体が無くても null (devto/zenn キー不在)", () => {
+    expect(insertIntoExistingBlock(`title: t\n`, "devto", `    id: 1\n`)).toBeNull();
   });
 });
 
@@ -705,6 +733,41 @@ describe("emitZenn publish create branch", () => {
     });
     expect(publishArg?.markdown).toMatch(/hello/);
   });
+
+  it("zenn block が publishAt だけ (id 未設定 = 予約済未作成) の .ja post を publish: id 生成 → 後挿入し publishAt を温存", async () => {
+    publishToZennMock.mockResolvedValueOnce({
+      filePath: "/fake/articles/yyy.md",
+      commitSha: "feedface4567",
+      pushed: true,
+    });
+    const srcFile = join(postsDir, "delta.ja.md");
+    await writeFile(
+      srcFile,
+      `---\ntitle: t\npublishedAt: "2026-01-01"\nsyndication:\n  zenn:\n    publishAt: "2099-01-01T08:30:00+09:00"\n---\nhello\n`,
+    );
+    const post = makePost({ slug: "delta", lang: "ja", body: "hello\n" });
+    post.meta = parseFrontmatter({
+      title: "t",
+      publishedAt: "2026-01-01",
+      syndication: { zenn: { publishAt: "2099-01-01T08:30:00+09:00" } },
+    });
+
+    await emitZenn({
+      posts: [post],
+      outDir,
+      footer: "",
+      publish: true,
+      postsDir,
+      repoDir: "/fake/repo",
+    });
+
+    // 生成 id が zenn block 先頭に挿入され、既存 publishAt は残る
+    const after = await readFile(srcFile, "utf8");
+    expect(after).toMatch(
+      /syndication:\n {2}zenn:\n {4}id: "[a-f0-9]{14}"\n {4}publishAt: "2099-01-01T08:30:00\+09:00"\n/u,
+    );
+    expect(publishToZennMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("emitDevto publish create branch", () => {
@@ -760,6 +823,37 @@ describe("emitDevto publish create branch", () => {
     // POST 直後の body と PUT body が同一なので二度叩きしない (Major #4)
     expect(createDevtoArticleMock).toHaveBeenCalledTimes(1);
     expect(publishToDevtoMock).not.toHaveBeenCalled();
+  });
+
+  it("devto block が publishAt だけ (id 未設定 = 予約済未作成) の .en post を publish: POST 作成 → id/slug を後挿入し publishAt を温存", async () => {
+    createDevtoArticleMock.mockResolvedValueOnce({
+      id: 67890,
+      slug: "delta-en-yyy",
+      url: "https://dev.to/ryantsuji/delta-en-yyy",
+    });
+    const srcFile = join(postsDir, "delta.en.md");
+    // publishAt だけ予約済、id/slug は未設定の状態 (= cortex-auto-review が踏むケース)
+    await writeFile(
+      srcFile,
+      `---\ntitle: t\npublishedAt: "2026-01-01"\nsyndication:\n  devto:\n    publishAt: "2099-01-01T07:00:00-07:00"\n---\nhello\n`,
+    );
+    const post = makePost({ slug: "delta", lang: "en", body: "hello\n" });
+    post.meta = parseFrontmatter({
+      title: "t",
+      publishedAt: "2026-01-01",
+      syndication: { devto: { publishAt: "2099-01-01T07:00:00-07:00" } },
+    });
+    const posts = [post];
+
+    await emitDevto({ posts, outDir, publish: true, apiKey: "test-key", postsDir });
+
+    expect(createDevtoArticleMock).toHaveBeenCalledTimes(1);
+    expect(publishToDevtoMock).not.toHaveBeenCalled();
+    // id/slug/contentHash が devto block 先頭に挿入され、既存 publishAt は残る
+    const after = await readFile(srcFile, "utf8");
+    expect(after).toMatch(
+      /syndication:\n {2}devto:\n {4}id: 67890\n {4}slug: "delta-en-yyy"\n {4}contentHash: "[a-f0-9]{16}"\n {4}publishAt: "2099-01-01T07:00:00-07:00"\n/u,
+    );
   });
 
   it("devto 既存だが contentHash 未設定の .en post を publish: PUT で update して contentHash 書き戻し", async () => {
