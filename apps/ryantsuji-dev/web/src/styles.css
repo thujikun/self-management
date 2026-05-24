@@ -731,6 +731,17 @@ main {
   margin-bottom: var(--space-1);
 }
 
+/* markdown `---` の thematic break。browser default では margin がほぼ無く前後の
+   段落と線が密着するので、section 区切りとして上下に余白を確保する (h2 の section
+   rhythm に揃えた `--space-12`)。default の立体 border は外して 1px 線に。
+   線色は `--border-subtle` だと dark mode で bg からの差が ~5% しかなく消えるため、
+   table 罫線 (上記) と同じ `--border-default` (~13%) で区切り線の視認性を確保する。 */
+.post-body hr {
+  border: none;
+  border-top: 1px solid var(--border-default);
+  margin: var(--space-12) 0;
+}
+
 .post-body blockquote {
   margin: var(--space-4) 0;
   padding: var(--space-2) var(--space-6);
