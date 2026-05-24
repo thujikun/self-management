@@ -129,14 +129,20 @@ jobs:
           git config --global user.name "ryantsuji-dev syndication bot"
           git config --global user.email "noreply@github.com"
 
-      # parent repo の `actions/checkout` は submodule の origin URL を HTTPS+
-      # GITHUB_TOKEN credential のまま継承するので、submodule 側 (= ryantsuji-dev-
-      # content) へ push しようとすると 403 になる。deploy key は SSH 専用なので、
-      # submodule 内の origin URL を SSH 形式に張り替える。
+      # parent repo の `actions/checkout` は submodule の local config に以下 2 つを書く:
+      #   - `http.https://github.com/.extraheader` (GITHUB_TOKEN 注入用)
+      #   - `url.https://github.com/.insteadOf = git@github.com:` (= submodule の
+      #     SSH 形式 URL を HTTPS に rewrite して GITHUB_TOKEN で fetch する仕掛け)
+      # この `insteadOf` が残ったまま origin URL を SSH に張り替えても、push 時に
+      # `git@github.com:` → `https://github.com/` に rewrite されて結局 GITHUB_TOKEN
+      # 認証 (= github-actions[bot]) で 403 になる。deploy key 経由 SSH push のために
+      # `extraheader` と `insteadOf` を先に外してから origin を SSH 形式に張り替える。
       - name: Switch submodule remote to SSH
         run: |
-          git -C apps/ryantsuji-dev/web/content remote set-url origin \
-            git@github.com:thujikun/ryantsuji-dev-content.git
+          cd apps/ryantsuji-dev/web/content
+          git config --local --unset-all "http.https://github.com/.extraheader" || true
+          git config --local --unset-all "url.https://github.com/.insteadOf" || true
+          git remote set-url origin git@github.com:thujikun/ryantsuji-dev-content.git
 
       # Zenn 側 repo を `$RUNNER_TEMP/ryantsuji-dev-content` に clone (= publishToZenn
       # の `repoDir`)。SSH key 認証で git@github.com:... 経由で push する。
