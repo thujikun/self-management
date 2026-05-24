@@ -13,9 +13,11 @@
 #   `scripts/syndicate.ts` は新規記事に `syndication.zenn.id` (= randomBytes(7) hex) と
 #   `syndication.devto.{id,slug}` (= dev.to POST レスポンスから) を frontmatter に書き
 #   戻す。content/posts/ は submodule (`thujikun/ryantsuji-dev-content`) なので、
-#   書き戻し後に (1) submodule 内側で deploy key 経由で commit + push → (2) 親 repo
-#   の submodule pointer を bump、の二段 commit にする。親 repo から `git add` で
-#   submodule 内部のパスを stage しようとしても pathspec が届かないため。
+#   書き戻し後は submodule 内側で deploy key 経由で `posts/` の diff を commit + push
+#   する (親 repo から `git add` で submodule 内部のパスを stage しても pathspec が
+#   届かないため)。親 repo の submodule pointer bump は本 workflow では行わず、content
+#   repo の dispatch-on-push.yml → monorepo bump-submodule.yml の PR auto-merge chain
+#   に委譲する (writeback step 末尾の comment 参照)。
 #
 # **secret 要件** (GCP Secret Manager に事前投入):
 # - `dev-to-api-key`: dev.to API key (Settings → Extensions → DEV API Keys)
@@ -42,10 +44,11 @@ on:
       #
       # NOTE: writeback (`chore(syndication): writeback syndication IDs`) 由来の bump も
       # この gitlink filter にマッチするため syndicate が 1 周だけ再発火する。再 run 時は
-      # 全 post が ID 済で `git status --porcelain posts/` が空になり writeback step が
-      # commit を skip する (= 追加 bump 無し) ため、writeback → bump → writeback の連鎖は
-      # 1 周で止まる。これは syndicate.cli が ID 既存 post の frontmatter を書き換えない
-      # 冪等性に依存する前提。
+      # post 内容が直前の同期と同一なので、devto は contentHash idempotency gate
+      # (`scripts/syndicate.ts` の `devto?.contentHash === contentHash`) が PUT /
+      # frontmatter writeback を short-circuit し、zenn は id 既存で再採番しない。よって
+      # `git status --porcelain posts/` が空になり writeback step が commit を skip する
+      # (= 追加 bump 無し) ため、writeback → bump → writeback の連鎖は 1 周で止まる。
       - "apps/ryantsuji-dev/web/content"
       - "packages/syndication/**"
       - "scripts/syndicate.ts"
@@ -163,9 +166,10 @@ jobs:
         run: pnpm exec tsx scripts/syndicate.cli.ts --target all --publish --include-drafts
 
       # syndicate が frontmatter に `syndication.zenn.id` / `syndication.devto.{id,slug}`
-      # を書き戻していたら二段 commit する:
-      # (1) submodule (ryantsuji-dev-content) 側で `posts/` の diff を commit + push
-      # (2) 親 repo (self-management) 側で submodule pointer を bump して commit + push
+      # を書き戻していたら submodule (ryantsuji-dev-content) 側で `posts/` の diff を
+      # commit + push する。親 repo (self-management) の submodule pointer bump は本 step
+      # では行わず、content repo の dispatch-on-push.yml → monorepo bump-submodule.yml の
+      # PR auto-merge chain に委譲する (理由は本 step 末尾の comment 参照)。
       # 親 repo から `git status --porcelain apps/.../content/posts/` を打っても
       # submodule 内のパスは pathspec として届かず空応答を返すので、submodule 内に
       # `pushd` してから検出 → 内側で commit する経路が必須。writeback commit には
