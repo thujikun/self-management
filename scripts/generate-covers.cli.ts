@@ -36,9 +36,11 @@ async function main(): Promise<void> {
   const fonts = await loadOgFonts();
 
   console.log("[og-image] reading posts...");
-  // og:image は syndication 可否に関わらず全 post に対して生成する
-  // (ryantsuji.dev 限定 post も unfurl で固有 cover を出すため)
-  const posts = await readAllPosts(undefined, { includeExcluded: true });
+  // og:image は syndication 可否・draft 可否に関わらず全 post に対して生成する
+  // (ryantsuji.dev 限定 post も unfurl で固有 cover を出す + draft の段階で cover を
+  // 用意しておき、published flip 時の 404 を防ぐ)。`_` prefix fixture は readAllPosts
+  // が内部で skip する。
+  const posts = await readAllPosts(undefined, { includeExcluded: true, includeDrafts: true });
   console.log(`[og-image] ${posts.length} post entries (slug filter: ${slug ?? "none"})`);
 
   const results = await generateAllCovers({ posts, fonts, slug, writeFrontmatter });

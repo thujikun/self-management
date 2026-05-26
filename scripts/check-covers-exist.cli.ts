@@ -27,18 +27,18 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { findMissingCovers } from "./check-covers-exist.js";
-import { listPublishedPostFiles } from "./posts-files.js";
+import { listPostFiles } from "./posts-files.js";
 
 const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPTS_DIR, "..");
 const PUBLIC_POSTS_DIR = resolve(REPO_ROOT, "apps/ryantsuji-dev/web/public/posts");
 
 async function main(): Promise<void> {
-  // covers は syndication 可否に関わらず全 post 必要 (ryantsuji.dev は独自 cover で
-  // unfurl するため)。draft 除外は `listPublishedPostFiles` 側で gray-matter から
-  // `draft` フラグだけ読んで実施 (= `excludeFromSyndication` は cover 要求と無関係
-  // なので参照しない)。
-  const entries = await listPublishedPostFiles();
+  // covers は syndication 可否・draft 可否に関わらず全 post 必要 (ryantsuji.dev は独自
+  // cover で unfurl するため)。draft も要求するのは、draft で cover 無しのまま merge され
+  // publishedAt 到達で published に flip した瞬間に cover が 404 になる事故を防ぐため。
+  // `_` prefix の test fixture は findMissingCovers の `shouldHaveCover` が skip する。
+  const entries = await listPostFiles();
 
   const missing = findMissingCovers(entries, (publicPath) =>
     existsSync(resolve(PUBLIC_POSTS_DIR, publicPath.replace(/^\/posts\//, ""))),
