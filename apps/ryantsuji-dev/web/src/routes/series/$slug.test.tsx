@@ -76,14 +76,31 @@ describe("/series/$slug — series hub", () => {
     expect(html).toMatch(/本/);
   });
 
-  it("post 数 (count) が表示される", async () => {
-    const router = getRouter({
-      history: createMemoryHistory({ initialEntries: ["/series/building-ai-harness?lang=en"] }),
-    });
-    await router.load();
-    const html = renderToString(<RouterProvider router={router} />);
-    // React の SSR が text node 間に `<!-- -->` を挟むので、`>2...posts<` の包括 match で確認
+  it("post 数 (count) が表示される (複数 = posts)", () => {
+    // 実コンテンツ (building-ai-harness) の本数を hardcode すると、連載に Part が増減
+    // する / draft が published に flip するたびに壊れる。count 表示ロジックは
+    // SeriesHubBody を fixture で直接 render して検証し、実 post 数から切り離す。
+    // React の SSR が text node 間に `<!-- -->` を挟むので包括 match で確認。
+    const posts = [
+      makePost({ slug: "a", seriesOrder: 1 }),
+      makePost({ slug: "b", seriesOrder: 2 }),
+    ];
+    const html = renderToString(<SeriesHubBody meta={fakeMeta} posts={posts} lang="en" />);
     expect(html).toMatch(/<p class="series__count">2(?:<!-- -->| )+posts<\/p>/);
+  });
+
+  it("post 数 (count): 単数は post / 空は no posts yet", () => {
+    const single = renderToString(
+      <SeriesHubBody
+        meta={fakeMeta}
+        posts={[makePost({ slug: "only", seriesOrder: 1 })]}
+        lang="en"
+      />,
+    );
+    expect(single).toMatch(/<p class="series__count">1(?:<!-- -->| )+post<\/p>/);
+
+    const empty = renderToString(<SeriesHubBody meta={fakeMeta} posts={[]} lang="en" />);
+    expect(empty).toMatch(/no posts yet\./);
   });
 
   it("head に canonical / og:type / og:image / twitter:card が出る", async () => {
