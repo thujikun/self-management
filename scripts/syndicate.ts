@@ -365,6 +365,9 @@ export async function emitZenn(args: EmitZennArgs): Promise<void> {
       canonicalHost: RYANTSUJI_DEV_BASE,
       enUrl,
       footerMarkdown: args.footer,
+      // per-post で frontmatter.emoji が指定されていれば、それを Zenn 記事カードの
+      // emoji として使う。未指定なら syndicateForZenn 側の default 🤖。
+      emoji: p.meta.emoji,
       now,
     });
     const outPath = resolve(args.outDir, `${zennId}.md`);

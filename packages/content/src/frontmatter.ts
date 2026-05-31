@@ -33,6 +33,12 @@ export const FrontmatterSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}/)
     .optional(),
   summary: z.string().optional(),
+  /**
+   * Zenn 記事カードに表示される emoji。Zenn 側は記事ごとに任意 emoji を指定可能で、
+   * 全記事 default の 🤖 では味気ないので per-article で上書きできるよう optional に。
+   * 未指定の場合は syndicate pipeline が default 🤖 を充てる。
+   */
+  emoji: z.string().optional(),
   tags: z
     .array(z.string())
     .default([])
