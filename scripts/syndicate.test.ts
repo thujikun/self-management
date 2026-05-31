@@ -382,14 +382,14 @@ describe("emitDevto", () => {
         slug: "alpha",
         lang: "en",
         devto: { id: 100, slug: "alpha-dev" },
-        cover: "/posts/alpha.cover.png",
+        cover: "/images/posts/alpha.cover.png",
       }),
     ];
     await emitDevto({ posts, outDir, publish: false });
     const json = JSON.parse(await readFile(resolve(outDir, "alpha.json"), "utf8")) as {
       article: { cover_image?: string };
     };
-    expect(json.article.cover_image).toBe("https://ryantsuji.dev/posts/alpha.cover.png");
+    expect(json.article.cover_image).toBe("https://ryantsuji.dev/images/posts/alpha.cover.png");
   });
 
   it("skips .ja posts even with devto entry (defensive)", async () => {

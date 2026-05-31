@@ -1,6 +1,6 @@
 /*
  * check-covers-exist logic — content/posts/*.{ja,en}.md 全てに対して
- * `apps/ryantsuji-dev/web/public/posts/<slug>.<lang>.cover.png` の存在を確認する。
+ * `apps/ryantsuji-dev/web/public/images/posts/<slug>.<lang>.cover.png` の存在を確認する。
  *
  * Why: PR #111 で「frontmatter に cover が無い時は convention path に fallback」
  * へ移行した結果、PNG 未生成のまま merge / deploy すると og:image が 404 を指して
@@ -36,7 +36,7 @@ export interface PostEntry {
 export interface MissingCover {
   slug: string;
   lang: OgLang;
-  /** site-relative path (`/posts/<slug>.<lang>.cover.png`)、debug 用 */
+  /** site-relative path (`/images/posts/<slug>.<lang>.cover.png`)、debug 用 */
   publicPath: string;
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /*
  * check-covers-exist CLI thin entry。content/posts/*.{ja,en}.md を全列挙し、
- * `apps/ryantsuji-dev/web/public/posts/<slug>.<lang>.cover.png` の存在を確認、
+ * `apps/ryantsuji-dev/web/public/images/posts/<slug>.<lang>.cover.png` の存在を確認、
  * 欠けていれば exit 1 で fail させる。
  *
  * 使い方:
@@ -31,7 +31,10 @@ import { listPostFiles } from "./posts-files.js";
 
 const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPTS_DIR, "..");
-const PUBLIC_POSTS_DIR = resolve(REPO_ROOT, "apps/ryantsuji-dev/web/public/posts");
+// 2026-05 に cover 生成の責務を content repo (ryantsuji-dev-content) に移行したのに
+// 合わせて、PNG の存在 check も content submodule の images/posts/ 配下を見るよう変更。
+// 旧 path (`apps/ryantsuji-dev/web/public/posts/`) は migration cleanup で消える想定。
+const CONTENT_IMAGES_POSTS_DIR = resolve(REPO_ROOT, "apps/ryantsuji-dev/web/content/images/posts");
 
 async function main(): Promise<void> {
   // covers は syndication 可否・draft 可否に関わらず全 post 必要 (ryantsuji.dev は独自
@@ -41,7 +44,7 @@ async function main(): Promise<void> {
   const entries = await listPostFiles();
 
   const missing = findMissingCovers(entries, (publicPath) =>
-    existsSync(resolve(PUBLIC_POSTS_DIR, publicPath.replace(/^\/posts\//, ""))),
+    existsSync(resolve(CONTENT_IMAGES_POSTS_DIR, publicPath.replace(/^\/images\/posts\//, ""))),
   );
 
   if (missing.length === 0) {
@@ -49,11 +52,13 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.error(`❌ ${missing.length} cover PNG file(s) missing in ${PUBLIC_POSTS_DIR}:`);
+  console.error(`❌ ${missing.length} cover PNG file(s) missing in ${CONTENT_IMAGES_POSTS_DIR}:`);
   for (const m of missing) {
     console.error(`  - ${m.slug}.${m.lang} → expected ${m.publicPath}`);
   }
-  console.error("\nRun: pnpm covers:generate");
+  console.error(
+    "\nContent repo (ryantsuji-dev-content) で `node scripts/generate-cover.mjs` を実行してください",
+  );
   process.exit(1);
 }
 

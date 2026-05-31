@@ -40,7 +40,7 @@ export const FrontmatterSchema = z.object({
   canonical: z.string().url().optional(),
   draft: z.boolean().default(false),
   /**
-   * cover image の **public/ からの絶対 path**。例: `/posts/<slug>.cover.png`。
+   * cover image の **public/ からの絶対 path**。例: `/images/posts/<slug>.cover.png`。
    * ryantsuji.dev では `<meta property="og:image">` に、Zenn / dev.to syndication
    * では `cover_image` field に絶対 URL 化して渡す。
    */

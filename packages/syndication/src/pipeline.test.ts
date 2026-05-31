@@ -190,10 +190,10 @@ describe("syndicateForDevto", () => {
       slug: "db-graph",
       resolver,
       canonicalHost: "https://ryantsuji.dev",
-      coverImageUrl: "https://ryantsuji.dev/posts/db-graph.cover.png",
+      coverImageUrl: "https://ryantsuji.dev/images/posts/db-graph.cover.png",
       series: "ai-harness",
     });
-    expect(out.cover_image).toBe("https://ryantsuji.dev/posts/db-graph.cover.png");
+    expect(out.cover_image).toBe("https://ryantsuji.dev/images/posts/db-graph.cover.png");
     expect(out.series).toBe("ai-harness");
   });
 

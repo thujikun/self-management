@@ -194,7 +194,7 @@ export function postUrlFor(slug: string, lang: Lang): string {
 
 /**
  * frontmatter `cover` を絶対 URL に解決。未指定なら `@self/og-image` の
- * `coverPublicPath` convention (`/posts/<slug>.<lang>.cover.png`) に fallback。
+ * `coverPublicPath` convention (`/images/posts/<slug>.<lang>.cover.png`) に fallback。
  *
  * `buildPostMeta` (og:image / twitter:image) と `buildPostJsonLd` (JSON-LD image)
  * の両方が同 helper を経由することで、絶対 URL 組み立てと convention fallback の
@@ -258,7 +258,7 @@ export function buildPostLinks(input: {
  * (`resolveCoverUrl` 経由)。`generate-covers` script が同 helper を経由して PNG を
  * 同 path に吐く前提で、frontmatter に `cover:` を書き忘れても自動で per-post cover
  * が og:image / twitter:image に乗る。convention 不在 → 404 の事故は `covers-exist`
- * gate (= public/posts/*.cover.png の存在確認) で merge 前に弾く。
+ * gate (= public/images/posts/*.cover.png の存在確認) で merge 前に弾く。
  *
  * @graph-connects none
  */

@@ -12,7 +12,7 @@
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business og:image の public path convention の SoT。`/posts/<slug>.<lang>.cover.png` を pure helper で固定し、generator と consumer (route head / JSON-LD) の double-source-of-truth による 404 drift を排除する。worker bundle が satori/resvg を pull しないよう、`./generate.ts` への import を 0 件に保つ
+ * @graph-business og:image の public path convention の SoT。`/images/posts/<slug>.<lang>.cover.png` を pure helper で固定し、generator と consumer (route head / JSON-LD) の double-source-of-truth による 404 drift を排除する。worker bundle が satori/resvg を pull しないよう、`./generate.ts` への import を 0 件に保つ
  * @graph-connects none
  */
 
@@ -26,17 +26,20 @@
 export type OgLang = "ja" | "en";
 
 /**
- * post の og:image (cover PNG) を `/posts/...` 配下に site-relative で返す。
+ * post の og:image (cover PNG) を `/images/posts/...` 配下に site-relative で返す。
  *
- * generator (`scripts/generate-covers.ts`) は本 path に PNG を書き、consumer
+ * 2026-05 に cover 生成の責務を content repo (ryantsuji-dev-content) 側に移行した
+ * のに合わせて path scheme も `/images/posts/<slug>.<lang>.cover.png` → `/images/posts/...`
+ * に変更している。PNG は content repo の `images/images/posts/<slug>.<lang>.cover.png` に
+ * 置かれ、R2 sync を経由して `/images/*` route で配信される。本 helper は consumer
  * (`apps/ryantsuji-dev/web/src/routes/posts/$slug.tsx` の og:image / twitter:image /
- * JSON-LD image) は本 path を absolute URL で参照する。両者が同じ helper を経由する
- * ことで convention 差異による silent 404 を構造的に排除する。
+ * JSON-LD image) と gate (`scripts/check-covers-exist.ts`) が同じ convention で
+ * path を組むための唯一の SoT として残す。
  *
  * @graph-connects none
  */
 export function coverPublicPath(slug: string, lang: OgLang): string {
-  return `/posts/${slug}.${lang}.cover.png`;
+  return `/images/posts/${slug}.${lang}.cover.png`;
 }
 
 /**

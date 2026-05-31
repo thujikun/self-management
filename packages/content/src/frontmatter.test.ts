@@ -84,9 +84,9 @@ describe("parseFrontmatter", () => {
       parseFrontmatter({
         title: "x",
         publishedAt: "2026-05-08",
-        cover: "/posts/x.cover.png",
+        cover: "/images/posts/x.cover.png",
       }).cover,
-    ).toBe("/posts/x.cover.png");
+    ).toBe("/images/posts/x.cover.png");
   });
 
   it("syndication.zenn.id / devto.id+slug の組合せを受理", () => {

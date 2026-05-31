@@ -74,10 +74,10 @@ describe("buildDevtoArticle", () => {
     const out = buildDevtoArticle(base, "x", {
       canonicalHost: "https://ryantsuji.dev",
       slug: "x",
-      coverImageUrl: "https://ryantsuji.dev/posts/x.cover.png",
+      coverImageUrl: "https://ryantsuji.dev/images/posts/x.cover.png",
       series: "ai-harness",
     });
-    expect(out.cover_image).toBe("https://ryantsuji.dev/posts/x.cover.png");
+    expect(out.cover_image).toBe("https://ryantsuji.dev/images/posts/x.cover.png");
     expect(out.series).toBe("ai-harness");
   });
 
