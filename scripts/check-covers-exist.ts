@@ -1,22 +1,25 @@
 /*
  * check-covers-exist logic — content/posts/*.{ja,en}.md 全てに対して
- * `apps/ryantsuji-dev/web/public/posts/<slug>.<lang>.cover.png` の存在を確認する。
+ * content submodule の `apps/ryantsuji-dev/web/content/images/posts/<slug>.<lang>.cover.png`
+ * の存在を確認する。
  *
  * Why: PR #111 で「frontmatter に cover が無い時は convention path に fallback」
  * へ移行した結果、PNG 未生成のまま merge / deploy すると og:image が 404 を指して
  * Slack / Twitter の unfurl が broken image を cache する事故が起き得る。
  *
- * generator (`scripts/generate-covers.ts`) は手動 (`pnpm covers:generate`) なので、
- * 「PNG を吐く / 吐かない」と「md を merge する / しない」が独立して動く。本 check
- * は両者を merge 前に意図的に交差させる gate。
+ * generator は content repo (ryantsuji-dev-content) 側の `scripts/generate-cover.mjs`
+ * に移行済で、こちら側は submodule pointer で取り込んだ生成済 PNG を check するだけ。
+ * 「PNG を吐く / 吐かない」 (content repo) と「md を merge する / しない」 (self-management)
+ * は独立して動くので、本 check が merge 前に両者を意図的に交差させる gate になる。
  *
- * 設計 (compact-log / syndicate / generate-covers と同じ):
+ * 設計 (compact-log / syndicate と同じ):
  * - pure logic は本ファイル (副作用は引数で受け取る existsSync 同等の述語のみ)
  * - filesystem I/O / process.exit / stdout の glue は `check-covers-exist.cli.ts`
  *
- * 「PNG を吐く対象 (`generateAllCovers`)」と「PNG 存在を要求する対象 (`findMissingCovers`)」
- * の skip 判定は `@self/og-image/path` の `shouldHaveCover` 1 つを SoT として共有する
- * (= `_` 始まり規約変更時に複数 file 同時更新を要求しない double-source-of-truth 防止)。
+ * 「PNG 存在を要求する対象 (`findMissingCovers`)」の skip 判定は `@self/og-image/path`
+ * の `shouldHaveCover` を SoT として参照する (= content repo 側 generator も同 規約に
+ * 揃える前提で、`_` 始まり規約変更時に複数 file 同時更新を要求しない double-source-of-truth
+ * 防止)。
  *
  * @graph-stack core
  * @graph-domain infra
@@ -36,7 +39,7 @@ export interface PostEntry {
 export interface MissingCover {
   slug: string;
   lang: OgLang;
-  /** site-relative path (`/posts/<slug>.<lang>.cover.png`)、debug 用 */
+  /** site-relative path (`/images/posts/<slug>.<lang>.cover.png`)、debug 用 */
   publicPath: string;
 }
 

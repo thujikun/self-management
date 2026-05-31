@@ -129,10 +129,13 @@ cmd_run() {
       pnpm exec tsx scripts/compact-log.cli.ts --check
       ;;
     covers-exist)
-      # content/posts/*.{ja,en}.md 全てに対して public/posts/<slug>.<lang>.cover.png
-      # が存在することを check (whole-repo state、staged/full 共通)。`generate-covers`
-      # は手動運用なので、PNG 未生成 + cover frontmatter 未記入の post を merge する
-      # と og:image / twitter:image / JSON-LD image が 404 を指す事故が起き得る。
+      # content/posts/*.{ja,en}.md 全てに対して content submodule の
+      # `apps/ryantsuji-dev/web/content/images/posts/<slug>.<lang>.cover.png` が存在することを
+      # check (whole-repo state、staged/full 共通)。PNG 生成は 2026-05 に content repo
+      # (ryantsuji-dev-content) 側の `scripts/generate-cover.mjs` に移行済で、こちら側は
+      # 手動運用 (= 生成済 PNG を submodule pointer で取り込む)。PNG 未生成 + cover
+      # frontmatter 未記入の post を merge すると og:image / twitter:image / JSON-LD
+      # image が 404 を指す事故が起き得るので、merge 前に弾く。
       pnpm exec tsx scripts/check-covers-exist.cli.ts
       ;;
     lint)

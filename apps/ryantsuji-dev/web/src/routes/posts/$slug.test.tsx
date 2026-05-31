@@ -1255,7 +1255,7 @@ describe("buildPostMeta", () => {
       slug: "hello",
       title: "Hello World",
       summary: "A test post",
-      cover: "/posts/hello.en.cover.png",
+      cover: "/images/posts/hello.en.cover.png",
       lang: "en",
     });
     const find = (key: string, val: "name" | "property") =>
@@ -1274,7 +1274,7 @@ describe("buildPostMeta", () => {
     });
     expect(find("og:image", "property")).toStrictEqual({
       property: "og:image",
-      content: "https://ryantsuji.dev/posts/hello.en.cover.png",
+      content: "https://ryantsuji.dev/images/posts/hello.en.cover.png",
     });
     expect(find("twitter:card", "name")).toStrictEqual({
       name: "twitter:card",
@@ -1292,7 +1292,7 @@ describe("buildPostMeta", () => {
     const meta = buildPostMeta({
       slug: "hello",
       title: "こんにちは",
-      cover: "/posts/hello.ja.cover.png",
+      cover: "/images/posts/hello.ja.cover.png",
       lang: "ja",
     });
     const url = meta.find((m) => "property" in m && m.property === "og:url");
@@ -1302,7 +1302,7 @@ describe("buildPostMeta", () => {
     });
   });
 
-  it("cover 未指定 post: `/posts/<slug>.<lang>.cover.png` の convention に fallback", () => {
+  it("cover 未指定 post: `/images/posts/<slug>.<lang>.cover.png` の convention に fallback", () => {
     const meta = buildPostMeta({
       slug: "no-cover",
       title: "No Cover",
@@ -1310,11 +1310,11 @@ describe("buildPostMeta", () => {
     });
     expect(meta.find((m) => "property" in m && m.property === "og:image")).toStrictEqual({
       property: "og:image",
-      content: "https://ryantsuji.dev/posts/no-cover.en.cover.png",
+      content: "https://ryantsuji.dev/images/posts/no-cover.en.cover.png",
     });
     expect(meta.find((m) => "name" in m && m.name === "twitter:image")).toStrictEqual({
       name: "twitter:image",
-      content: "https://ryantsuji.dev/posts/no-cover.en.cover.png",
+      content: "https://ryantsuji.dev/images/posts/no-cover.en.cover.png",
     });
     expect(meta.find((m) => "name" in m && m.name === "twitter:card")).toStrictEqual({
       name: "twitter:card",
@@ -1330,7 +1330,7 @@ describe("buildPostMeta", () => {
     });
     expect(meta.find((m) => "property" in m && m.property === "og:image")).toStrictEqual({
       property: "og:image",
-      content: "https://ryantsuji.dev/posts/no-cover.ja.cover.png",
+      content: "https://ryantsuji.dev/images/posts/no-cover.ja.cover.png",
     });
   });
 
@@ -1354,7 +1354,7 @@ describe("buildPostJsonLd", () => {
       slug: "hello",
       title: "Hello",
       summary: "intro",
-      cover: "/posts/hello.en.cover.png",
+      cover: "/images/posts/hello.en.cover.png",
       publishedAt: "2026-05-10",
       updatedAt: "2026-05-12",
       lang: "en",
@@ -1374,7 +1374,7 @@ describe("buildPostJsonLd", () => {
     expect(doc.author.sameAs).toEqual(
       expect.arrayContaining(["https://x.com/ryantsuji", "https://github.com/thujikun"]),
     );
-    expect(doc.image).toStrictEqual(["https://ryantsuji.dev/posts/hello.en.cover.png"]);
+    expect(doc.image).toStrictEqual(["https://ryantsuji.dev/images/posts/hello.en.cover.png"]);
     expect(doc.mainEntityOfPage).toStrictEqual({
       "@type": "WebPage",
       "@id": "https://ryantsuji.dev/posts/hello",
@@ -1404,7 +1404,7 @@ describe("buildPostJsonLd", () => {
       lang: "en",
     });
     const doc = JSON.parse(json);
-    expect(doc.image).toStrictEqual(["https://ryantsuji.dev/posts/x.en.cover.png"]);
+    expect(doc.image).toStrictEqual(["https://ryantsuji.dev/images/posts/x.en.cover.png"]);
   });
 
   it("updatedAt 無し → dateModified は publishedAt と同値 fallback", () => {
@@ -1464,13 +1464,13 @@ describe("resolveCoverUrl", () => {
 
   it("cover 未指定 (en) → convention path に fallback", () => {
     expect(resolveCoverUrl({ slug: "hello", lang: "en" })).toStrictEqual(
-      "https://ryantsuji.dev/posts/hello.en.cover.png",
+      "https://ryantsuji.dev/images/posts/hello.en.cover.png",
     );
   });
 
   it("cover 未指定 (ja) → convention path に lang=ja を埋める", () => {
     expect(resolveCoverUrl({ slug: "hello", lang: "ja" })).toStrictEqual(
-      "https://ryantsuji.dev/posts/hello.ja.cover.png",
+      "https://ryantsuji.dev/images/posts/hello.ja.cover.png",
     );
   });
 

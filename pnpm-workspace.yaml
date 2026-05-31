@@ -2,6 +2,12 @@ packages:
   - "apps/**"
   - "packages/**"
   - "infra/**"
+  # content submodule (ryantsuji-dev-content) は独自の package.json を持つが、
+  # cover 生成等のためだけで monorepo の deps とは独立。pnpm workspace に
+  # 巻き込むと lockfile に submodule の deps が混入し、submodule が deps を
+  # 追加するたびに frozen-lockfile CI が落ちる。明示的に exclude。
+  - "!apps/ryantsuji-dev/web/content"
+  - "!apps/ryantsuji-dev/web/content/**"
 
 # pnpm catalog: workspace 全体で同一バージョンを保証する。
 # 各 package.json は `"<name>": "catalog:"` で参照、ここを唯一の SSoT として bump する。

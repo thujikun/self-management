@@ -27,7 +27,10 @@ describe("findMissingCovers", () => {
       return true;
     });
     expect(result).toStrictEqual([]);
-    expect(seen).toStrictEqual(["/posts/alpha.en.cover.png", "/posts/alpha.ja.cover.png"]);
+    expect(seen).toStrictEqual([
+      "/images/posts/alpha.en.cover.png",
+      "/images/posts/alpha.ja.cover.png",
+    ]);
   });
 
   it("一部 PNG が欠けている場合は欠落のみを返す (順序は posts 入力順)", () => {
@@ -37,9 +40,9 @@ describe("findMissingCovers", () => {
       { slug: "beta", lang: "en" },
     ];
     // ja だけ欠けている fake exists 述語
-    const result = findMissingCovers(posts, (p) => p !== "/posts/alpha.ja.cover.png");
+    const result = findMissingCovers(posts, (p) => p !== "/images/posts/alpha.ja.cover.png");
     expect(result).toStrictEqual([
-      { slug: "alpha", lang: "ja", publicPath: "/posts/alpha.ja.cover.png" },
+      { slug: "alpha", lang: "ja", publicPath: "/images/posts/alpha.ja.cover.png" },
     ]);
   });
 
@@ -56,7 +59,7 @@ describe("findMissingCovers", () => {
     });
     expect(result).toStrictEqual([]);
     // fixture slug は exists 述語を呼ばない (= I/O 無駄打ち防止)
-    expect(seen).toStrictEqual(["/posts/real-post.en.cover.png"]);
+    expect(seen).toStrictEqual(["/images/posts/real-post.en.cover.png"]);
   });
 
   it("全 PNG 欠落 → 全 entry を返す (順序維持、`_` 始まりは依然 skip)", () => {
@@ -67,8 +70,8 @@ describe("findMissingCovers", () => {
     ];
     const result = findMissingCovers(posts, () => false);
     expect(result).toStrictEqual([
-      { slug: "alpha", lang: "en", publicPath: "/posts/alpha.en.cover.png" },
-      { slug: "beta", lang: "ja", publicPath: "/posts/beta.ja.cover.png" },
+      { slug: "alpha", lang: "en", publicPath: "/images/posts/alpha.en.cover.png" },
+      { slug: "beta", lang: "ja", publicPath: "/images/posts/beta.ja.cover.png" },
     ]);
   });
 

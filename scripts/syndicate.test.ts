@@ -239,7 +239,7 @@ describe("readAllPosts", () => {
     expect(posts.map((p) => p.slug).sort()).toStrictEqual(["public"]);
   });
 
-  it("includeExcluded: true で excludeFromSyndication post も返す (generate-covers 等の non-syndicate 経路用)", async () => {
+  it("includeExcluded: true で excludeFromSyndication post も返す (non-syndicate 経路用)", async () => {
     await writeFile(join(dir, "internal.ja.md"), baseFm("excludeFromSyndication: true\n"));
     await writeFile(join(dir, "public.ja.md"), baseFm());
     const posts = await readAllPosts(dir, { includeExcluded: true });
@@ -331,6 +331,38 @@ describe("emitZenn", () => {
     expect(alpha).toContain("published: false");
     expect(beta).toContain("published: true");
   });
+
+  it("meta.emoji を syndicateForZenn に thread して Zenn frontmatter の emoji 行に乗せる", async () => {
+    // Arrange: per-post emoji を指定した .ja post
+    const post = makePost({ slug: "alpha", lang: "ja", zennId: "abc123", body: "hello\n" });
+    post.meta = parseFrontmatter({
+      title: "alpha",
+      publishedAt: "2026-01-01",
+      emoji: "📊",
+      syndication: { zenn: { id: "abc123" } },
+    });
+
+    // Act
+    await emitZenn({ posts: [post], outDir, footer: "", publish: false });
+
+    // Assert: 出力 markdown の frontmatter で per-post emoji が反映 (default 🤖 ではない)
+    const alpha = await readFile(resolve(outDir, "abc123.md"), "utf8");
+    expect(alpha).toContain('emoji: "📊"');
+    expect(alpha).not.toContain('emoji: "🤖"');
+  });
+
+  it("meta.emoji 未指定なら syndicateForZenn 側の default 🤖 にフォールバック", async () => {
+    // Arrange: emoji 未指定 (= meta.emoji が undefined)
+    const post = makePost({ slug: "beta", lang: "ja", zennId: "def456", body: "world\n" });
+    expect(post.meta.emoji).toBeUndefined();
+
+    // Act
+    await emitZenn({ posts: [post], outDir, footer: "", publish: false });
+
+    // Assert: default 🤖 が出力される
+    const beta = await readFile(resolve(outDir, "def456.md"), "utf8");
+    expect(beta).toContain('emoji: "🤖"');
+  });
 });
 
 describe("emitDevto", () => {
@@ -382,14 +414,14 @@ describe("emitDevto", () => {
         slug: "alpha",
         lang: "en",
         devto: { id: 100, slug: "alpha-dev" },
-        cover: "/posts/alpha.cover.png",
+        cover: "/images/posts/alpha.cover.png",
       }),
     ];
     await emitDevto({ posts, outDir, publish: false });
     const json = JSON.parse(await readFile(resolve(outDir, "alpha.json"), "utf8")) as {
       article: { cover_image?: string };
     };
-    expect(json.article.cover_image).toBe("https://ryantsuji.dev/posts/alpha.cover.png");
+    expect(json.article.cover_image).toBe("https://ryantsuji.dev/images/posts/alpha.cover.png");
   });
 
   it("skips .ja posts even with devto entry (defensive)", async () => {

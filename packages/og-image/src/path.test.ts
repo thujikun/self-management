@@ -1,9 +1,8 @@
 /**
  * `coverPublicPath` / `shouldHaveCover` の pure 関数 test。convention path
- * (`/posts/<slug>.<lang>.cover.png`) と「PNG 生成 / 存在要求の対象 slug」の判定を
- * inline snapshot で固定し、generator (scripts/generate-covers.ts) と consumer
- * (route の og:image meta / JSON-LD / gate scripts/check-covers-exist.ts) が同 helper を
- * 経由している前提を機械的に保証する。
+ * (`/images/posts/<slug>.<lang>.cover.png`) と「PNG 生成 / 存在要求の対象 slug」の判定を
+ * inline snapshot で固定し、consumer (route の og:image meta / JSON-LD / gate
+ * scripts/check-covers-exist.ts) が同 helper を経由している前提を機械的に保証する。
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
@@ -18,23 +17,23 @@ import * as pathMod from "./path.js";
 import { coverPublicPath, shouldHaveCover } from "./path.js";
 
 describe("coverPublicPath", () => {
-  it("en slug は `/posts/<slug>.en.cover.png`", () => {
-    expect(coverPublicPath("hello", "en")).toStrictEqual("/posts/hello.en.cover.png");
+  it("en slug は `/images/posts/<slug>.en.cover.png`", () => {
+    expect(coverPublicPath("hello", "en")).toStrictEqual("/images/posts/hello.en.cover.png");
   });
 
-  it("ja slug は `/posts/<slug>.ja.cover.png`", () => {
-    expect(coverPublicPath("hello", "ja")).toStrictEqual("/posts/hello.ja.cover.png");
+  it("ja slug は `/images/posts/<slug>.ja.cover.png`", () => {
+    expect(coverPublicPath("hello", "ja")).toStrictEqual("/images/posts/hello.ja.cover.png");
   });
 
   it("`_` 始まり fixture slug でも format は同じ", () => {
     expect(coverPublicPath("_minimal-fixture", "en")).toStrictEqual(
-      "/posts/_minimal-fixture.en.cover.png",
+      "/images/posts/_minimal-fixture.en.cover.png",
     );
   });
 
   it("hyphen / digit を含む slug を URL-safe にそのまま反映 (encoding は行わない)", () => {
     expect(coverPublicPath("17-mcp-servers", "ja")).toStrictEqual(
-      "/posts/17-mcp-servers.ja.cover.png",
+      "/images/posts/17-mcp-servers.ja.cover.png",
     );
   });
 });
