@@ -11,10 +11,12 @@
 # 5. CI が通れば自動 merge → main 反映 → deploy / syndicate へ伝播
 #
 # secrets:
-# - `BOT_PAT`: PR open + push に使う fine-grained PAT。default GITHUB_TOKEN で
-#   PR を開いても GITHUB_TOKEN 由来の push は cascade workflow を発火しないため、
-#   PR 上で CI が回らず auto-merge が永遠に待ち続ける。PAT で push すると pull_request
-#   trigger が普通に発火する。
+# - `APP_ID` / `APP_PRIVATE_KEY`: GitHub App (両 repo に install 済み) の credentials。
+#   default GITHUB_TOKEN で PR を開いても GITHUB_TOKEN 由来の push は cascade
+#   workflow を発火しないため、PR 上で CI が回らず auto-merge が永遠に待ち続ける。
+#   App installation token で push すれば pull_request trigger が普通に発火し、
+#   かつ user PAT と違って独立した 5000/hr quota を持つ。
+#   詳細セットアップ手順: docs/operations/github-app-setup.md
 #
 # manual setup (リポジトリ設定):
 # - Settings → General → "Allow auto-merge" を ON
@@ -47,10 +49,17 @@ jobs:
       run:
         shell: bash
     steps:
-      - name: Checkout (with PAT, so PR push cascades CI)
+      - name: Generate App installation token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout (with App token, so PR push cascades CI)
         uses: actions/checkout@v6
         with:
-          token: ${{ secrets.BOT_PAT }}
+          token: ${{ steps.app-token.outputs.token }}
           submodules: true
 
       - name: Configure git identity (bot)
@@ -100,7 +109,7 @@ jobs:
       - name: Open PR + enable auto-merge
         if: steps.update.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.BOT_PAT }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BUMP_REASON: ${{ github.event.client_payload.reason || github.event.inputs.reason || 'unknown' }}
           BUMP_SLUGS: ${{ github.event.client_payload.slugs || '-' }}
           BUMP_SHA: ${{ steps.update.outputs.new_sha }}
