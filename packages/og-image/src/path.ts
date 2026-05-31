@@ -1,8 +1,8 @@
 /**
  * og:image の public path convention。`coverPublicPath(slug, lang)` が **唯一の SoT**
- * で、generator (scripts/generate-covers.ts) と consumer (route の og:image meta /
- * JSON-LD / sitemap) が同じ helper を経由することで convention 差異による silent
- * 404 を構造的に排除する。
+ * で、generator (content repo `ryantsuji-dev-content` の `scripts/generate-cover.mjs`)
+ * と consumer (route の og:image meta / JSON-LD / sitemap) が同じ convention を
+ * 経由することで convention 差異による silent 404 を構造的に排除する。
  *
  * 純粋 string helper のみで、I/O や生成依存 (satori / resvg) には触れない。
  * `./generate.ts` への import 経路を 1 つでも持つと、consumer (Cloudflare Worker bundle
@@ -29,9 +29,10 @@ export type OgLang = "ja" | "en";
  * post の og:image (cover PNG) を `/images/posts/...` 配下に site-relative で返す。
  *
  * 2026-05 に cover 生成の責務を content repo (ryantsuji-dev-content) 側に移行した
- * のに合わせて path scheme も `/images/posts/<slug>.<lang>.cover.png` → `/images/posts/...`
- * に変更している。PNG は content repo の `images/images/posts/<slug>.<lang>.cover.png` に
- * 置かれ、R2 sync を経由して `/images/*` route で配信される。本 helper は consumer
+ * のに合わせて path scheme も `/posts/<slug>.<lang>.cover.png` → `/images/posts/<slug>.<lang>.cover.png`
+ * に変更している (content repo の `/images/*` R2 route に揃えるため)。PNG は content
+ * repo (ryantsuji-dev-content) の `images/posts/<slug>.<lang>.cover.png` に置かれ、
+ * `/images/*` route 経由で配信される。本 helper は consumer
  * (`apps/ryantsuji-dev/web/src/routes/posts/$slug.tsx` の og:image / twitter:image /
  * JSON-LD image) と gate (`scripts/check-covers-exist.ts`) が同じ convention で
  * path を組むための唯一の SoT として残す。
@@ -48,9 +49,10 @@ export function coverPublicPath(slug: string, lang: OgLang): string {
  * `_` 始まり slug は test fixture (e.g. `_minimal-fixture` / `_draft-example`)。
  * production / syndication に露出しないので PNG 生成も存在要求もしない。
  *
- * generator (`generateAllCovers`) と gate (`findMissingCovers`) の両方が本 helper を
- * 経由することで、「PNG を吐く対象」と「PNG 存在を要求する対象」が機械的に一致する。
- * 規約変更 (`_` → `__` / `draft:` frontmatter 化 等) が 1 箇所更新で済む。
+ * content repo (ryantsuji-dev-content) 側 generator (`scripts/generate-cover.mjs`) と
+ * gate (`findMissingCovers`) の両方が同 規約を参照することで、「PNG を吐く対象」と
+ * 「PNG 存在を要求する対象」が機械的に一致する。規約変更 (`_` → `__` / `draft:`
+ * frontmatter 化 等) は本 helper の 1 箇所更新で済む。
  *
  * @graph-connects none
  */

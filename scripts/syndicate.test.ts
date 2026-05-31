@@ -239,7 +239,7 @@ describe("readAllPosts", () => {
     expect(posts.map((p) => p.slug).sort()).toStrictEqual(["public"]);
   });
 
-  it("includeExcluded: true で excludeFromSyndication post も返す (generate-covers 等の non-syndicate 経路用)", async () => {
+  it("includeExcluded: true で excludeFromSyndication post も返す (non-syndicate 経路用)", async () => {
     await writeFile(join(dir, "internal.ja.md"), baseFm("excludeFromSyndication: true\n"));
     await writeFile(join(dir, "public.ja.md"), baseFm());
     const posts = await readAllPosts(dir, { includeExcluded: true });

@@ -1,15 +1,15 @@
 #!/usr/bin/env tsx
 /*
  * check-covers-exist CLI thin entry。content/posts/*.{ja,en}.md を全列挙し、
- * `apps/ryantsuji-dev/web/public/images/posts/<slug>.<lang>.cover.png` の存在を確認、
- * 欠けていれば exit 1 で fail させる。
+ * content submodule の `apps/ryantsuji-dev/web/content/images/posts/<slug>.<lang>.cover.png`
+ * の存在を確認、欠けていれば exit 1 で fail させる。
  *
  * 使い方:
  *   pnpm tsx scripts/check-covers-exist.cli.ts        # 全 post を check
  *
- * gates.sh の `covers-exist` gate (= pre-commit + CI) から呼ばれる。`pnpm
- * covers:generate` を手動で踏まずに content を merge する事故 (og:image 404)
- * を merge 前に弾く。
+ * gates.sh の `covers-exist` gate (= pre-commit + CI) から呼ばれる。content repo
+ * (ryantsuji-dev-content) 側で `node scripts/generate-cover.mjs` を踏まずに
+ * submodule pointer を bump する事故 (og:image 404) を merge 前に弾く。
  *
  * 注: `@self/content` には依存しない (= dist build を要求しない)。CI matrix で
  * `gate (build)` と並列に走らせるため、`@self/content/dist` 不在でも単体起動できる
@@ -18,7 +18,7 @@
  *
  * @graph-stack core
  * @graph-domain infra
- * @graph-business check-covers-exist の filesystem 実行 entry。pnpm covers:generate 未実行で content を merge する事故 (og:image 404) を gate で防ぐ。`@self/content` 非依存で CI build 並列起動に対応
+ * @graph-business check-covers-exist の filesystem 実行 entry。content repo (ryantsuji-dev-content) 側 `scripts/generate-cover.mjs` 未実行で submodule pointer を bump する事故 (og:image 404) を gate で防ぐ。`@self/content` 非依存で CI build 並列起動に対応
  * @graph-connects none
  */
 

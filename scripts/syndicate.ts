@@ -39,9 +39,8 @@ import {
 import { POSTS_DIR, parseFileName } from "./posts-files.js";
 
 // `POSTS_DIR` / `parseFileName` の SoT は `posts-files.ts` (= `@self/content` 非依存の
-// lightweight 層) に置く。`generate-covers.ts` / `check-covers-exist.cli.ts` 等の caller
-// は本 file 経由でも `posts-files` 直経由でも参照できる二重 import 経路を許容するが、
-// 定義 SoT は 1 つ。
+// lightweight 層) に置く。`check-covers-exist.cli.ts` 等の caller は本 file 経由でも
+// `posts-files` 直経由でも参照できる二重 import 経路を許容するが、定義 SoT は 1 つ。
 export { POSTS_DIR, parseFileName };
 
 const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
@@ -102,7 +101,8 @@ export async function readAllPosts(
     const meta = parseFrontmatter(grayMatter.data);
     if (meta.draft && !options.includeDrafts) continue;
     // `excludeFromSyndication: true` の post は ryantsuji.dev のみに公開し、
-    // Zenn / dev.to には流さない。generate-covers 等の non-syndicate な consumer は
+    // Zenn / dev.to には流さない。non-syndicate な consumer (= content repo 側
+    // `scripts/generate-cover.mjs` 等が同 readAllPosts を読む将来想定) は
     // `includeExcluded: true` で除外を無効化できる。
     if (meta.excludeFromSyndication && !options.includeExcluded) continue;
     out.push({ slug: parsed.slug, lang: parsed.lang, meta, body: grayMatter.content });
