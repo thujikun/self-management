@@ -190,6 +190,17 @@ describe("parseFrontmatter", () => {
     expect(() => parseFrontmatter({ title: "x", publishedAt: "2026-05-08", series: "" })).toThrow();
   });
 
+  it("emoji を指定すれば文字列として parse され、未指定なら undefined のまま (default 不付与)", () => {
+    expect(
+      parseFrontmatter({ title: "x", publishedAt: "2026-05-08", emoji: "📊" }).emoji,
+    ).toStrictEqual("📊");
+    expect(parseFrontmatter({ title: "x", publishedAt: "2026-05-08" }).emoji).toBeUndefined();
+  });
+
+  it("emoji=42 (非文字列) は throw", () => {
+    expect(() => parseFrontmatter({ title: "x", publishedAt: "2026-05-08", emoji: 42 })).toThrow();
+  });
+
   it("seriesOrder=0 / 負値 / 小数 (int positive 違反) は throw", () => {
     for (const bad of [0, -1, 1.5]) {
       expect(() =>

@@ -331,6 +331,38 @@ describe("emitZenn", () => {
     expect(alpha).toContain("published: false");
     expect(beta).toContain("published: true");
   });
+
+  it("meta.emoji を syndicateForZenn に thread して Zenn frontmatter の emoji 行に乗せる", async () => {
+    // Arrange: per-post emoji を指定した .ja post
+    const post = makePost({ slug: "alpha", lang: "ja", zennId: "abc123", body: "hello\n" });
+    post.meta = parseFrontmatter({
+      title: "alpha",
+      publishedAt: "2026-01-01",
+      emoji: "📊",
+      syndication: { zenn: { id: "abc123" } },
+    });
+
+    // Act
+    await emitZenn({ posts: [post], outDir, footer: "", publish: false });
+
+    // Assert: 出力 markdown の frontmatter で per-post emoji が反映 (default 🤖 ではない)
+    const alpha = await readFile(resolve(outDir, "abc123.md"), "utf8");
+    expect(alpha).toContain('emoji: "📊"');
+    expect(alpha).not.toContain('emoji: "🤖"');
+  });
+
+  it("meta.emoji 未指定なら syndicateForZenn 側の default 🤖 にフォールバック", async () => {
+    // Arrange: emoji 未指定 (= meta.emoji が undefined)
+    const post = makePost({ slug: "beta", lang: "ja", zennId: "def456", body: "world\n" });
+    expect(post.meta.emoji).toBeUndefined();
+
+    // Act
+    await emitZenn({ posts: [post], outDir, footer: "", publish: false });
+
+    // Assert: default 🤖 が出力される
+    const beta = await readFile(resolve(outDir, "def456.md"), "utf8");
+    expect(beta).toContain('emoji: "🤖"');
+  });
 });
 
 describe("emitDevto", () => {
