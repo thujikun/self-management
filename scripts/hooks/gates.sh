@@ -41,6 +41,7 @@ GATES_FULL_ONLY=(
   test-coverage
   build
   posts-frontmatter
+  devto-slug-fresh
 )
 
 cmd_list() {
@@ -197,6 +198,15 @@ cmd_run() {
       # parseFrontmatter は @self/content の dist を要するので先に build する。
       pnpm turbo run build --filter=@self/content >/dev/null
       pnpm exec tsx scripts/check-posts-frontmatter.cli.ts
+      ;;
+    devto-slug-fresh)
+      # content/posts/*.en.md の syndication.devto.slug に `-temp-slug-NNNNN` が残ったまま
+      # 公開時刻を過ぎていないかを検査する Guide。syndicate.ts:emitDevto の PUT-time slug
+      # reconcile が当たらないウィンドウ (publish 直後〜次の body 変更まで) で stored slug
+      # が腐ったままになると link-rewriter が他記事の body に 404 URL を埋め込む事故になる。
+      # parseFrontmatter は @self/content の dist を要するので先に build する。
+      pnpm turbo run build --filter=@self/content >/dev/null
+      pnpm exec tsx scripts/check-devto-slug-fresh.cli.ts
       ;;
     *)
       echo "unknown gate: $name" >&2

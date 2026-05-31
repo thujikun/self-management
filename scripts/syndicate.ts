@@ -268,6 +268,69 @@ export function upsertDevtoContentHash(fmContent: string, contentHash: string): 
 }
 
 /**
+ * dev.to API レスポンスの `url` (例: `https://dev.to/ryantsuji/foo-bar-baz`) から
+ * canonical な slug 部分だけ抜き出す。trailing slash / query / fragment はすべて
+ * 落とす。空 path や URL 解析失敗時は `null`。
+ *
+ * 用途: PUT レスポンスの slug を frontmatter `syndication.devto.slug` と diff する
+ * (slug drift 検知)。dev.to は draft → 公開時に `-temp-slug-NNNNN` を剥がし、UI で
+ * タイトル編集すると slug を再生成するが、API は通知してくれない。response の url
+ * は常に canonical を返すので、ここから抜いて reconcile する。
+ *
+ * @graph-connects none
+ */
+export function extractDevtoSlugFromUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const segments = u.pathname.split("/").filter((s) => s.length > 0);
+    // `https://dev.to/<user>/<slug>` 想定なので最後の segment が slug。最短 2 segment
+    // (user + slug) を満たさないものは形式不明として null。
+    if (segments.length < 2) return null;
+    return segments[segments.length - 1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * frontmatter content (delimiter 抜き) を受け取り、`syndication.devto.slug` 行を
+ * 上書きする。既存 slug 行が無い frontmatter には throw (= devto block 自体不在 =
+ * 呼ぶ前に gate するべき)。
+ *
+ * @graph-connects none
+ */
+export function upsertDevtoSlug(fmContent: string, slug: string): string {
+  const newLine = `    slug: "${slug}"`;
+  if (!/^ {4}slug:/m.test(fmContent)) {
+    throw new Error("syndication.devto.slug line not found; cannot reconcile slug");
+  }
+  return fmContent.replace(/^ {4}slug:.*$/m, newLine);
+}
+
+/**
+ * source .md の frontmatter `syndication.devto.slug` を上書きする。frontmatter
+ * delimiter が無いファイル / `syndication.devto.slug` が存在しないファイルでは
+ * throw する。
+ *
+ * 呼ばれる経路: dev.to PUT 応答の `url` から抽出した canonical slug が、stored slug
+ * と差分があった場合の reconcile。POST 経路 (新規 article 作成) は
+ * {@link writebackDevtoToFile} 側で同時挿入されるため、本関数は呼ばない。
+ *
+ * @graph-connects none
+ */
+export async function writebackDevtoSlugToFile(file: string, slug: string): Promise<void> {
+  const raw = await readFile(file, "utf8");
+  const fmMatch = /^---\n([\s\S]*?)\n---\n/.exec(raw);
+  if (!fmMatch) {
+    throw new Error("frontmatter delimiter `---\\n...\\n---\\n` not found");
+  }
+  const fmContent = fmMatch[1] as string;
+  const afterFm = raw.slice(fmMatch[0].length);
+  const updatedFm = upsertDevtoSlug(fmContent, slug);
+  await writeFile(file, `---\n${updatedFm}\n---\n${afterFm}`, "utf8");
+}
+
+/**
  * 14 char hex の Zenn article ID を生成 (`crypto.randomBytes(7)` → hex)。
  *
  * @graph-connects none
@@ -478,5 +541,17 @@ export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
     const result = await publishToDevto({ apiKey, articleId, article });
     await writebackDevtoContentHashToFile(srcFile, contentHash);
     console.log(`    publish: ${result.url} (contentHash=${contentHash})`);
+
+    // slug reconcile: PUT 応答の url から canonical slug を抜き、stored と diff が
+    // あれば書き戻す。dev.to は (1) draft → 公開時に `-temp-slug-NNNNN` を剥がし、
+    // (2) UI でタイトル編集すると slug を再生成するが、どちらも API は通知してくれ
+    // ないため、ここで毎 PUT 後に reconcile しないと frontmatter が腐り、
+    // link-rewriter が 404 URL を他記事の body に埋め込む事故になる
+    // (実例: Part 2 → Part 3 リンクが temp-slug 残しの 404 URL に rewrite された)。
+    const canonicalSlug = extractDevtoSlugFromUrl(result.url);
+    if (canonicalSlug && devto?.slug !== canonicalSlug) {
+      await writebackDevtoSlugToFile(srcFile, canonicalSlug);
+      console.log(`    slug reconciled: ${devto?.slug ?? "(unset)"} → ${canonicalSlug}`);
+    }
   }
 }
