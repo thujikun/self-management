@@ -736,14 +736,20 @@ describe("buildImageHashResolver", () => {
   });
 
   it("同じ画像を 2 回引いても同じ hash + file は 1 度しか read しない (cache hit)", async () => {
+    // cache hit を間接証明する: 1 回目 resolve した後に file 内容を書き換え、
+    // それでも 2 回目が h1 と一致することで「読み直していない (= cache hit)」を保証する。
+    // 単純な toStrictEqual(h1) では cache 経路が壊れても pass してしまうため、
+    // ここで書き換えを挟んで cache 分岐の regression を捕まえる。
     const { mkdir: mkdirP } = await import("node:fs/promises");
     await mkdirP(join(contentDir, "images"), { recursive: true });
-    await writeFile(join(contentDir, "images", "x.png"), "same-bytes");
+    const imgPath = join(contentDir, "images", "x.png");
+    await writeFile(imgPath, "same-bytes");
     const resolver = buildImageHashResolver(contentDir);
     const h1 = resolver("/images/x.png");
+    expect(h1).toMatch(/^[a-f0-9]{8}$/);
+    await writeFile(imgPath, "different-bytes-that-would-yield-different-hash");
     const h2 = resolver("/images/x.png");
     expect(h2).toStrictEqual(h1);
-    expect(h1).not.toBeNull();
   });
 
   it("内容が違えば違う hash を返す", async () => {
