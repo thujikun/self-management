@@ -36,6 +36,7 @@ import { createDevtoArticle, publishToDevto, publishToZenn } from "@self/syndica
 
 import {
   buildDevtoResolver,
+  buildImageHashResolver,
   buildZennResolver,
   computeDevtoContentHash,
   emitDevto,
@@ -709,6 +710,57 @@ describe("generateZennId", () => {
   it("呼び出しごとに異なる id を返す (= 衝突確率 1/16^14)", () => {
     const ids = new Set(Array.from({ length: 16 }, () => generateZennId()));
     expect(ids.size).toBe(16);
+  });
+});
+
+describe("buildImageHashResolver", () => {
+  let contentDir: string;
+
+  beforeEach(async () => {
+    contentDir = await mkdtemp(join(tmpdir(), "syndicate-img-hash-"));
+  });
+  afterEach(async () => {
+    await rm(contentDir, { recursive: true, force: true });
+  });
+
+  it("画像 file の sha256 prefix (8 hex chars) を返す", async () => {
+    const { mkdir: mkdirP } = await import("node:fs/promises");
+    await mkdirP(join(contentDir, "images", "posts", "demo"), { recursive: true });
+    await writeFile(join(contentDir, "images", "posts", "demo", "a.png"), "alpha-bytes");
+    const resolver = buildImageHashResolver(contentDir);
+    const hash = resolver("/images/posts/demo/a.png");
+    expect(hash).toMatch(/^[a-f0-9]{8}$/);
+  });
+
+  it("同じ画像を 2 回引いても同じ hash + file は 1 度しか read しない (cache hit)", async () => {
+    const { mkdir: mkdirP } = await import("node:fs/promises");
+    await mkdirP(join(contentDir, "images"), { recursive: true });
+    await writeFile(join(contentDir, "images", "x.png"), "same-bytes");
+    const resolver = buildImageHashResolver(contentDir);
+    const h1 = resolver("/images/x.png");
+    const h2 = resolver("/images/x.png");
+    expect(h2).toStrictEqual(h1);
+    expect(h1).not.toBeNull();
+  });
+
+  it("内容が違えば違う hash を返す", async () => {
+    const { mkdir: mkdirP } = await import("node:fs/promises");
+    await mkdirP(join(contentDir, "images"), { recursive: true });
+    await writeFile(join(contentDir, "images", "p.png"), "content-1");
+    await writeFile(join(contentDir, "images", "q.png"), "content-2-different");
+    const resolver = buildImageHashResolver(contentDir);
+    expect(resolver("/images/p.png")).not.toBe(resolver("/images/q.png"));
+  });
+
+  it("ファイル不在は null を返す (rewriteImageLinks 側で素通り)", () => {
+    const resolver = buildImageHashResolver(contentDir);
+    expect(resolver("/images/missing.png")).toBeNull();
+  });
+
+  it("`/images/` で始まらない path は null", () => {
+    const resolver = buildImageHashResolver(contentDir);
+    expect(resolver("posts/foo.png")).toBeNull();
+    expect(resolver("/assets/foo.png")).toBeNull();
   });
 });
 

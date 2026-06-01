@@ -113,3 +113,45 @@ describe("rewriteImageLinks", () => {
     expect(rewriteImageLinks(input, BASE)).toBe(input);
   });
 });
+
+describe("rewriteImageLinks with hashResolver (cache-buster)", () => {
+  const BASE = "https://ryantsuji.dev";
+  const HASHES: Record<string, string> = {
+    "/images/posts/foo/a.png": "a1b2c3d4",
+    "/images/posts/foo/b.png": "deadbeef",
+  };
+  const resolveHash = (p: string): string | null => HASHES[p] ?? null;
+
+  it("image path に `?v=<hash>` を付与", () => {
+    const out = rewriteImageLinks("![x](/images/posts/foo/a.png)", BASE, resolveHash);
+    expect(out).toBe("![x](https://ryantsuji.dev/images/posts/foo/a.png?v=a1b2c3d4)");
+  });
+
+  it("hash 解決失敗 (null) なら絶対化のみ実施 (cache-buster は付けない)", () => {
+    const out = rewriteImageLinks("![x](/images/posts/foo/missing.png)", BASE, resolveHash);
+    expect(out).toBe("![x](https://ryantsuji.dev/images/posts/foo/missing.png)");
+  });
+
+  it("既存 fragment (#section) を保持しつつ ?v=...# として前置", () => {
+    const out = rewriteImageLinks("![x](/images/posts/foo/a.png#zoom)", BASE, resolveHash);
+    expect(out).toBe("![x](https://ryantsuji.dev/images/posts/foo/a.png?v=a1b2c3d4#zoom)");
+  });
+
+  it("既存 query (?w=600) を保持しつつ ?v=...&w=600 として merge", () => {
+    const out = rewriteImageLinks("![x](/images/posts/foo/a.png?w=600)", BASE, resolveHash);
+    expect(out).toBe("![x](https://ryantsuji.dev/images/posts/foo/a.png?v=a1b2c3d4&w=600)");
+  });
+
+  it("複数 image を一括で cache-buster 付与 (画像毎に独立 hash)", () => {
+    const input = "![a](/images/posts/foo/a.png) と ![b](/images/posts/foo/b.png)";
+    const out = rewriteImageLinks(input, BASE, resolveHash);
+    expect(out).toContain("/images/posts/foo/a.png?v=a1b2c3d4");
+    expect(out).toContain("/images/posts/foo/b.png?v=deadbeef");
+  });
+
+  it("hashResolver 無し呼び出しは従来挙動 (絶対化のみ、cache-buster 無し)", () => {
+    expect(rewriteImageLinks("![x](/images/posts/foo/a.png)", BASE)).toBe(
+      "![x](https://ryantsuji.dev/images/posts/foo/a.png)",
+    );
+  });
+});

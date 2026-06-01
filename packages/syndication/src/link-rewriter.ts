@@ -52,6 +52,14 @@ export function rewriteInternalLinks(content: string, resolver: SlugResolver): s
 }
 
 /**
+ * resolver: `/images/<path>` → 画像 content hash (例: sha256 prefix 8 chars)。
+ * `null` を返したら hash を URL に付けない (= 解決失敗時は素通り)。
+ *
+ * @graph-connects none
+ */
+export type ImageHashResolver = (imagePath: string) => string | null;
+
+/**
  * markdown 内の `/images/...` 相対 URL を `<baseUrl>/images/...` の絶対 URL に置換する。
  *
  * ryantsuji.dev では post 添付画像を `![alt](/images/posts/<slug>/<file>)` で参照するが、
@@ -61,8 +69,49 @@ export function rewriteInternalLinks(content: string, resolver: SlugResolver): s
  * `]\(/images/` で始まる pattern を取れば markdown image `![alt](...)` も link
  * `[text](...)` も両方拾える。`baseUrl` は trailing slash 無し前提 (`https://ryantsuji.dev`)。
  *
+ * `hashResolver` が渡された場合は、各 image path に対して `?v=<hash>` を URL に
+ * 付与する (= cache-buster)。dev.to image optimizer (`media2.dev.to/cdn-cgi/image
+ * /...`) は source URL を cache key にするため、PNG だけ更新して URL が同一だと
+ * 古い画像がキャッシュから返り続ける。画像 hash を URL に乗せれば、画像差分で
+ * URL が変わって optimizer が再 fetch する。既存の fragment (`#section`) / query
+ * (`?w=600`) は **保持** しつつ `?v=...` を append する (既存 `?` が有れば
+ * `?v=...&...`、無ければ `?v=...`)。
+ *
  * @graph-connects none
  */
-export function rewriteImageLinks(content: string, baseUrl: string): string {
-  return content.replace(/\]\(\/images\//g, `](${baseUrl}/images/`);
+export function rewriteImageLinks(
+  content: string,
+  baseUrl: string,
+  hashResolver?: ImageHashResolver,
+): string {
+  if (!hashResolver) {
+    return content.replace(/\]\(\/images\//g, `](${baseUrl}/images/`);
+  }
+  // image path + optional suffix (`#frag` / `?query`) を分離して捕捉する。`)` の手前
+  // までを path と suffix にきれいに分けることで、`?v=` を suffix の前 (= path 直後)
+  // に挿入できる。
+  return content.replace(
+    /\]\(\/images\/([^)#?]+)([#?][^)]*)?\)/g,
+    (_match, path: string, suffix?: string) => {
+      const imagePath = `/images/${path}`;
+      const hash = hashResolver(imagePath);
+      const existing = suffix ?? "";
+      if (!hash) {
+        // hash 解決失敗時は cache-buster を付けず、絶対化のみ実施 (= 解決対象外画像を
+        // syndication で 404 にしないため)。
+        return `](${baseUrl}/images/${path}${existing})`;
+      }
+      const buster = `v=${hash}`;
+      let combinedSuffix: string;
+      if (!existing) {
+        combinedSuffix = `?${buster}`;
+      } else if (existing.startsWith("#")) {
+        combinedSuffix = `?${buster}${existing}`;
+      } else {
+        // existing.startsWith("?") — 既存 query パラメータの前に `v=` を挿入
+        combinedSuffix = `?${buster}&${existing.slice(1)}`;
+      }
+      return `](${baseUrl}/images/${path}${combinedSuffix})`;
+    },
+  );
 }

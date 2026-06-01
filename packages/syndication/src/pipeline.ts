@@ -16,7 +16,12 @@ import type { Frontmatter } from "@self/content";
 
 import { appendFooter } from "./footer.js";
 import { buildDevtoArticle, type DevtoArticleAttributes } from "./devto-frontmatter.js";
-import { rewriteImageLinks, rewriteInternalLinks, type SlugResolver } from "./link-rewriter.js";
+import {
+  rewriteImageLinks,
+  rewriteInternalLinks,
+  type ImageHashResolver,
+  type SlugResolver,
+} from "./link-rewriter.js";
 import { buildZennFrontmatter, stringifyZennFrontmatter } from "./zenn-frontmatter.js";
 
 /** @graph-connects none */
@@ -43,6 +48,10 @@ export interface SyndicateForZennArgs {
    *  CLI で loop の外に 1 回 fix して全 post に同一 Date を渡すと、process 内で
    *  publishAt 境界をまたぐ race を防げる。test では境界 freeze 用に注入する。 */
   now?: Date;
+  /** `/images/<path>` → 画像 content hash の resolver。指定時は `?v=<hash>` を画像 URL
+   *  に付与する (= cache-buster)。Zenn / dev.to の image proxy が source URL を cache
+   *  key にするため、PNG だけ更新して URL 同一だと古い画像が返り続ける罠を避ける。 */
+  imageHashResolver?: ImageHashResolver;
 }
 
 /**
@@ -66,7 +75,11 @@ export function buildZennCrossLangHeader(enUrl: string | null): string {
  */
 export function syndicateForZenn(args: SyndicateForZennArgs): string {
   const linkRewritten = rewriteInternalLinks(args.body, args.resolver);
-  const imageRewritten = rewriteImageLinks(linkRewritten, args.canonicalHost);
+  const imageRewritten = rewriteImageLinks(
+    linkRewritten,
+    args.canonicalHost,
+    args.imageHashResolver,
+  );
   const withFooter = appendFooter(imageRewritten, args.footerMarkdown);
   const header = buildZennCrossLangHeader(args.enUrl);
   const withHeader = `${header}${withFooter.replace(/^\s+/u, "")}`;
@@ -97,6 +110,11 @@ export interface SyndicateForDevtoArgs {
    *  CLI で loop の外に 1 回 fix して全 post に同一 Date を渡すと、process 内で
    *  publishAt 境界をまたぐ race を防げる。test では境界 freeze 用に注入する。 */
   now?: Date;
+  /** `/images/<path>` → 画像 content hash の resolver。指定時は `?v=<hash>` を画像 URL
+   *  に付与する。dev.to image optimizer (`media2.dev.to/cdn-cgi/image/...`) は source
+   *  URL を cache key にするため、PNG だけ更新で URL 同一だと古い画像が返り続ける罠を
+   *  避ける。 */
+  imageHashResolver?: ImageHashResolver;
 }
 
 /**
@@ -107,7 +125,11 @@ export interface SyndicateForDevtoArgs {
  */
 export function syndicateForDevto(args: SyndicateForDevtoArgs): DevtoArticleAttributes {
   const linkRewritten = rewriteInternalLinks(args.body, args.resolver);
-  const imageRewritten = rewriteImageLinks(linkRewritten, args.canonicalHost);
+  const imageRewritten = rewriteImageLinks(
+    linkRewritten,
+    args.canonicalHost,
+    args.imageHashResolver,
+  );
   return buildDevtoArticle(args.meta, imageRewritten, {
     canonicalHost: args.canonicalHost,
     slug: args.slug,
