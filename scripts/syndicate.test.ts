@@ -41,13 +41,16 @@ import {
   computeDevtoContentHash,
   emitDevto,
   emitZenn,
+  extractDevtoSlugFromUrl,
   generateZennId,
   insertIntoExistingBlock,
   insertSyndicationBlock,
   parseFileName,
   readAllPosts,
   upsertDevtoContentHash,
+  upsertDevtoSlug,
   writebackDevtoContentHashToFile,
+  writebackDevtoSlugToFile,
   writebackDevtoToFile,
   writebackZennIdToFile,
   type ParsedPost,
@@ -977,6 +980,77 @@ describe("emitDevto publish create branch", () => {
     expect(after).toMatch(/ {4}contentHash: "[a-f0-9]{16}"/u);
   });
 
+  it("PUT 応答 url の slug が stored と差分があれば frontmatter slug を reconcile", async () => {
+    // dev.to が draft → 公開時に temp-slug を剥がしたケースを再現。stored は temp-slug
+    // 付き、PUT 応答 url は canonical slug を返す。
+    publishToDevtoMock.mockResolvedValueOnce({
+      url: "https://dev.to/ryantsuji/zeta-canonical-slug",
+      editedAt: "2026-05-17T00:00:00Z",
+    });
+    const srcFile = join(postsDir, "zeta.en.md");
+    await writeFile(
+      srcFile,
+      `---\ntitle: t\npublishedAt: "2026-01-01"\nsyndication:\n  devto:\n    id: 111\n    slug: "zeta-stale-temp-slug-9999"\n---\nzeta body\n`,
+    );
+    const posts = [
+      makePost({
+        slug: "zeta",
+        lang: "en",
+        devto: { id: 111, slug: "zeta-stale-temp-slug-9999" },
+        body: "zeta body\n",
+      }),
+    ];
+
+    await emitDevto({
+      posts,
+      outDir,
+      publish: true,
+      apiKey: "test-key",
+      postsDir,
+    });
+
+    expect(publishToDevtoMock).toHaveBeenCalledTimes(1);
+    const after = await readFile(srcFile, "utf8");
+    // stale な temp-slug 付きは消え、canonical slug に置き換わる
+    expect(after).toContain('    slug: "zeta-canonical-slug"');
+    expect(after).not.toContain("temp-slug-9999");
+    // body は触らない
+    expect(after).toContain("zeta body\n");
+  });
+
+  it("PUT 応答 url の slug が stored と一致するなら slug は書き換えない (idempotency)", async () => {
+    publishToDevtoMock.mockResolvedValueOnce({
+      url: "https://dev.to/ryantsuji/eta-same-slug",
+      editedAt: "2026-05-17T00:00:00Z",
+    });
+    const srcFile = join(postsDir, "eta.en.md");
+    await writeFile(
+      srcFile,
+      `---\ntitle: t\npublishedAt: "2026-01-01"\nsyndication:\n  devto:\n    id: 222\n    slug: "eta-same-slug"\n---\neta body\n`,
+    );
+    const posts = [
+      makePost({
+        slug: "eta",
+        lang: "en",
+        devto: { id: 222, slug: "eta-same-slug" },
+        body: "eta body\n",
+      }),
+    ];
+
+    await emitDevto({
+      posts,
+      outDir,
+      publish: true,
+      apiKey: "test-key",
+      postsDir,
+    });
+
+    const after = await readFile(srcFile, "utf8");
+    // slug 行は元のまま、ファイル全体に slug 1 行だけ
+    expect(after.match(/^ {4}slug:/gmu)).toHaveLength(1);
+    expect(after).toContain('    slug: "eta-same-slug"');
+  });
+
   it("devto 既存 + contentHash 一致なら PUT を skip (= 毎 cron tick で edited_at が bump しない)", async () => {
     // Arrange: contentHash を 「いま computeDevtoContentHash で出る hash」に予め設定
     const posts = [
@@ -1101,6 +1175,108 @@ describe("writebackDevtoContentHashToFile", () => {
     await writeFile(file, "no frontmatter here\n");
     await expect(writebackDevtoContentHashToFile(file, "abc1234567890def")).rejects.toThrowError(
       /frontmatter delimiter/u,
+    );
+  });
+});
+
+describe("extractDevtoSlugFromUrl", () => {
+  it("`https://dev.to/<user>/<slug>` から末尾 slug を抜く", () => {
+    expect(extractDevtoSlugFromUrl("https://dev.to/ryantsuji/foo-bar-baz")).toStrictEqual(
+      "foo-bar-baz",
+    );
+  });
+
+  it("trailing slash を許容", () => {
+    expect(extractDevtoSlugFromUrl("https://dev.to/ryantsuji/foo-bar-baz/")).toStrictEqual(
+      "foo-bar-baz",
+    );
+  });
+
+  it("query / fragment は無視して slug だけ返す", () => {
+    expect(extractDevtoSlugFromUrl("https://dev.to/ryantsuji/foo-bar-baz?x=1")).toStrictEqual(
+      "foo-bar-baz",
+    );
+    expect(extractDevtoSlugFromUrl("https://dev.to/ryantsuji/foo-bar-baz#h")).toStrictEqual(
+      "foo-bar-baz",
+    );
+  });
+
+  it("segment 不足 (user だけ / 空) は null", () => {
+    expect(extractDevtoSlugFromUrl("https://dev.to/ryantsuji")).toBeNull();
+    expect(extractDevtoSlugFromUrl("https://dev.to/")).toBeNull();
+  });
+
+  it("URL parse 失敗時は null", () => {
+    expect(extractDevtoSlugFromUrl("not-a-url")).toBeNull();
+    expect(extractDevtoSlugFromUrl("")).toBeNull();
+  });
+});
+
+describe("upsertDevtoSlug", () => {
+  const fmWithDevto = [
+    "title: t",
+    "syndication:",
+    "  devto:",
+    "    id: 1",
+    '    slug: "old-slug-temp-slug-999"',
+    '    contentHash: "abc1234567890def"',
+  ].join("\n");
+
+  it("既存 slug 行を新しい値で上書き", () => {
+    const out = upsertDevtoSlug(fmWithDevto, "new-canonical-slug");
+    expect(out).toContain('    slug: "new-canonical-slug"');
+    expect(out).not.toContain("old-slug-temp-slug-999");
+    // 他の field は温存される
+    expect(out).toContain("    id: 1");
+    expect(out).toContain('    contentHash: "abc1234567890def"');
+    // slug 行は重複しない
+    expect(out.match(/^ {4}slug:/gmu)).toHaveLength(1);
+  });
+
+  it("devto.slug 行が無い frontmatter には throw", () => {
+    const fmNoDevto = ["title: t", "syndication:", "  zenn:", '    id: "xyz"'].join("\n");
+    expect(() => upsertDevtoSlug(fmNoDevto, "foo")).toThrowError(
+      /syndication.devto.slug line not found/u,
+    );
+  });
+});
+
+describe("writebackDevtoSlugToFile", () => {
+  let postsDir: string;
+
+  beforeEach(async () => {
+    postsDir = await mkdtemp(join(tmpdir(), "syndicate-slug-wb-"));
+  });
+  afterEach(async () => {
+    await rm(postsDir, { recursive: true, force: true });
+  });
+
+  it("既存 devto.slug 行を新値で上書きし、body は触らない", async () => {
+    const file = join(postsDir, "epsilon.en.md");
+    await writeFile(
+      file,
+      `---\ntitle: t\nsyndication:\n  devto:\n    id: 5\n    slug: "old-slug-temp-slug-111"\n---\nbody content\n`,
+    );
+    await writebackDevtoSlugToFile(file, "new-canonical-slug");
+    const after = await readFile(file, "utf8");
+    expect(after).toContain('    slug: "new-canonical-slug"');
+    expect(after).not.toContain("old-slug-temp-slug-111");
+    expect(after).toContain("body content\n");
+  });
+
+  it("frontmatter delimiter が無いファイルでは throw", async () => {
+    const file = join(postsDir, "broken.en.md");
+    await writeFile(file, "no frontmatter\n");
+    await expect(writebackDevtoSlugToFile(file, "foo")).rejects.toThrowError(
+      /frontmatter delimiter/u,
+    );
+  });
+
+  it("syndication.devto.slug 行が無いファイルでは throw", async () => {
+    const file = join(postsDir, "no-slug.en.md");
+    await writeFile(file, `---\ntitle: t\n---\nbody\n`);
+    await expect(writebackDevtoSlugToFile(file, "foo")).rejects.toThrowError(
+      /syndication.devto.slug line not found/u,
     );
   });
 });
