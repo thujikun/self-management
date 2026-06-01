@@ -19,6 +19,7 @@
  */
 
 import { createHash, randomBytes } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -33,6 +34,7 @@ import {
   syndicateForDevto,
   syndicateForZenn,
   type DevtoArticleAttributes,
+  type ImageHashResolver,
   type SlugResolver,
 } from "@self/syndication";
 
@@ -66,6 +68,49 @@ export const ZENN_PUBLICATION = "aircloset";
 export const ZENN_REPO_REMOTE_DEFAULT = "git@github.com:thujikun/ryantsuji-dev-content.git";
 export const ZENN_REPO_REMOTE = process.env.ZENN_REPO_REMOTE ?? ZENN_REPO_REMOTE_DEFAULT;
 export const ZENN_REPO_LOCAL_DEFAULT = resolve(homedir(), "Workspace/ryantsuji-dev-content");
+
+/**
+ * content submodule の絶対 path。`POSTS_DIR` の親が posts、その親が content ルート。
+ * 画像 (`apps/ryantsuji-dev/web/content/images/...`) の hash 解決に使う。
+ */
+export const CONTENT_DIR = resolve(POSTS_DIR, "..");
+
+/**
+ * `/images/<path>` の content hash を解決する {@link ImageHashResolver} を構築する。
+ *
+ * 戻り値の resolver は、最初の解決時に `<CONTENT_DIR>/images/<path>` を読んで sha256
+ * の prefix 8 文字を返し、map に cache する。同じ run 内で同じ画像を何度引いても 1 度
+ * しか read しない。
+ *
+ * Why hash を URL に乗せるか: dev.to image optimizer (`media2.dev.to/cdn-cgi/image/
+ * ...`) と Zenn の画像 proxy は source URL を cache key にする。PNG のバイト列だけ
+ * 変えて URL が同じだと、optimizer が古い画像を返し続ける。`?v=<hash>` を画像 URL
+ * に append すれば、画像差分で URL が変わって optimizer が再 fetch する。
+ *
+ * file が存在しなければ `null` を返す (`rewriteImageLinks` 側で素通り扱い)。base64
+ * 等は扱わない (= 想定 input は `/images/posts/<slug>/<file>` の filesystem path)。
+ *
+ * @graph-connects none
+ */
+export function buildImageHashResolver(contentDir: string = CONTENT_DIR): ImageHashResolver {
+  const cache = new Map<string, string | null>();
+  return (imagePath) => {
+    if (cache.has(imagePath)) return cache.get(imagePath) ?? null;
+    // imagePath は `/images/...` 前提。`/` を strip して contentDir 配下に join する。
+    if (!imagePath.startsWith("/images/")) {
+      cache.set(imagePath, null);
+      return null;
+    }
+    const fsPath = resolve(contentDir, imagePath.slice(1));
+    if (!existsSync(fsPath)) {
+      cache.set(imagePath, null);
+      return null;
+    }
+    const hash = createHash("sha256").update(readFileSync(fsPath)).digest("hex").slice(0, 8);
+    cache.set(imagePath, hash);
+    return hash;
+  };
+}
 
 /** parse + filename 由来 slug + lang。 */
 export interface ParsedPost {
@@ -395,6 +440,9 @@ export interface EmitZennArgs {
 /** Zenn 変換: 全 .ja.md を Zenn 用に書き出す + 任意で repo に commit/push。 */
 export async function emitZenn(args: EmitZennArgs): Promise<void> {
   const resolver = buildZennResolver(args.posts);
+  // 画像 cache-buster: `/images/<path>` → sha256[:8] を解決する resolver を 1 つだけ
+  // 構築して全 post で共有する (同じ画像を複数記事で参照しても 1 度しか read しない)。
+  const imageHashResolver = buildImageHashResolver();
   await mkdir(args.outDir, { recursive: true });
   const repoDir = args.repoDir ?? process.env.RYANTSUJI_CONTENT_REPO_DIR ?? ZENN_REPO_LOCAL_DEFAULT;
   // 同 slug の en variant 存在を SET で持ち、ja syndication 時に enUrl を組む。
@@ -432,6 +480,7 @@ export async function emitZenn(args: EmitZennArgs): Promise<void> {
       // emoji として使う。未指定なら syndicateForZenn 側の default 🤖。
       emoji: p.meta.emoji,
       now,
+      imageHashResolver,
     });
     const outPath = resolve(args.outDir, `${zennId}.md`);
     await writeFile(outPath, markdown, "utf8");
@@ -474,6 +523,9 @@ export interface EmitDevtoArgs {
 /** dev.to 変換: 全 .en.md を API article attributes として JSON で書き出す + 任意で PUT publish。 */
 export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
   const resolver = buildDevtoResolver(args.posts);
+  // 画像 cache-buster: `/images/<path>` → sha256[:8]。dev.to image optimizer の cache key
+  // (= source URL) を画像差分で変えて、PNG 差し替えだけで optimizer が再 fetch するようにする。
+  const imageHashResolver = buildImageHashResolver();
   await mkdir(args.outDir, { recursive: true });
   // apiKey の有無 = publish mode の有無 と等価にする (publish mode で apiKey が無ければ
   // 直後の throw で gate)。以後の loop では `apiKey` truthy = "publish + key あり" を
@@ -497,6 +549,7 @@ export async function emitDevto(args: EmitDevtoArgs): Promise<void> {
       canonicalHost: RYANTSUJI_DEV_BASE,
       coverImageUrl: p.meta.cover ? `${RYANTSUJI_DEV_BASE}${p.meta.cover}` : undefined,
       now,
+      imageHashResolver,
     });
 
     const contentHash = computeDevtoContentHash(article);
