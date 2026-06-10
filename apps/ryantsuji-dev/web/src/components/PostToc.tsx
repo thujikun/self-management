@@ -23,6 +23,27 @@
 import { useEffect, useRef, useState } from "react";
 import type { Heading } from "@self/content";
 
+import type { Lang } from "../server/i18n.js";
+
+/**
+ * TOC で使う lang-conditional 文言の純関数。post 詳細 page 全体の i18n と同じく
+ * `lang === "ja"` を基準にした 2 値分岐で、`server/i18n.ts:Lang` に依拠する。
+ * 文言は test 側 (`PostToc.test.tsx`) からも参照されるため named export にして
+ * literal の二重定義を避ける。
+ *
+ * @graph-connects none
+ */
+export function tocLabels(lang: Lang): {
+  heading: string;
+  openTrigger: string;
+  closeDialog: string;
+} {
+  if (lang === "ja") {
+    return { heading: "目次", openTrigger: "目次を開く", closeDialog: "閉じる" };
+  }
+  return { heading: "Contents", openTrigger: "Open contents", closeDialog: "Close" };
+}
+
 /** @graph-connects none */
 export const TOC_OBSERVER_ROOT_MARGIN = "-25% 0px -65% 0px";
 
@@ -77,19 +98,20 @@ export function useActiveHeading(headings: readonly Heading[]): string | null {
 }
 
 /** @graph-connects react [provides] floating TOC */
-export function PostToc({ headings }: { headings: readonly Heading[] }) {
+export function PostToc({ headings, lang }: { headings: readonly Heading[]; lang: Lang }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const activeId = useActiveHeading(headings);
   if (headings.length <= 1) return null;
 
   const openMobile = () => dialogRef.current?.showModal();
   const closeMobile = () => dialogRef.current?.close();
+  const labels = tocLabels(lang);
 
   return (
     <>
       {/* desktop sticky aside (≥1280px のみ visible、それ未満は display:none で消える) */}
-      <aside className="post-toc post-toc--desktop" aria-label="目次">
-        <h2 className="post-toc__heading">目次</h2>
+      <aside className="post-toc post-toc--desktop" aria-label={labels.heading}>
+        <h2 className="post-toc__heading">{labels.heading}</h2>
         <TocList headings={headings} activeId={activeId} />
       </aside>
 
@@ -98,7 +120,7 @@ export function PostToc({ headings }: { headings: readonly Heading[] }) {
         type="button"
         className="post-toc__mobile-trigger"
         onClick={openMobile}
-        aria-label="目次を開く"
+        aria-label={labels.openTrigger}
       >
         <TocIcon />
       </button>
@@ -113,12 +135,12 @@ export function PostToc({ headings }: { headings: readonly Heading[] }) {
       >
         <div className="post-toc__dialog-panel">
           <header className="post-toc__dialog-head">
-            <h2 className="post-toc__heading">目次</h2>
+            <h2 className="post-toc__heading">{labels.heading}</h2>
             <button
               type="button"
               className="post-toc__dialog-close"
               onClick={closeMobile}
-              aria-label="閉じる"
+              aria-label={labels.closeDialog}
             >
               ×
             </button>
