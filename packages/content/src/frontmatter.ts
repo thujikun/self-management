@@ -44,7 +44,6 @@ export const FrontmatterSchema = z.object({
     .default([])
     .transform((arr) => Array.from(new Set(arr.map((t) => t.toLowerCase()))).sort()),
   canonical: z.string().url().optional(),
-  draft: z.boolean().default(false),
   /**
    * cover image の **public/ からの絶対 path**。例: `/images/posts/<slug>.cover.png`。
    * ryantsuji.dev では `<meta property="og:image">` に、Zenn / dev.to syndication

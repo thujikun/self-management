@@ -19,7 +19,6 @@ const meta: Frontmatter = {
   title: "DB Graph",
   publishedAt: "2026-05-01",
   tags: ["ai", "mcp"],
-  draft: false,
   syndication: {},
   excludeFromSyndication: false,
   summary: "summary",
@@ -125,7 +124,7 @@ describe("syndicateForZenn", () => {
     expect(out).not.toContain("English Version is here");
   });
 
-  it("now を forward して publishAt 境界判定を builder まで通す (publishAt 未来 / draft 扱い)", () => {
+  it("now を forward して publishAt 境界判定を builder まで通す (publishAt 未来 → 非公開)", () => {
     // Arrange: zenn 側で publishAt を未来に置き、now をその直前に freeze
     const future: Frontmatter = {
       ...meta,

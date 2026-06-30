@@ -214,25 +214,19 @@ describe("readAllPosts", () => {
     expect(posts.map((p) => p.slug)).toStrictEqual(["ok"]);
   });
 
-  it("skips draft: true posts", async () => {
+  it("draft field は schema で strip され runtime に届かない (旧 draft 概念廃止、 publishAt 1 本管理)", async () => {
     await writeFile(join(dir, "alpha.ja.md"), baseFm("draft: true\n"));
     await writeFile(join(dir, "beta.ja.md"), baseFm());
     const posts = await readAllPosts(dir);
-    expect(posts.map((p) => p.slug)).toStrictEqual(["beta"]);
-  });
-
-  it("includeDrafts: true で draft も含めて返す", async () => {
-    await writeFile(join(dir, "alpha.ja.md"), baseFm("draft: true\n"));
-    await writeFile(join(dir, "beta.ja.md"), baseFm());
-    const posts = await readAllPosts(dir, { includeDrafts: true });
+    // 両方 readAllPosts に乗る (publishAt 過去判定は別経路の isPublishedNow が担当)
     expect(posts.map((p) => p.slug).sort()).toStrictEqual(["alpha", "beta"]);
   });
 
-  it("`_` prefix slug (test fixture) は includeDrafts でも syndication 対象から除外", async () => {
-    await writeFile(join(dir, "_fixture.ja.md"), baseFm("draft: true\n"));
+  it("`_` prefix slug (test fixture) は syndication 対象から除外", async () => {
+    await writeFile(join(dir, "_fixture.ja.md"), baseFm());
     await writeFile(join(dir, "_minimal.en.md"), baseFm());
     await writeFile(join(dir, "real.ja.md"), baseFm());
-    const posts = await readAllPosts(dir, { includeDrafts: true });
+    const posts = await readAllPosts(dir);
     expect(posts.map((p) => p.slug).sort()).toStrictEqual(["real"]);
   });
 

@@ -31,7 +31,6 @@ const SAMPLE_LATEST: PostListItem[] = [
     title: "Hello World",
     publishedAt: "2026-05-10",
     tags: [],
-    draft: false,
     syndication: {},
     servedLang: "en",
     availableLangs: ["en"],

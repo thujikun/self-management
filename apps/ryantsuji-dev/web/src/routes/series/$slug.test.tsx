@@ -28,7 +28,6 @@ function makePost(over: Partial<PostListItem> & Pick<PostListItem, "slug">): Pos
     publishedAt: over.publishedAt ?? "2026-05-10",
     summary: over.summary,
     tags: over.tags ?? [],
-    draft: over.draft ?? false,
     series: over.series,
     seriesOrder: over.seriesOrder,
     syndication: over.syndication ?? {},

@@ -3,7 +3,7 @@
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business dev.to article builder の test。tags 4 件上限 / canonical_url 生成 / cover_image / series / draft → published / summary → description の各 path を網羅
+ * @graph-business dev.to article builder の test。tags 4 件上限 / canonical_url 生成 / cover_image / series / publishAt → published / summary → description の各 path を網羅
  * @graph-connects none
  */
 
@@ -16,7 +16,6 @@ const base: Frontmatter = {
   title: "Hello",
   publishedAt: "2026-05-01",
   tags: ["ai", "mcp"],
-  draft: false,
   syndication: {},
   excludeFromSyndication: false,
   summary: "summary text",
@@ -52,14 +51,6 @@ describe("buildDevtoArticle", () => {
       slug: "hello",
     });
     expect(out.canonical_url).toBe("https://ryantsuji.dev/posts/hello");
-  });
-
-  it("draft: true → published: false", () => {
-    const out = buildDevtoArticle({ ...base, draft: true }, "x", {
-      canonicalHost: "https://ryantsuji.dev",
-      slug: "x",
-    });
-    expect(out.published).toBe(false);
   });
 
   it("summary 無しなら description omit", () => {
@@ -110,11 +101,7 @@ describe("buildDevtoArticle", () => {
 
 describe("isPublishedNow", () => {
   const now = new Date("2026-05-18T00:00:00Z");
-  it("draft 立っていれば常に false", () => {
-    expect(isPublishedNow({ ...base, draft: true }, "devto", now)).toBe(false);
-  });
-
-  it("publishAt 未指定なら !draft が答え", () => {
+  it("publishAt 未指定なら常に true (公開可)", () => {
     expect(isPublishedNow(base, "devto", now)).toBe(true);
   });
 
@@ -147,7 +134,7 @@ describe("isPublishedNow", () => {
       ...base,
       syndication: { zenn: { id: "x", publishAt: "2099-01-01" } },
     };
-    // devto の publishAt は未設定 → !draft の true
+    // devto の publishAt は未設定 → true (公開可)
     expect(isPublishedNow(meta, "devto", now)).toBe(true);
     // zenn は未来 → false
     expect(isPublishedNow(meta, "zenn", now)).toBe(false);

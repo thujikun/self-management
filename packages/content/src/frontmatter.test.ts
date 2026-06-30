@@ -20,7 +20,6 @@ describe("parseFrontmatter", () => {
       title: "hello",
       publishedAt: "2026-05-08",
       tags: [],
-      draft: false,
       syndication: {},
     });
   });
@@ -37,7 +36,6 @@ describe("parseFrontmatter", () => {
       title: "x",
       publishedAt: "2026-05-08",
       tags: [],
-      draft: false,
       syndication: {},
     });
   });
