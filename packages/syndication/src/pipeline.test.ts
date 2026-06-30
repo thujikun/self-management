@@ -13,6 +13,7 @@
 import { describe, expect, it } from "vitest";
 import type { Frontmatter } from "@self/content";
 
+import { AI_DISCLOSURE_MARKDOWN } from "./devto-ai-disclosure.js";
 import { syndicateForDevto, syndicateForZenn } from "./pipeline.js";
 
 const meta: Frontmatter = {
@@ -240,5 +241,49 @@ describe("syndicateForDevto", () => {
       now: new Date("2026-05-18T00:00:00Z"),
     });
     expect(out.published).toBe(true);
+  });
+
+  it("AI disclosure を body 先頭に自動 prepend する (dev.to community guideline 追従)", () => {
+    const out = syndicateForDevto({
+      meta,
+      body: "Hi, I'm Ryan...\n\nbody.",
+      slug: "db-graph",
+      resolver,
+      canonicalHost: "https://ryantsuji.dev",
+    });
+    expect(out.body_markdown.startsWith(AI_DISCLOSURE_MARKDOWN)).toBe(true);
+    // 「Hi, I'm Ryan」が disclosure の後ろに来ていること
+    expect(out.body_markdown.indexOf("Hi, I'm Ryan")).toBeGreaterThan(
+      AI_DISCLOSURE_MARKDOWN.length,
+    );
+  });
+
+  it("既に disclosure marker を含む SoT body には二重 prepend しない", () => {
+    const body = `${AI_DISCLOSURE_MARKDOWN}\n\nHi.`;
+    const out = syndicateForDevto({
+      meta,
+      body,
+      slug: "db-graph",
+      resolver,
+      canonicalHost: "https://ryantsuji.dev",
+    });
+    // marker は 1 回しか出現しない
+    const markerCount = out.body_markdown.split("<!-- ai-disclosure -->").length - 1;
+    expect(markerCount).toBe(1);
+  });
+});
+
+describe("syndicateForZenn (AI disclosure invariant)", () => {
+  it("Zenn 配信には AI disclosure を入れない (Zenn は disclosure 必須ルール無し)", () => {
+    const out = syndicateForZenn({
+      meta,
+      body: "本文。",
+      resolver,
+      canonicalHost: "https://ryantsuji.dev",
+      enUrl: null,
+      footerMarkdown: null,
+    });
+    expect(out).not.toContain("<!-- ai-disclosure -->");
+    expect(out).not.toContain("AI assistance disclosure");
   });
 });
