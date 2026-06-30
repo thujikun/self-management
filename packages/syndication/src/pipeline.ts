@@ -14,6 +14,7 @@
 
 import type { Frontmatter } from "@self/content";
 
+import { prependAiDisclosure } from "./devto-ai-disclosure.js";
 import { appendFooter } from "./footer.js";
 import { buildDevtoArticle, type DevtoArticleAttributes } from "./devto-frontmatter.js";
 import {
@@ -119,9 +120,12 @@ export interface SyndicateForDevtoArgs {
 
 /**
  * dev.to API 用に変換。`PUT /api/articles/{id}` の request body の `article` field
- * にそのまま入れられる shape を返す。footer は付加しない (dev.to には footer 不要)。
+ * にそのまま入れられる shape を返す。 footer は付加しない (dev.to には footer 不要)。
+ * 本文先頭には dev.to community guideline に従い AI assistance disclosure を自動
+ * prepend する (`prependAiDisclosure` が marker comment で idempotent を担保するため、
+ * SoT markdown 側に disclosure を書いた記事と混在しても二重化しない)。
  *
- * @graph-connects content [calls] rewriteInternalLinks / buildDevtoArticle
+ * @graph-connects content [calls] rewriteInternalLinks / prependAiDisclosure / buildDevtoArticle
  */
 export function syndicateForDevto(args: SyndicateForDevtoArgs): DevtoArticleAttributes {
   const linkRewritten = rewriteInternalLinks(args.body, args.resolver);
@@ -130,7 +134,8 @@ export function syndicateForDevto(args: SyndicateForDevtoArgs): DevtoArticleAttr
     args.canonicalHost,
     args.imageHashResolver,
   );
-  return buildDevtoArticle(args.meta, imageRewritten, {
+  const withDisclosure = prependAiDisclosure(imageRewritten);
+  return buildDevtoArticle(args.meta, withDisclosure, {
     canonicalHost: args.canonicalHost,
     slug: args.slug,
     coverImageUrl: args.coverImageUrl,
