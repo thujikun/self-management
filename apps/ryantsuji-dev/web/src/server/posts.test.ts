@@ -34,21 +34,26 @@ describe("listPosts(lang)", () => {
     expect(new Set(ja.map((p) => p.slug))).toStrictEqual(new Set(en.map((p) => p.slug)));
   });
 
-  it("draft: true の variant は除外される", () => {
+  it("publishedAt 未来の post は public listing から除外される (旧 draft: true 相当)", () => {
     const posts = listPosts("en");
-    expect(posts.map((p) => p.draft)).toStrictEqual(posts.map(() => false));
+    const now = Date.now();
+    for (const p of posts) {
+      expect(new Date(p.publishedAt).getTime()).toBeLessThanOrEqual(now);
+    }
   });
 
-  it("includeDrafts: true を渡すと draft variant も listing に含む (admin preview)", () => {
+  it("includeDrafts: true を渡すと publishedAt 未来の post も listing に含む (admin preview)", () => {
     const publicPosts = listPosts("en");
     const withDrafts = listPosts("en", { includeDrafts: true });
-    // 少なくとも 1 つは draft が増えていなければ、テスト fixture に draft 記事が無い
-    // → 別 mechanism (= cortex-product-graph 等) が draft で居ると assume
+    // 少なくとも 1 つは pending が増えていなければ、 テスト fixture に未来 publishedAt の記事が無い
     expect(withDrafts.length).toBeGreaterThanOrEqual(publicPosts.length);
-    const draftSlugs = withDrafts.filter((p) => p.draft).map((p) => p.slug);
-    // draft mode で draft 記事 1 つでも見えるなら admin preview 経路は機能している
-    if (draftSlugs.length > 0) {
-      for (const slug of draftSlugs) {
+    const now = Date.now();
+    const pendingSlugs = withDrafts
+      .filter((p) => new Date(p.publishedAt).getTime() > now)
+      .map((p) => p.slug);
+    // pending mode で pending 記事 1 つでも見えるなら admin preview 経路は機能している
+    if (pendingSlugs.length > 0) {
+      for (const slug of pendingSlugs) {
         expect(publicPosts.find((p) => p.slug === slug)).toBeUndefined();
       }
     }
@@ -135,13 +140,12 @@ describe("getRenderedPost(slug, lang)", () => {
     expect(result?.availableLangs).toContain("ja");
   });
 
-  it("draft post の slug でも null (公開経路から漏らさない)", () => {
-    // _draft-example.en.md は frontmatter で draft: true
+  it("pending (publishedAt 未来) post の slug でも null (公開経路から漏らさない)", () => {
+    // _draft-example.en.md は frontmatter で publishedAt 未来 (旧 draft: true 相当)
     expect(getRenderedPost("_draft-example", "en")).toBeNull();
   });
 
-  it("includeDrafts: true で draft post の slug も lookup できる (admin preview)", () => {
-    // _draft-example.en.md は frontmatter で draft: true
+  it("includeDrafts: true で pending post の slug も lookup できる (admin preview)", () => {
     expect(getRenderedPost("_draft-example", "en", { includeDrafts: true })).not.toBeNull();
     // default (= public) 経路は変化なし
     expect(getRenderedPost("_draft-example", "en")).toBeNull();
@@ -156,7 +160,6 @@ describe("variantFor (internal、fallback ロジックと invariant 破れの fa
       publishedAt: "2026-01-01",
       slug: "_ja-only-test",
       tags: [],
-      draft: false,
       syndication: {},
       lang: "ja" as const,
     },

@@ -109,7 +109,8 @@ function buildEntries(includeDrafts: boolean): Map<string, PostEntry> {
   for (const [filename, doc] of Object.entries(rendered)) {
     const parsed = parseFilename(filename);
     if (!parsed) continue;
-    if (doc.frontmatter.draft && !includeDrafts) continue;
+    // publishedAt 未来 = pending post (旧 draft: true 相当)。 includeDrafts で admin preview。
+    if (new Date(doc.frontmatter.publishedAt).getTime() > Date.now() && !includeDrafts) continue;
     const meta: PostMeta = { ...doc.frontmatter, slug: parsed.slug, lang: parsed.lang };
     let entry = out.get(parsed.slug);
     if (!entry) {
