@@ -54,7 +54,6 @@ describe("runLanding", () => {
         title: `t${i}`,
         publishedAt: `2026-01-0${i + 1}`,
         tags: [],
-        draft: false,
         syndication: {},
         availableLangs: ["en"],
         servedLang: "en",

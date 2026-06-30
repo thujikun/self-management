@@ -20,7 +20,6 @@ function makePost(
     title: over.title,
     publishedAt: over.publishedAt,
     tags: over.tags ?? [],
-    draft: false,
     syndication: {},
     slug: over.slug,
     lang: over.lang ?? "en",

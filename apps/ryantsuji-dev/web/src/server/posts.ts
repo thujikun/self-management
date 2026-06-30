@@ -88,29 +88,23 @@ function parseFilename(name: string): { slug: string; lang: Lang } | null {
 }
 
 /**
- * 内部 Map: slug → { variants: { en?, ja? } }。
+ * 内部 Map: slug → { variants: { en?, ja? } }。**全 variant を時刻非依存で構築**し、
+ * process 寿命で 1 度だけ memo する (`rendered` は build 成果物で deploy 間 immutable)。
  *
- * 公開 API は `includeDrafts: boolean` を取り、2 種類の Map を別 memo する:
- * - `_entriesPublic` (default): `draft: true` の variant を構築段階で除外
- * - `_entriesWithDrafts`: 全 variant を含む (admin preview 用)
- *
- * どちらかの lang だけ draft でも、その lang を listPosts / getRenderedPost が返さ
- * ないようにする (= draft = variant 単位の filter)。
+ * 公開境界 (`publishedAt <= now`) はこの memo に**焼き込まない**。pending 判定を
+ * 構築段階で固定すると、予約投稿が時刻到来後も同一 isolate が生きている限り stale な
+ * まま公開されない。公開可否は `visibleEntries()` が per-request に評価する。
  *
  * @graph-connects none
  */
-let _entriesPublic: Map<string, PostEntry> | null = null;
-/** @graph-connects none */
-let _entriesWithDrafts: Map<string, PostEntry> | null = null;
+let _entries: Map<string, PostEntry> | null = null;
 
 /** @graph-connects none */
-function buildEntries(includeDrafts: boolean): Map<string, PostEntry> {
+function buildEntries(): Map<string, PostEntry> {
   const out = new Map<string, PostEntry>();
   for (const [filename, doc] of Object.entries(rendered)) {
     const parsed = parseFilename(filename);
     if (!parsed) continue;
-    // publishedAt 未来 = pending post (旧 draft: true 相当)。 includeDrafts で admin preview。
-    if (new Date(doc.frontmatter.publishedAt).getTime() > Date.now() && !includeDrafts) continue;
     const meta: PostMeta = { ...doc.frontmatter, slug: parsed.slug, lang: parsed.lang };
     let entry = out.get(parsed.slug);
     if (!entry) {
@@ -123,18 +117,52 @@ function buildEntries(includeDrafts: boolean): Map<string, PostEntry> {
 }
 
 /** @graph-connects none */
-function entries(includeDrafts: boolean = false): Map<string, PostEntry> {
-  if (includeDrafts) {
-    if (!_entriesWithDrafts) _entriesWithDrafts = buildEntries(true);
-    return _entriesWithDrafts;
+function allEntries(): Map<string, PostEntry> {
+  if (!_entries) _entries = buildEntries();
+  return _entries;
+}
+
+/**
+ * variant の `publishedAt` が現在時刻より未来 (= pending / 旧 draft: true 相当) か。
+ * `Date.now()` を都度読むので、予約時刻の到来で公開判定が flip する。
+ *
+ * @graph-connects none
+ */
+function isPending(variant: PostVariant): boolean {
+  return new Date(variant.meta.publishedAt).getTime() > Date.now();
+}
+
+/**
+ * memo 済の全 entry に対し、公開境界を **per-request** に適用した view を返す。
+ *
+ * - `includeDrafts: true` (admin preview): pending variant も残した全 entry をそのまま
+ * - default (public): `publishedAt <= now` の variant のみ残し、可視 variant が 0 件に
+ *   なった entry は Map から落とす (= pending は variant 単位で filter)
+ *
+ * memo は variant 構築のみキャッシュし公開判定はキャッシュしないので、予約投稿は
+ * isolate を再起動せずとも時刻到来で listing / detail に自動的に現れる。
+ *
+ * @graph-connects none
+ */
+function visibleEntries(includeDrafts: boolean): Map<string, PostEntry> {
+  if (includeDrafts) return allEntries();
+  const out = new Map<string, PostEntry>();
+  for (const [slug, entry] of allEntries()) {
+    const variants: Partial<Record<Lang, PostVariant>> = {};
+    for (const lang of SUPPORTED_LANGS) {
+      const variant = entry.variants[lang];
+      if (variant && !isPending(variant)) variants[lang] = variant;
+    }
+    if (SUPPORTED_LANGS.some((lang) => variants[lang])) {
+      out.set(slug, { slug, variants });
+    }
   }
-  if (!_entriesPublic) _entriesPublic = buildEntries(false);
-  return _entriesPublic;
+  return out;
 }
 
 /**
  * 要求 lang の variant を優先、無ければ `en` variant に fallback、en も無ければ
- * `SUPPORTED_LANGS` の順に他 lang を試す。`entries()` は variant 0 件の post を
+ * `SUPPORTED_LANGS` の順に他 lang を試す。`visibleEntries()` は variant 0 件の post を
  * Map に入れないので必ず何か返る (unreachable 経路は防御的に throw)。
  *
  * @graph-connects none
@@ -172,13 +200,13 @@ function availableLangs(entry: PostEntry): Lang[] {
  * 利用可能 lang を返す (`publishedAt` 降順)。`_` prefix slug は production 一覧から
  * 除外 (test fixture 用 convention)。
  *
- * `includeDrafts: true` の時のみ draft variant も含む (admin preview 経路)。
- * 既存 caller (= flag 省略) は `false` 動作と等価。
+ * `includeDrafts: true` の時のみ pending (publishedAt 未来) variant も含む (admin
+ * preview 経路)。既存 caller (= flag 省略) は `false` 動作と等価。
  *
  * @graph-connects none
  */
 export function listPosts(lang: Lang, options: { includeDrafts?: boolean } = {}): PostListItem[] {
-  return [...entries(options.includeDrafts ?? false).values()]
+  return [...visibleEntries(options.includeDrafts ?? false).values()]
     .filter((entry) => !entry.slug.startsWith("_"))
     .map((entry) => {
       const picked = variantFor(entry, lang);
@@ -193,9 +221,10 @@ export function listPosts(lang: Lang, options: { includeDrafts?: boolean } = {})
 
 /**
  * 公開 API: slug から pre-rendered HTML + meta を返す。要求 lang が無ければ en
- * fallback。存在しないか全 variant draft (かつ admin でない) なら null。
+ * fallback。存在しないか全 variant が pending (publishedAt 未来、かつ admin でない)
+ * なら null。
  *
- * `includeDrafts: true` の時のみ draft variant も lookup 対象に入る。
+ * `includeDrafts: true` の時のみ pending variant も lookup 対象に入る。
  *
  * @graph-connects none
  */
@@ -204,7 +233,7 @@ export function getRenderedPost(
   lang: Lang,
   options: { includeDrafts?: boolean } = {},
 ): RenderedPostResult | null {
-  const entry = entries(options.includeDrafts ?? false).get(slug);
+  const entry = visibleEntries(options.includeDrafts ?? false).get(slug);
   if (!entry) return null;
   const picked = variantFor(entry, lang);
   return {

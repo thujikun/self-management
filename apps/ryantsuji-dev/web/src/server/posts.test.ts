@@ -82,8 +82,8 @@ describe("listPosts(lang)", () => {
 
   it("`_` prefix slug (fixture / 内部用) は production 一覧から除外される", () => {
     // `_minimal-fixture.en.md` / `_draft-example.en.md` のいずれも /posts 一覧には
-    // 露出させない (draft: true は entries() 段階で全経路から落ちる別 mechanism、
-    // 本 filter は draft でない fixture を listing 表面から隠す convention)。
+    // 露出させない (pending = publishedAt 未来 は visibleEntries() で公開経路から落ちる
+    // 別 mechanism、本 filter は pending でない fixture を listing 表面から隠す convention)。
     const slugs = new Set(listPosts("en").map((p) => p.slug));
     expect(slugs.has("_minimal-fixture")).toBe(false);
     expect(slugs.has("_draft-example")).toBe(false);
@@ -150,6 +150,23 @@ describe("getRenderedPost(slug, lang)", () => {
     // default (= public) 経路は変化なし
     expect(getRenderedPost("_draft-example", "en")).toBeNull();
   });
+
+  it("pending post は publishedAt 到来で同一 process でも公開される (memo に焼かない)", () => {
+    // 公開境界は entries memo に焼き込まず per-request 評価する。fake timer で
+    // _draft-example の publishedAt を跨いで Date.now() を進め、同一 isolate のまま
+    // null → 公開 へ flip することを確認する (旧 memo 実装は (b) で null のまま stale)。
+    vi.useFakeTimers();
+    try {
+      // (a) 公開予定時刻より前: pending なので公開経路は null
+      vi.setSystemTime(new Date("2000-01-01T00:00:00Z"));
+      expect(getRenderedPost("_draft-example", "en")).toBeNull();
+      // (b) publishedAt を確実に過ぎた時刻に進めると同一 process でも公開される
+      vi.setSystemTime(new Date("9999-12-31T23:59:59Z"));
+      expect(getRenderedPost("_draft-example", "en")?.servedLang).toBe("en");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("variantFor (internal、fallback ロジックと invariant 破れの fail-fast)", () => {
@@ -169,7 +186,6 @@ describe("variantFor (internal、fallback ロジックと invariant 破れの fa
         title: "Ja-only test",
         publishedAt: "2026-01-01",
         tags: [],
-        draft: false,
         syndication: {},
       },
       headings: [],
