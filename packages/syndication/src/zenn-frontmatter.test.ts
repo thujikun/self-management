@@ -3,7 +3,7 @@
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business Zenn frontmatter builder の test。emoji / publication_name / topics 上限 5 件 / draft → published reverse / YAML escape を網羅
+ * @graph-business Zenn frontmatter builder の test。emoji / publication_name / topics 上限 5 件 / publishAt → published reverse / YAML escape を網羅
  * @graph-connects none
  */
 
@@ -17,7 +17,6 @@ const base: Frontmatter = {
   title: "テスト記事",
   publishedAt: "2026-05-01",
   tags: ["ai", "mcp", "graphrag"],
-  draft: false,
   syndication: {},
   excludeFromSyndication: false,
 };
@@ -44,11 +43,6 @@ describe("buildZennFrontmatter", () => {
   it("publicationName=null で publication_name 自体を omit (個人 publish)", () => {
     const out = buildZennFrontmatter(base, { publicationName: null });
     expect(out.publication_name).toBeUndefined();
-  });
-
-  it("draft: true → published: false に反転", () => {
-    const out = buildZennFrontmatter({ ...base, draft: true });
-    expect(out.published).toBe(false);
   });
 
   it("tags が 5 件超なら先頭 5 件に truncate (Zenn topics 上限)", () => {
@@ -86,10 +80,7 @@ describe("isPublishedNow(target=zenn)", () => {
   // 共有するための回帰 test (`devto-frontmatter.ts:isPublishedNow` 側で同じ pure
   // 関数を呼ぶ).
   const now = new Date("2026-05-18T00:00:00Z");
-  it("draft 立っていれば常に false", () => {
-    expect(isPublishedNow({ ...base, draft: true }, "zenn", now)).toBe(false);
-  });
-  it("publishAt 未指定なら true", () => {
+  it("publishAt 未指定なら true (公開可)", () => {
     expect(isPublishedNow(base, "zenn", now)).toBe(true);
   });
   it("publishAt 未来 → false", () => {

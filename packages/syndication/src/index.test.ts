@@ -20,11 +20,13 @@ describe("@self/syndication public API", () => {
   it("公開している runtime export の集合を snapshot で固定する", () => {
     expect(Object.keys(syndication).sort()).toMatchInlineSnapshot(`
       [
+        "AI_DISCLOSURE_MARKDOWN",
         "appendFooter",
         "buildDevtoArticle",
         "buildZennFrontmatter",
         "cleanupOrphanZennArticles",
         "createDevtoArticle",
+        "prependAiDisclosure",
         "publishToDevto",
         "publishToZenn",
         "rewriteInternalLinks",

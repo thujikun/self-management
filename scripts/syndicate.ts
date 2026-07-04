@@ -122,11 +122,11 @@ export interface ParsedPost {
 }
 
 /**
- * `postsDir` 配下の `<slug>.<lang>.md` を全て parse する。`draft: true` は default で
- * 除外するが、`includeDrafts: true` を指定すると drafts も含めて返す。draft 記事を
- * Zenn / dev.to 側に「下書き状態」で同期して、連携 pipeline の挙動を本番記事に影響
- * させずに検証する用途を想定 (`published: !meta.draft` が target frontmatter で評価
- * され、`published: false` 扱いになる)。
+ * `postsDir` 配下の `<slug>.<lang>.md` を全て parse する。 各 post の公開状態は
+ * `meta.syndication.<target>.publishAt` の時刻判定 (= `isPublishedNow`) で決まる。
+ * 旧 `meta.draft` 由来の skip は廃止 (publishAt 1 本管理に統一)。
+ *
+ * `includeDrafts` option は後方互換 noop (CLI flag からの呼び出しが残るため引数は受け取る)。
  */
 export async function readAllPosts(
   postsDir: string = POSTS_DIR,
@@ -139,13 +139,12 @@ export async function readAllPosts(
     if (!parsed) continue;
     // `_` prefix slug は test fixture (e.g. `_draft-example` / `_minimal-fixture`)。
     // listing / detail / scheduler が同 prefix で除外する規約と整合させる。
-    // ここで弾かないと `--include-drafts` 経路で dev.to に CREATE されてしまう
+    // ここで弾かないと dev.to に誤って CREATE されてしまう
     // (= 2026-05-17 16:48Z run 25996825130 で実際に発生したインシデント)。
     if (parsed.slug.startsWith("_")) continue;
     const raw = await readFile(resolve(postsDir, f), "utf8");
     const grayMatter = matter(raw);
     const meta = parseFrontmatter(grayMatter.data);
-    if (meta.draft && !options.includeDrafts) continue;
     // `excludeFromSyndication: true` の post は ryantsuji.dev のみに公開し、
     // Zenn / dev.to には流さない。non-syndicate な consumer (= content repo 側
     // `scripts/generate-cover.mjs` 等が同 readAllPosts を読む将来想定) は

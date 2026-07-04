@@ -76,14 +76,15 @@ export function buildDevtoArticle(
 }
 
 /**
- * `meta.draft` と `meta.syndication.<target>.publishAt` を合わせて「いま `published:
- * true` にしてよいか」を判定する。draft が立ってる時は常に false、publishAt が
- * 未指定なら `!meta.draft`、publishAt が指定されてる時は `now >= publishAt`。
+ * `meta.syndication.<target>.publishAt` を見て「いま `published: true` にしてよいか」を判定する。
+ * publishAt が未指定なら常に公開可。指定時は `now >= publishAt`。
+ *
+ * 旧 `meta.draft` 参照は廃止 (publishAt 1 本管理)。 予約投稿は `publishAt` を未来時刻にすれば
+ * 同等の挙動になる。
  *
  * @graph-connects none
  */
 export function isPublishedNow(meta: Frontmatter, target: "zenn" | "devto", now: Date): boolean {
-  if (meta.draft) return false;
   const publishAt = meta.syndication?.[target]?.publishAt;
   if (!publishAt) return true;
   const t = new Date(publishAt);
