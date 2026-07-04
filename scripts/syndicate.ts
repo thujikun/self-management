@@ -30,6 +30,7 @@ import { parseFrontmatter, type Frontmatter } from "@self/content";
 import {
   cleanupOrphanZennArticles,
   createDevtoArticle,
+  ensureZennRepoCloned,
   publishToDevto,
   publishToZenn,
   syndicateForDevto,
@@ -530,6 +531,10 @@ export async function emitZenn(args: EmitZennArgs): Promise<void> {
   // run (git stash conflict 等) で作った重複 draft が Zenn 側で「push のたびに resurrect
   // される」問題への対処。 title 不一致 (post rename / 削除の可能性) は自動削除せず warn。
   if (args.publish) {
+    // cold-start (repoDir が persist されず未 clone) では articles/ が読めず、 zombie
+    // 検出が空振りして cleanup が次 run まで遅延する。 detection の前に clone を保証し、
+    // fresh-clone の run でも 1 run で zombie を消せるようにする。
+    await ensureZennRepoCloned(repoDir, ZENN_REPO_REMOTE);
     const articlesDir = resolve(repoDir, "articles");
     const articleFiles = await readZennArticleFiles(articlesDir);
     const { zombies, legitOrphans } = detectOrphanZennArticles(articleFiles, args.posts);

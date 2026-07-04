@@ -12,7 +12,7 @@
  * @graph-connects none
  */
 
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,6 +28,7 @@ vi.mock("@self/syndication", async () => {
     ...actual,
     cleanupOrphanZennArticles: vi.fn(),
     createDevtoArticle: vi.fn(),
+    ensureZennRepoCloned: vi.fn(),
     publishToDevto: vi.fn(),
     publishToZenn: vi.fn(),
   };
@@ -36,6 +37,7 @@ vi.mock("@self/syndication", async () => {
 import {
   cleanupOrphanZennArticles,
   createDevtoArticle,
+  ensureZennRepoCloned,
   publishToDevto,
   publishToZenn,
 } from "@self/syndication";
@@ -64,7 +66,8 @@ import {
   type ParsedPost,
 } from "./syndicate.js";
 
-const _cleanupOrphanZennArticlesMock = vi.mocked(cleanupOrphanZennArticles);
+const cleanupOrphanZennArticlesMock = vi.mocked(cleanupOrphanZennArticles);
+const ensureZennRepoClonedMock = vi.mocked(ensureZennRepoCloned);
 const createDevtoArticleMock = vi.mocked(createDevtoArticle);
 const publishToDevtoMock = vi.mocked(publishToDevto);
 const publishToZennMock = vi.mocked(publishToZenn);
@@ -790,12 +793,49 @@ describe("emitZenn publish create branch", () => {
     createDevtoArticleMock.mockReset();
     publishToDevtoMock.mockReset();
     publishToZennMock.mockReset();
+    cleanupOrphanZennArticlesMock.mockReset();
+    ensureZennRepoClonedMock.mockReset();
+    ensureZennRepoClonedMock.mockResolvedValue(undefined);
   });
   afterEach(async () => {
     logSpy.mockRestore();
     warnSpy.mockRestore();
     await rm(outDir, { recursive: true, force: true });
     await rm(postsDir, { recursive: true, force: true });
+  });
+
+  it("cold-start (repoDir 未 clone): detection 前に ensureZennRepoCloned で clone を保証し、1 run で zombie を cleanup する", async () => {
+    const repoDir = await mkdtemp(join(tmpdir(), "syndicate-zpub-repo-"));
+    // 「未 clone」状態を模擬: ensureZennRepoCloned が呼ばれて初めて articles/ を
+    // materialize する (= real clone が articles/ を持ってくる状況)。 detection より
+    // 前に clone が走らなければ zombie は空振りするため、この順序を固定する。
+    ensureZennRepoClonedMock.mockImplementationOnce(async (dir: string) => {
+      const articlesDir = join(dir, "articles");
+      await mkdir(articlesDir, { recursive: true });
+      // canonical id set に無く、canonical title と一致 → zombie 判定される
+      await writeFile(join(articlesDir, "zombielegacy01.md"), `---\ntitle: title\n---\nold\n`);
+    });
+    cleanupOrphanZennArticlesMock.mockResolvedValueOnce({
+      deletedFiles: ["articles/zombielegacy01.md"],
+      commitSha: "abcdef012345",
+      pushed: true,
+    });
+    publishToZennMock.mockResolvedValue({ filePath: "x", commitSha: null, pushed: false });
+    const posts = [makePost({ slug: "alpha", lang: "ja", zennId: "aaaaaaaaaaaa01", body: "hi\n" })];
+
+    await emitZenn({ posts, outDir, footer: "", publish: true, postsDir, repoDir });
+
+    expect(ensureZennRepoClonedMock).toHaveBeenCalledWith(
+      repoDir,
+      "git@github.com:thujikun/ryantsuji-dev-content.git",
+    );
+    expect(cleanupOrphanZennArticlesMock).toHaveBeenCalledTimes(1);
+    expect(cleanupOrphanZennArticlesMock.mock.calls[0]?.[0]).toMatchObject({
+      repoDir,
+      remoteUrl: "git@github.com:thujikun/ryantsuji-dev-content.git",
+      zombieIds: ["zombielegacy01"],
+    });
+    await rm(repoDir, { recursive: true, force: true });
   });
 
   it("id 不在の .ja post を publish: 新規 zenn id 生成 → writeback → publishToZenn を実行", async () => {

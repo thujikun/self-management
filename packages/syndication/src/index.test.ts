@@ -26,6 +26,7 @@ describe("@self/syndication public API", () => {
         "buildZennFrontmatter",
         "cleanupOrphanZennArticles",
         "createDevtoArticle",
+        "ensureZennRepoCloned",
         "prependAiDisclosure",
         "publishToDevto",
         "publishToZenn",

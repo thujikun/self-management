@@ -15,7 +15,7 @@ import { spawnSync } from "node:child_process";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { cleanupOrphanZennArticles, publishToZenn } from "./zenn.js";
+import { cleanupOrphanZennArticles, ensureZennRepoCloned, publishToZenn } from "./zenn.js";
 
 function gitSync(argv: string[], cwd: string): { code: number; stdout: string } {
   // husky pre-commit 経路で GIT_DIR / GIT_WORK_TREE 等が env に立っていると、cwd を
@@ -289,5 +289,37 @@ describe("cleanupOrphanZennArticles (integration with real git)", () => {
     });
     expect(result.deletedFiles).toEqual(["articles/prepush1.md"]);
     expect(result.pushed).toBe(true);
+    // fresh clone は local identity を継承しないが、commit は `-c user.name/email` を
+    // 明示注入するので ambient gitconfig 非依存で author が固定される (Author identity
+    // unknown 回避)。 cleanup commit の author を検証してこれを固定する。
+    const author = gitSync(["log", "-1", "--format=%an <%ae>"], freshDir);
+    expect(author.stdout.trim()).toBe("syndication-bot <bot@ryantsuji.dev>");
+  });
+});
+
+describe("ensureZennRepoCloned (integration with real git)", () => {
+  let repos: { root: string; bare: string; workDir: string };
+
+  beforeEach(async () => {
+    repos = await makeRepos();
+  });
+
+  afterEach(async () => {
+    await rm(repos.root, { recursive: true, force: true });
+  });
+
+  it("repoDir 未作成なら remoteUrl から clone し、origin が設定される", async () => {
+    const target = resolve(repos.root, "ensure-fresh");
+    await ensureZennRepoCloned(target, repos.bare);
+    const remoteOut = gitSync(["remote", "get-url", "origin"], target);
+    expect(remoteOut.code).toBe(0);
+    expect(remoteOut.stdout.trim()).toBe(repos.bare);
+  });
+
+  it("repoDir が既存なら clone せず no-op (既存 remote を上書きしない)", async () => {
+    // workDir は makeRepos で clone 済み。 別 remote を渡しても no-op で origin は不変。
+    await ensureZennRepoCloned(repos.workDir, "git@example.com:should/not-be-used.git");
+    const remoteOut = gitSync(["remote", "get-url", "origin"], repos.workDir);
+    expect(remoteOut.stdout.trim()).toBe(repos.bare);
   });
 });
