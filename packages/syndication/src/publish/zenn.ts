@@ -13,11 +13,40 @@
  * @graph-connects none
  */
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { Buffer } from "node:buffer";
+
+/**
+ * commit identity。 fresh clone した repo は checkout 時の local config を継承せず、
+ * commit の author/committer は ambient (global `~/.gitconfig`) に依存する。 global
+ * config の無い CI 環境ではこれが "Author identity unknown" (exit 128) を招くため、
+ * commit 時に `-c user.name` / `-c user.email` で明示注入し、環境非依存にする。
+ *
+ * @graph-connects none
+ */
+const BOT_GIT_NAME = "syndication-bot";
+/** @graph-connects none */
+const BOT_GIT_EMAIL = "bot@ryantsuji.dev";
+
+/**
+ * identity を明示注入した `git commit` argv を組む (ambient gitconfig に依存しない)。
+ *
+ * @graph-connects none
+ */
+function commitArgv(subject: string): string[] {
+  return [
+    "-c",
+    `user.name=${BOT_GIT_NAME}`,
+    "-c",
+    `user.email=${BOT_GIT_EMAIL}`,
+    "commit",
+    "-m",
+    subject,
+  ];
+}
 
 /** @graph-connects none */
 export interface PublishZennArgs {
@@ -44,14 +73,25 @@ export interface PublishZennResult {
 }
 
 /**
+ * repoDir が未 clone なら remoteUrl から clone する。 既に存在すれば no-op。
+ *
+ * cold-start (repoDir が persist されず毎回 clone される CI runner 等) で、 zombie
+ * 検出 (articles/ の read) より前に clone を保証したい caller が使う。
+ *
+ * @graph-connects none
+ */
+export async function ensureZennRepoCloned(repoDir: string, remoteUrl: string): Promise<void> {
+  if (existsSync(repoDir)) return;
+  await runGit(["clone", remoteUrl, repoDir], process.cwd());
+}
+
+/**
  * Zenn repo に article を書き込み、変更があれば commit + push する。
  *
  * @graph-connects none
  */
 export async function publishToZenn(args: PublishZennArgs): Promise<PublishZennResult> {
-  if (!existsSync(args.repoDir)) {
-    await runGit(["clone", args.remoteUrl, args.repoDir], process.cwd());
-  }
+  await ensureZennRepoCloned(args.repoDir, args.remoteUrl);
   // articles/ ディレクトリを確保
   const articlesDir = resolve(args.repoDir, "articles");
   await mkdir(articlesDir, { recursive: true });
@@ -81,14 +121,79 @@ export async function publishToZenn(args: PublishZennArgs): Promise<PublishZennR
     return { filePath, commitSha: null, pushed: false };
   }
   const subject = args.commitSubject ?? `chore: sync articles/${args.zennId}.md`;
-  await runGit(["commit", "-m", subject], args.repoDir);
+  await runGit(commitArgv(subject), args.repoDir);
   const sha = (await runGitOutput(["rev-parse", "HEAD"], args.repoDir)).trim();
   await runGit(["push"], args.repoDir);
   return { filePath, commitSha: sha, pushed: true };
 }
 
+/** @graph-connects none */
+export interface CleanupOrphanZennArticlesArgs {
+  /** Zenn repo の local clone path。 */
+  repoDir: string;
+  /** clone 元 (未 clone 時に使用)。 */
+  remoteUrl: string;
+  /** 削除対象の Zenn article id リスト (= `articles/<id>.md` のファイル名)。 */
+  zombieIds: string[];
+  /** commit subject。default: `chore: cleanup orphan Zenn articles (N)`。 */
+  commitSubject?: string;
+  /** dryRun: true で unlink までだけ、commit/push 無し。 */
+  dryRun?: boolean;
+}
+
+/** @graph-connects none */
+export interface CleanupOrphanZennArticlesResult {
+  deletedFiles: string[];
+  /** 実 commit 時の sha。dry-run / no-change の時は null */
+  commitSha: string | null;
+  pushed: boolean;
+}
+
 /**
- * git CLI を run。失敗時は throw (allowFail で exit code を返すモードも可)。
+ * Zenn repo の `articles/<id>.md` から orphan zombie 記事を削除し、 commit + push する。
+ *
+ * caller (syndicate.ts) 側で detect 済みの zombie id リストを渡す前提。 本関数は
+ * I/O layer で、 実在確認と git 操作のみを行う。 空リストなら早期 return。
+ *
+ * @graph-connects none
+ */
+export async function cleanupOrphanZennArticles(
+  args: CleanupOrphanZennArticlesArgs,
+): Promise<CleanupOrphanZennArticlesResult> {
+  if (args.zombieIds.length === 0) {
+    return { deletedFiles: [], commitSha: null, pushed: false };
+  }
+  await ensureZennRepoCloned(args.repoDir, args.remoteUrl);
+  const articlesDir = resolve(args.repoDir, "articles");
+  const deleted: string[] = [];
+  for (const id of args.zombieIds) {
+    const filePath = resolve(articlesDir, `${id}.md`);
+    if (!existsSync(filePath)) continue;
+    await unlink(filePath);
+    deleted.push(`articles/${id}.md`);
+  }
+  if (deleted.length === 0) {
+    return { deletedFiles: [], commitSha: null, pushed: false };
+  }
+  if (args.dryRun) {
+    return { deletedFiles: deleted, commitSha: null, pushed: false };
+  }
+  for (const path of deleted) {
+    await runGit(["add", path], args.repoDir);
+  }
+  const staged = await runGit(["diff", "--cached", "--quiet"], args.repoDir, { allowFail: true });
+  if (staged === 0) {
+    return { deletedFiles: deleted, commitSha: null, pushed: false };
+  }
+  const subject = args.commitSubject ?? `chore: cleanup orphan Zenn articles (${deleted.length})`;
+  await runGit(commitArgv(subject), args.repoDir);
+  const sha = (await runGitOutput(["rev-parse", "HEAD"], args.repoDir)).trim();
+  await runGit(["push"], args.repoDir);
+  return { deletedFiles: deleted, commitSha: sha, pushed: true };
+}
+
+/**
+ * git CLI を run。 失敗時は throw (allowFail で exit code を返すモードも可)。
  *
  * @graph-connects none
  */
@@ -98,7 +203,7 @@ async function runGit(
   options: { allowFail?: boolean } = {},
 ): Promise<number> {
   return new Promise((resolveP, rejectP) => {
-    const child = spawn("git", argv, { cwd, stdio: "inherit" });
+    const child = spawn("git", argv, { cwd, stdio: "inherit", env: gitEnv() });
     child.on("error", rejectP);
     child.on("exit", (code: number | null) => {
       if (code === 0 || options.allowFail) resolveP(code ?? 0);
@@ -108,13 +213,42 @@ async function runGit(
 }
 
 /**
+ * spawn git 用の env。 husky / pre-commit hook 経由で呼ばれた際に GIT_DIR / GIT_WORK_TREE
+ * 等が inherit されると、 cwd で指定した repoDir ではなく parent (呼び出し元) の git dir
+ * に commit が漏れる (実際にテストでこの経路が起きた)。 明示的に unset して cwd から
+ * repo discovery させる。
+ *
+ * 同様に GIT_AUTHOR_* / GIT_COMMITTER_* も hook 経由で leak すると `commitArgv` の
+ * `-c user.name/email` より優先され、 commit の author が呼び出し元のものに乗っ取られる
+ * (env var は config より precedence が高い)。 これも unset して identity 注入を効かせる。
+ *
+ * @graph-connects none
+ */
+function gitEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  delete env.GIT_INDEX_FILE;
+  delete env.GIT_COMMON_DIR;
+  delete env.GIT_AUTHOR_NAME;
+  delete env.GIT_AUTHOR_EMAIL;
+  delete env.GIT_COMMITTER_NAME;
+  delete env.GIT_COMMITTER_EMAIL;
+  return env;
+}
+
+/**
  * git CLI を run して stdout を return。
  *
  * @graph-connects none
  */
 async function runGitOutput(argv: string[], cwd: string): Promise<string> {
   return new Promise((resolveP, rejectP) => {
-    const child = spawn("git", argv, { cwd, stdio: ["ignore", "pipe", "inherit"] });
+    const child = spawn("git", argv, {
+      cwd,
+      stdio: ["ignore", "pipe", "inherit"],
+      env: gitEnv(),
+    });
     let out = "";
     child.stdout.on("data", (chunk: Buffer) => {
       out += chunk.toString("utf8");

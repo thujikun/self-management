@@ -28,7 +28,9 @@ import { fileURLToPath } from "node:url";
 import matter from "gray-matter";
 import { parseFrontmatter, type Frontmatter } from "@self/content";
 import {
+  cleanupOrphanZennArticles,
   createDevtoArticle,
+  ensureZennRepoCloned,
   publishToDevto,
   publishToZenn,
   syndicateForDevto,
@@ -383,6 +385,79 @@ export function generateZennId(): string {
   return randomBytes(7).toString("hex");
 }
 
+/** {@link detectOrphanZennArticles} の入力。 */
+export interface ZennArticleFileInfo {
+  /** ファイル名から派生した Zenn article id (= filename without `.md`)。 */
+  id: string;
+  /** frontmatter の title。 orphan classification に使う。 */
+  title: string;
+}
+
+/** {@link detectOrphanZennArticles} の結果。 */
+export interface OrphanZennDetection {
+  /** canonical set に無いが title 一致 post を持つ article。 zombie 判定して自動削除対象。 */
+  zombies: string[];
+  /** canonical set にも title 一致 post にも該当しない article。 手動 review 対象で自動削除しない。 */
+  legitOrphans: string[];
+}
+
+/**
+ * Zenn repo の `articles/*.md` から orphan (canonical set に無いファイル) を検出し、
+ * title 一致の post が canonical に存在する場合は `zombies` に分類 (bug 経路で作られた
+ * 重複と見なす)。 title が一致しない場合は `legitOrphans` に分類 (post が rename /
+ * 削除された可能性があるため自動削除しない)。
+ *
+ * ロジックは pure。 I/O (git rm / commit / push) は
+ * `cleanupOrphanZennArticles` (`@self/syndication`) に委譲する。
+ *
+ * @graph-connects none
+ */
+export function detectOrphanZennArticles(
+  articleFiles: ZennArticleFileInfo[],
+  canonicalPosts: ParsedPost[],
+): OrphanZennDetection {
+  const jaPosts = canonicalPosts.filter((p) => p.lang === "ja");
+  const canonicalIds = new Set<string>();
+  const canonicalTitles = new Set<string>();
+  for (const p of jaPosts) {
+    const id = p.meta.syndication.zenn?.id;
+    if (id) canonicalIds.add(id);
+    if (p.meta.title) canonicalTitles.add(p.meta.title);
+  }
+  const zombies: string[] = [];
+  const legitOrphans: string[] = [];
+  for (const file of articleFiles) {
+    if (canonicalIds.has(file.id)) continue;
+    if (canonicalTitles.has(file.title)) {
+      zombies.push(file.id);
+    } else {
+      legitOrphans.push(file.id);
+    }
+  }
+  return { zombies, legitOrphans };
+}
+
+/**
+ * Zenn repo の `articles/*.md` を全 read し、 `ZennArticleFileInfo[]` を返す。
+ * frontmatter だけ parse して title を抜き出す (body は不要)。
+ *
+ * @graph-connects none
+ */
+export async function readZennArticleFiles(articlesDir: string): Promise<ZennArticleFileInfo[]> {
+  if (!existsSync(articlesDir)) return [];
+  const files = await readdir(articlesDir);
+  const infos: ZennArticleFileInfo[] = [];
+  for (const f of files) {
+    if (!f.endsWith(".md")) continue;
+    const id = f.slice(0, -3);
+    const raw = await readFile(resolve(articlesDir, f), "utf8");
+    const parsed = matter(raw);
+    const title = typeof parsed.data.title === "string" ? parsed.data.title : "";
+    infos.push({ id, title });
+  }
+  return infos;
+}
+
 /**
  * slug → Zenn 公開 URL の resolver を構築。`.ja.md` の frontmatter
  * `syndication.zenn.id` から逆引きする。
@@ -450,6 +525,42 @@ export async function emitZenn(args: EmitZennArgs): Promise<void> {
   const slugsWithEn = new Set(args.posts.filter((q) => q.lang === "en").map((q) => q.slug));
   // publishAt 境界 race 防止のため、loop 開始前に 1 度だけ now を fix する
   const now = args.now ?? new Date();
+
+  // publish mode で articles/ に orphan (canonical set に無い) 記事があれば、
+  // title 一致で zombie と判定して自動削除する。 過去に syndication bot が buggy な
+  // run (git stash conflict 等) で作った重複 draft が Zenn 側で「push のたびに resurrect
+  // される」問題への対処。 title 不一致 (post rename / 削除の可能性) は自動削除せず warn。
+  if (args.publish) {
+    // cold-start (repoDir が persist されず未 clone) では articles/ が読めず、 zombie
+    // 検出が空振りして cleanup が次 run まで遅延する。 detection の前に clone を保証し、
+    // fresh-clone の run でも 1 run で zombie を消せるようにする。
+    await ensureZennRepoCloned(repoDir, ZENN_REPO_REMOTE);
+    const articlesDir = resolve(repoDir, "articles");
+    const articleFiles = await readZennArticleFiles(articlesDir);
+    const { zombies, legitOrphans } = detectOrphanZennArticles(articleFiles, args.posts);
+    if (zombies.length > 0) {
+      console.log(
+        `  [cleanup] found ${zombies.length} orphan Zenn article(s) with matching title (auto-delete):`,
+      );
+      for (const id of zombies) console.log(`    - articles/${id}.md`);
+      const result = await cleanupOrphanZennArticles({
+        repoDir,
+        remoteUrl: ZENN_REPO_REMOTE,
+        zombieIds: zombies,
+      });
+      console.log(
+        `    cleanup: ${
+          result.pushed ? `pushed ${result.commitSha?.slice(0, 8)}` : "no push"
+        } (${result.deletedFiles.length} file(s) deleted)`,
+      );
+    }
+    if (legitOrphans.length > 0) {
+      console.warn(
+        `  [warn] ${legitOrphans.length} article file(s) have no matching post title — manual review needed:`,
+      );
+      for (const id of legitOrphans) console.warn(`    - articles/${id}.md`);
+    }
+  }
 
   for (const p of args.posts) {
     if (p.lang !== "ja") continue;

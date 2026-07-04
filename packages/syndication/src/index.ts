@@ -29,5 +29,10 @@ export type {
   PublishDevtoArgs,
   PublishDevtoResult,
 } from "./publish/devto.js";
-export { publishToZenn } from "./publish/zenn.js";
-export type { PublishZennArgs, PublishZennResult } from "./publish/zenn.js";
+export { cleanupOrphanZennArticles, ensureZennRepoCloned, publishToZenn } from "./publish/zenn.js";
+export type {
+  CleanupOrphanZennArticlesArgs,
+  CleanupOrphanZennArticlesResult,
+  PublishZennArgs,
+  PublishZennResult,
+} from "./publish/zenn.js";
