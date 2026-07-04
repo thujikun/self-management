@@ -15,10 +15,17 @@ import { spawnSync } from "node:child_process";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { publishToZenn } from "./zenn.js";
+import { cleanupOrphanZennArticles, publishToZenn } from "./zenn.js";
 
 function gitSync(argv: string[], cwd: string): { code: number; stdout: string } {
-  const r = spawnSync("git", argv, { cwd, encoding: "utf8" });
+  // husky pre-commit 経路で GIT_DIR / GIT_WORK_TREE 等が env に立っていると、cwd を
+  // 指定しても親 worktree に commit が漏れる。 明示 unset して cwd から repo discovery。
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  delete env.GIT_INDEX_FILE;
+  delete env.GIT_COMMON_DIR;
+  const r = spawnSync("git", argv, { cwd, encoding: "utf8", env });
   return { code: r.status ?? 1, stdout: r.stdout };
 }
 
@@ -172,5 +179,115 @@ describe("publishToZenn (integration with real git)", () => {
     });
     expect(result.commitSha).toBeNull();
     expect(result.pushed).toBe(false);
+  });
+});
+
+describe("cleanupOrphanZennArticles (integration with real git)", () => {
+  let repos: { root: string; bare: string; workDir: string };
+
+  beforeEach(async () => {
+    repos = await makeRepos();
+  });
+
+  afterEach(async () => {
+    await rm(repos.root, { recursive: true, force: true });
+  });
+
+  it("zombieIds 空なら early return (no push)", async () => {
+    const result = await cleanupOrphanZennArticles({
+      repoDir: repos.workDir,
+      remoteUrl: repos.bare,
+      zombieIds: [],
+    });
+    expect(result.deletedFiles).toEqual([]);
+    expect(result.commitSha).toBeNull();
+    expect(result.pushed).toBe(false);
+  });
+
+  it("実在する zombie file を unlink + commit + push する", async () => {
+    // articles/89da562d3026d5.md を初期状態として作っておく
+    await publishToZenn({
+      repoDir: repos.workDir,
+      remoteUrl: repos.bare,
+      zennId: "89da562d3026d5",
+      markdown: "---\ntitle: zombie\n---\nold body",
+    });
+    const result = await cleanupOrphanZennArticles({
+      repoDir: repos.workDir,
+      remoteUrl: repos.bare,
+      zombieIds: ["89da562d3026d5"],
+    });
+    expect(result.deletedFiles).toEqual(["articles/89da562d3026d5.md"]);
+    expect(result.pushed).toBe(true);
+    expect(result.commitSha).toMatch(/^[0-9a-f]{40}$/);
+    // bare 側に削除が反映されているか (fresh clone)
+    const verifyDir = resolve(repos.root, "verify");
+    gitSync(["clone", repos.bare, verifyDir], repos.root);
+    await expect(
+      readFile(resolve(verifyDir, "articles/89da562d3026d5.md"), "utf8"),
+    ).rejects.toThrow();
+  });
+
+  it("dryRun=true は unlink までだけ、commit / push 無し", async () => {
+    await publishToZenn({
+      repoDir: repos.workDir,
+      remoteUrl: repos.bare,
+      zennId: "abc9999999",
+      markdown: "---\ntitle: t\n---\nbody",
+    });
+    const result = await cleanupOrphanZennArticles({
+      repoDir: repos.workDir,
+      remoteUrl: repos.bare,
+      zombieIds: ["abc9999999"],
+      dryRun: true,
+    });
+    expect(result.deletedFiles).toEqual(["articles/abc9999999.md"]);
+    expect(result.commitSha).toBeNull();
+    expect(result.pushed).toBe(false);
+  });
+
+  it("存在しない id は deleted に入れない (silent skip)", async () => {
+    const result = await cleanupOrphanZennArticles({
+      repoDir: repos.workDir,
+      remoteUrl: repos.bare,
+      zombieIds: ["not-exist"],
+    });
+    expect(result.deletedFiles).toEqual([]);
+    expect(result.pushed).toBe(false);
+  });
+
+  it("実在 zombie と存在しない id が混在する場合、実在分のみ削除", async () => {
+    await publishToZenn({
+      repoDir: repos.workDir,
+      remoteUrl: repos.bare,
+      zennId: "real12345",
+      markdown: "---\ntitle: t\n---\nbody",
+    });
+    const result = await cleanupOrphanZennArticles({
+      repoDir: repos.workDir,
+      remoteUrl: repos.bare,
+      zombieIds: ["real12345", "phantom99"],
+    });
+    expect(result.deletedFiles).toEqual(["articles/real12345.md"]);
+    expect(result.pushed).toBe(true);
+  });
+
+  it("clone-on-missing: repoDir 未作成なら remoteUrl から clone してから cleanup", async () => {
+    // まず bare に何か push しておく
+    await publishToZenn({
+      repoDir: repos.workDir,
+      remoteUrl: repos.bare,
+      zennId: "prepush1",
+      markdown: "---\ntitle: t\n---\nb",
+    });
+    // 削除対象の別 dir を用意 (まだ clone されていない)
+    const freshDir = resolve(repos.root, "fresh-cleanup-target");
+    const result = await cleanupOrphanZennArticles({
+      repoDir: freshDir,
+      remoteUrl: repos.bare,
+      zombieIds: ["prepush1"],
+    });
+    expect(result.deletedFiles).toEqual(["articles/prepush1.md"]);
+    expect(result.pushed).toBe(true);
   });
 });

@@ -23,6 +23,7 @@ describe("@self/syndication public API", () => {
         "appendFooter",
         "buildDevtoArticle",
         "buildZennFrontmatter",
+        "cleanupOrphanZennArticles",
         "createDevtoArticle",
         "publishToDevto",
         "publishToZenn",

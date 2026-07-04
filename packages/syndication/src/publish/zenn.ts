@@ -13,7 +13,7 @@
  * @graph-connects none
  */
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -87,8 +87,75 @@ export async function publishToZenn(args: PublishZennArgs): Promise<PublishZennR
   return { filePath, commitSha: sha, pushed: true };
 }
 
+/** @graph-connects none */
+export interface CleanupOrphanZennArticlesArgs {
+  /** Zenn repo の local clone path。 */
+  repoDir: string;
+  /** clone 元 (未 clone 時に使用)。 */
+  remoteUrl: string;
+  /** 削除対象の Zenn article id リスト (= `articles/<id>.md` のファイル名)。 */
+  zombieIds: string[];
+  /** commit subject。default: `chore: cleanup orphan Zenn articles (N)`。 */
+  commitSubject?: string;
+  /** dryRun: true で unlink までだけ、commit/push 無し。 */
+  dryRun?: boolean;
+}
+
+/** @graph-connects none */
+export interface CleanupOrphanZennArticlesResult {
+  deletedFiles: string[];
+  /** 実 commit 時の sha。dry-run / no-change の時は null */
+  commitSha: string | null;
+  pushed: boolean;
+}
+
 /**
- * git CLI を run。失敗時は throw (allowFail で exit code を返すモードも可)。
+ * Zenn repo の `articles/<id>.md` から orphan zombie 記事を削除し、 commit + push する。
+ *
+ * caller (syndicate.ts) 側で detect 済みの zombie id リストを渡す前提。 本関数は
+ * I/O layer で、 実在確認と git 操作のみを行う。 空リストなら早期 return。
+ *
+ * @graph-connects none
+ */
+export async function cleanupOrphanZennArticles(
+  args: CleanupOrphanZennArticlesArgs,
+): Promise<CleanupOrphanZennArticlesResult> {
+  if (args.zombieIds.length === 0) {
+    return { deletedFiles: [], commitSha: null, pushed: false };
+  }
+  if (!existsSync(args.repoDir)) {
+    await runGit(["clone", args.remoteUrl, args.repoDir], process.cwd());
+  }
+  const articlesDir = resolve(args.repoDir, "articles");
+  const deleted: string[] = [];
+  for (const id of args.zombieIds) {
+    const filePath = resolve(articlesDir, `${id}.md`);
+    if (!existsSync(filePath)) continue;
+    await unlink(filePath);
+    deleted.push(`articles/${id}.md`);
+  }
+  if (deleted.length === 0) {
+    return { deletedFiles: [], commitSha: null, pushed: false };
+  }
+  if (args.dryRun) {
+    return { deletedFiles: deleted, commitSha: null, pushed: false };
+  }
+  for (const path of deleted) {
+    await runGit(["add", path], args.repoDir);
+  }
+  const staged = await runGit(["diff", "--cached", "--quiet"], args.repoDir, { allowFail: true });
+  if (staged === 0) {
+    return { deletedFiles: deleted, commitSha: null, pushed: false };
+  }
+  const subject = args.commitSubject ?? `chore: cleanup orphan Zenn articles (${deleted.length})`;
+  await runGit(["commit", "-m", subject], args.repoDir);
+  const sha = (await runGitOutput(["rev-parse", "HEAD"], args.repoDir)).trim();
+  await runGit(["push"], args.repoDir);
+  return { deletedFiles: deleted, commitSha: sha, pushed: true };
+}
+
+/**
+ * git CLI を run。 失敗時は throw (allowFail で exit code を返すモードも可)。
  *
  * @graph-connects none
  */
@@ -98,7 +165,7 @@ async function runGit(
   options: { allowFail?: boolean } = {},
 ): Promise<number> {
   return new Promise((resolveP, rejectP) => {
-    const child = spawn("git", argv, { cwd, stdio: "inherit" });
+    const child = spawn("git", argv, { cwd, stdio: "inherit", env: gitEnv() });
     child.on("error", rejectP);
     child.on("exit", (code: number | null) => {
       if (code === 0 || options.allowFail) resolveP(code ?? 0);
@@ -108,13 +175,34 @@ async function runGit(
 }
 
 /**
+ * spawn git 用の env。 husky / pre-commit hook 経由で呼ばれた際に GIT_DIR / GIT_WORK_TREE
+ * 等が inherit されると、 cwd で指定した repoDir ではなく parent (呼び出し元) の git dir
+ * に commit が漏れる (実際にテストでこの経路が起きた)。 明示的に unset して cwd から
+ * repo discovery させる。
+ *
+ * @graph-connects none
+ */
+function gitEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  delete env.GIT_INDEX_FILE;
+  delete env.GIT_COMMON_DIR;
+  return env;
+}
+
+/**
  * git CLI を run して stdout を return。
  *
  * @graph-connects none
  */
 async function runGitOutput(argv: string[], cwd: string): Promise<string> {
   return new Promise((resolveP, rejectP) => {
-    const child = spawn("git", argv, { cwd, stdio: ["ignore", "pipe", "inherit"] });
+    const child = spawn("git", argv, {
+      cwd,
+      stdio: ["ignore", "pipe", "inherit"],
+      env: gitEnv(),
+    });
     let out = "";
     child.stdout.on("data", (chunk: Buffer) => {
       out += chunk.toString("utf8");

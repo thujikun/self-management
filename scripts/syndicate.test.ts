@@ -26,19 +26,26 @@ vi.mock("@self/syndication", async () => {
   const actual = await vi.importActual<typeof import("@self/syndication")>("@self/syndication");
   return {
     ...actual,
+    cleanupOrphanZennArticles: vi.fn(),
     createDevtoArticle: vi.fn(),
     publishToDevto: vi.fn(),
     publishToZenn: vi.fn(),
   };
 });
 
-import { createDevtoArticle, publishToDevto, publishToZenn } from "@self/syndication";
+import {
+  cleanupOrphanZennArticles,
+  createDevtoArticle,
+  publishToDevto,
+  publishToZenn,
+} from "@self/syndication";
 
 import {
   buildDevtoResolver,
   buildImageHashResolver,
   buildZennResolver,
   computeDevtoContentHash,
+  detectOrphanZennArticles,
   emitDevto,
   emitZenn,
   extractDevtoSlugFromUrl,
@@ -47,6 +54,7 @@ import {
   insertSyndicationBlock,
   parseFileName,
   readAllPosts,
+  readZennArticleFiles,
   upsertDevtoContentHash,
   upsertDevtoSlug,
   writebackDevtoContentHashToFile,
@@ -56,6 +64,7 @@ import {
   type ParsedPost,
 } from "./syndicate.js";
 
+const _cleanupOrphanZennArticlesMock = vi.mocked(cleanupOrphanZennArticles);
 const createDevtoArticleMock = vi.mocked(createDevtoArticle);
 const publishToDevtoMock = vi.mocked(publishToDevto);
 const publishToZennMock = vi.mocked(publishToZenn);
@@ -1284,5 +1293,114 @@ describe("writebackDevtoSlugToFile", () => {
     await expect(writebackDevtoSlugToFile(file, "foo")).rejects.toThrowError(
       /syndication.devto.slug line not found/u,
     );
+  });
+});
+
+describe("detectOrphanZennArticles", () => {
+  it("canonical id と一致する article は zombie / orphan いずれにも入らない", () => {
+    const posts: ParsedPost[] = [
+      makePost({ slug: "post-a", lang: "ja", zennId: "aaa1111111111a" }),
+    ];
+    const result = detectOrphanZennArticles([{ id: "aaa1111111111a", title: "title" }], posts);
+    expect(result.zombies).toEqual([]);
+    expect(result.legitOrphans).toEqual([]);
+  });
+
+  it("canonical id に無く title 一致 post があるものは zombie に分類", () => {
+    const posts: ParsedPost[] = [
+      makePost({ slug: "post-a", lang: "ja", zennId: "c93e730ea6e5c3" }),
+    ];
+    const result = detectOrphanZennArticles(
+      [
+        { id: "c93e730ea6e5c3", title: "title" },
+        { id: "89da562d3026d5", title: "title" },
+      ],
+      posts,
+    );
+    expect(result.zombies).toEqual(["89da562d3026d5"]);
+    expect(result.legitOrphans).toEqual([]);
+  });
+
+  it("canonical id にも title 一致 post にも該当しないものは legitOrphans (自動削除しない)", () => {
+    const posts: ParsedPost[] = [
+      makePost({ slug: "current", lang: "ja", zennId: "current11111111" }),
+    ];
+    const result = detectOrphanZennArticles(
+      [
+        { id: "current11111111", title: "title" },
+        { id: "removed11111111", title: "old title of removed post" },
+      ],
+      posts,
+    );
+    expect(result.zombies).toEqual([]);
+    expect(result.legitOrphans).toEqual(["removed11111111"]);
+  });
+
+  it("zombie と legitOrphans が同時に存在する場合、両方正しく分類", () => {
+    const posts: ParsedPost[] = [
+      makePost({ slug: "post-a", lang: "ja", zennId: "canonical111111" }),
+    ];
+    const result = detectOrphanZennArticles(
+      [
+        { id: "canonical111111", title: "title" },
+        { id: "zombie111111111", title: "title" },
+        { id: "orphan111111111", title: "unrelated old title" },
+      ],
+      posts,
+    );
+    expect(result.zombies).toEqual(["zombie111111111"]);
+    expect(result.legitOrphans).toEqual(["orphan111111111"]);
+  });
+
+  it("en post は canonical set に入らない (ja のみ照合)", () => {
+    const posts: ParsedPost[] = [makePost({ slug: "post-a", lang: "en" })];
+    const result = detectOrphanZennArticles([{ id: "somezenn1111111", title: "title" }], posts);
+    expect(result.zombies).toEqual([]);
+    expect(result.legitOrphans).toEqual(["somezenn1111111"]);
+  });
+
+  it("id 無し (未 publish) の ja post があっても title は canonical titles に入る", () => {
+    const posts: ParsedPost[] = [makePost({ slug: "unpublished", lang: "ja" })];
+    const result = detectOrphanZennArticles([{ id: "someid111111111", title: "title" }], posts);
+    expect(result.zombies).toEqual(["someid111111111"]);
+    expect(result.legitOrphans).toEqual([]);
+  });
+});
+
+describe("readZennArticleFiles", () => {
+  let tmpdirPath: string;
+
+  beforeEach(async () => {
+    tmpdirPath = await mkdtemp(join(tmpdir(), "readZennArticles-"));
+  });
+
+  afterEach(async () => {
+    await rm(tmpdirPath, { recursive: true, force: true });
+  });
+
+  it("存在しない dir に対しては [] を返す (throw しない)", async () => {
+    const result = await readZennArticleFiles(join(tmpdirPath, "does-not-exist"));
+    expect(result).toEqual([]);
+  });
+
+  it(".md ファイルの frontmatter から title を抽出し、 filename を id にする", async () => {
+    await writeFile(
+      join(tmpdirPath, "abc1234567890a.md"),
+      `---\ntitle: "Test Article"\nemoji: "🌀"\n---\nbody\n`,
+    );
+    await writeFile(join(tmpdirPath, "def4567890abcd.md"), `---\ntitle: "Another"\n---\n`);
+    await writeFile(join(tmpdirPath, "readme.txt"), "not markdown");
+    const result = await readZennArticleFiles(tmpdirPath);
+    const sorted = [...result].sort((a, b) => a.id.localeCompare(b.id));
+    expect(sorted).toEqual([
+      { id: "abc1234567890a", title: "Test Article" },
+      { id: "def4567890abcd", title: "Another" },
+    ]);
+  });
+
+  it("title が無い frontmatter でも空文字で拾う (throw しない)", async () => {
+    await writeFile(join(tmpdirPath, "no-title1111111.md"), `---\nemoji: "🌀"\n---\n`);
+    const result = await readZennArticleFiles(tmpdirPath);
+    expect(result).toEqual([{ id: "no-title1111111", title: "" }]);
   });
 });
