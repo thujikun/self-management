@@ -189,10 +189,10 @@ describe("/posts/$slug — detail (SSR)", () => {
     expect(html).not.toMatch(/<ul class="post-detail__tags">/);
   });
 
-  it("draft post の slug は notFound boundary に倒される (200 boundary、本文なし)", async () => {
+  it("pending (publishedAt 未来) post の slug は notFound boundary に倒される (200 boundary、本文なし)", async () => {
     const html = await ssrAt("/posts/_draft-example");
     expect(html).not.toMatch(/<article class="post-body">/);
-    expect(html).not.toMatch(/Draft example/);
+    expect(html).not.toMatch(/Pending example/);
   });
 
   it("存在しない slug は notFound boundary に倒される (post body 不出力)", async () => {

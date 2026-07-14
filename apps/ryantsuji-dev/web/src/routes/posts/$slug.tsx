@@ -427,7 +427,7 @@ function PostDetail() {
         </div>
       </header>
       {seriesNav ? <PostSeriesBox nav={seriesNav} lang={servedLang} /> : null}
-      <PostToc headings={headings} />
+      <PostToc headings={headings} lang={servedLang} />
       <PostBody html={html} />
       <PostShareRail
         slug={slug}

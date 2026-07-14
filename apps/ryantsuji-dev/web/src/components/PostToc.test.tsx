@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { hydrateRoot, type Root } from "react-dom/client";
 import { act } from "react";
 
-import { PostToc, TOC_OBSERVER_ROOT_MARGIN } from "./PostToc.js";
+import { PostToc, TOC_OBSERVER_ROOT_MARGIN, tocLabels } from "./PostToc.js";
 
 const SAMPLE_HEADINGS = [
   { id: "intro", text: "Intro", level: 2 },
@@ -27,17 +27,17 @@ const SAMPLE_HEADINGS = [
 
 describe("PostToc", () => {
   it("headings 0 件なら null (DOM 出さない)", () => {
-    const html = renderToString(<PostToc headings={[]} />);
+    const html = renderToString(<PostToc headings={[]} lang="en" />);
     expect(html).toBe("");
   });
 
   it("headings 1 件なら null (TOC を出すには 2 件以上必要)", () => {
-    const html = renderToString(<PostToc headings={[SAMPLE_HEADINGS[0]]} />);
+    const html = renderToString(<PostToc headings={[SAMPLE_HEADINGS[0]]} lang="en" />);
     expect(html).toBe("");
   });
 
   it("headings 2+ 件で desktop aside + mobile trigger + dialog を全て render", () => {
-    const html = renderToString(<PostToc headings={SAMPLE_HEADINGS} />);
+    const html = renderToString(<PostToc headings={SAMPLE_HEADINGS} lang="en" />);
     expect(html).toMatch(/<aside class="post-toc post-toc--desktop"/);
     expect(html).toMatch(/<button[^>]*class="post-toc__mobile-trigger"/);
     expect(html).toMatch(/<dialog class="post-toc__dialog"/);
@@ -45,6 +45,53 @@ describe("PostToc", () => {
     expect(html).toMatch(/<a href="#intro"[^>]*>Intro<\/a>/);
     expect(html).toMatch(/<a href="#section-a-1"[^>]*>Section A\.1<\/a>/);
     expect(html).toMatch(/data-level="3"/);
+  });
+
+  it("lang=ja: TOC heading / mobile trigger aria / close aria に ja 文言が出る", () => {
+    const html = renderToString(<PostToc headings={SAMPLE_HEADINGS} lang="ja" />);
+    // desktop aside + dialog の両方に `<h2>目次</h2>` が出る (= 2 箇所)
+    expect(html.match(/<h2 class="post-toc__heading">目次<\/h2>/g)?.length).toBe(2);
+    // mobile trigger の aria-label
+    expect(html).toMatch(
+      /<button[^>]*class="post-toc__mobile-trigger"[^>]*aria-label="目次を開く"/,
+    );
+    // dialog close の aria-label
+    expect(html).toMatch(/<button[^>]*class="post-toc__dialog-close"[^>]*aria-label="閉じる"/);
+    // desktop aside の aria-label も ja
+    expect(html).toMatch(/<aside class="post-toc post-toc--desktop"[^>]*aria-label="目次"/);
+    // en 文言は出ない (= clean 切替が成立、ja 経路に en 文言が混ざってない)
+    expect(html).not.toMatch(/Contents/);
+    expect(html).not.toMatch(/Open contents/);
+  });
+
+  it("lang=en: TOC heading / aria に en 文言が出る (旧 ja 固定だった bug の回帰防止)", () => {
+    const html = renderToString(<PostToc headings={SAMPLE_HEADINGS} lang="en" />);
+    expect(html.match(/<h2 class="post-toc__heading">Contents<\/h2>/g)?.length).toBe(2);
+    expect(html).toMatch(
+      /<button[^>]*class="post-toc__mobile-trigger"[^>]*aria-label="Open contents"/,
+    );
+    expect(html).toMatch(/<button[^>]*class="post-toc__dialog-close"[^>]*aria-label="Close"/);
+    expect(html).toMatch(/<aside class="post-toc post-toc--desktop"[^>]*aria-label="Contents"/);
+    // ja 文言が混ざらない
+    expect(html).not.toMatch(/目次/);
+    expect(html).not.toMatch(/閉じる/);
+  });
+
+  describe("tocLabels (pure)", () => {
+    it("ja は 目次 / 目次を開く / 閉じる", () => {
+      expect(tocLabels("ja")).toStrictEqual({
+        heading: "目次",
+        openTrigger: "目次を開く",
+        closeDialog: "閉じる",
+      });
+    });
+    it("en は Contents / Open contents / Close", () => {
+      expect(tocLabels("en")).toStrictEqual({
+        heading: "Contents",
+        openTrigger: "Open contents",
+        closeDialog: "Close",
+      });
+    });
   });
 
   describe("DOM interaction (happy-dom)", () => {
@@ -70,10 +117,10 @@ describe("PostToc", () => {
     });
 
     function mount() {
-      const ssr = renderToString(<PostToc headings={SAMPLE_HEADINGS} />);
+      const ssr = renderToString(<PostToc headings={SAMPLE_HEADINGS} lang="en" />);
       container.innerHTML = ssr;
       act(() => {
-        root = hydrateRoot(container, <PostToc headings={SAMPLE_HEADINGS} />);
+        root = hydrateRoot(container, <PostToc headings={SAMPLE_HEADINGS} lang="en" />);
       });
     }
 
@@ -175,10 +222,10 @@ describe("PostToc", () => {
       }
       container = document.createElement("div");
       document.body.appendChild(container);
-      const ssr = renderToString(<PostToc headings={SAMPLE_HEADINGS} />);
+      const ssr = renderToString(<PostToc headings={SAMPLE_HEADINGS} lang="en" />);
       container.innerHTML = ssr;
       act(() => {
-        root = hydrateRoot(container, <PostToc headings={SAMPLE_HEADINGS} />);
+        root = hydrateRoot(container, <PostToc headings={SAMPLE_HEADINGS} lang="en" />);
       });
     }
 
@@ -271,10 +318,10 @@ describe("PostToc", () => {
       // (テスト fixture / SSR で headings parse のみ完了 / 本文 hydration 前等)
       container = document.createElement("div");
       document.body.appendChild(container);
-      const ssr = renderToString(<PostToc headings={SAMPLE_HEADINGS} />);
+      const ssr = renderToString(<PostToc headings={SAMPLE_HEADINGS} lang="en" />);
       container.innerHTML = ssr;
       act(() => {
-        root = hydrateRoot(container, <PostToc headings={SAMPLE_HEADINGS} />);
+        root = hydrateRoot(container, <PostToc headings={SAMPLE_HEADINGS} lang="en" />);
       });
       // observe される要素が無いので、active が決まらず aria-current も付かない
       expect(activeHrefs()).toStrictEqual([]);
@@ -294,9 +341,9 @@ describe("PostToc", () => {
       try {
         const container = document.createElement("div");
         document.body.appendChild(container);
-        const ssr = renderToString(<PostToc headings={SAMPLE_HEADINGS} />);
+        const ssr = renderToString(<PostToc headings={SAMPLE_HEADINGS} lang="en" />);
         container.innerHTML = ssr;
-        const fakeRoot = hydrateRoot(container, <PostToc headings={SAMPLE_HEADINGS} />);
+        const fakeRoot = hydrateRoot(container, <PostToc headings={SAMPLE_HEADINGS} lang="en" />);
         // hydrate が落ちなければ OK (early return 経路)
         act(() => fakeRoot.unmount());
         container.remove();
