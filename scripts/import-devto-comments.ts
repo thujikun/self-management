@@ -131,7 +131,12 @@ async function main(): Promise<void> {
   );
 
   let totalWritten = 0;
+  let first = true;
   for (const { slug, devtoId } of targets) {
+    // 全記事を舐める backfill で dev.to のレート制限を避けるため記事間に小休止を挟む
+    // (429 自体は fetchDevtoJson がバックオフ再試行するが、そもそも当てない方が速い)。
+    if (!first) await new Promise((r) => setTimeout(r, 600));
+    first = false;
     const [tree, articleUrl] = await Promise.all([
       fetchDevtoComments(devtoId),
       fetchArticleUrl(devtoId),

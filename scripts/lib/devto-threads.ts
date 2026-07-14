@@ -44,9 +44,17 @@ export interface DevtoComment {
   children: DevtoComment[];
 }
 
+/** 投稿者がアカウント / コメントを削除した場合に dev.to が返す欠落 user の代替名。 */
+const DELETED_USER_NAME = "[deleted]";
+
 /**
  * dev.to API レスポンスの境界検証 schema (`DevtoComment` の再帰形)。
  * 外部 API の shape 変化を DB 書き込みや深部の walk まで素通しにせず、fetch 直後に弾く。
+ *
+ * `user.name` / `user.username` は **欠落を許容する**。投稿者がアカウントやコメントを削除すると
+ * dev.to は user フィールドを欠いた (null/undefined) コメントを返すため、ここを必須にすると
+ * 削除コメントを 1 件でも含む記事の取り込みが丸ごと落ちる。欠落時は placeholder に正規化し、
+ * username 空 = 非 OWNER 扱い (プロフィール URL も後段で抑止) にする。
  */
 const devtoCommentSchema: z.ZodType<DevtoComment> = z.lazy(() =>
   z.object({
@@ -54,7 +62,9 @@ const devtoCommentSchema: z.ZodType<DevtoComment> = z.lazy(() =>
     id_code: z.string(),
     created_at: z.string(),
     body_html: z.string(),
-    user: z.object({ name: z.string(), username: z.string() }),
+    user: z
+      .object({ name: z.string().nullish(), username: z.string().nullish() })
+      .transform((u) => ({ name: u.name ?? DELETED_USER_NAME, username: u.username ?? "" })),
     children: z.array(devtoCommentSchema),
   }),
 );
@@ -125,22 +135,33 @@ function subtreeHasOwner(node: DevtoComment): boolean {
   return node.children.some(subtreeHasOwner);
 }
 
+/**
+ * subtree のどこかに削除コメント (投稿者が削除して username 欠落 = 空文字) があるか。
+ * 削除が 1 件でも混じるスレッドは文脈が欠けるため丸ごと取り込み対象外にする。
+ */
+function subtreeHasDeleted(node: DevtoComment): boolean {
+  if (node.user.username === "") return true;
+  return node.children.some(subtreeHasDeleted);
+}
+
 /** DevtoComment 1 件を FlatComment に変換する。 */
 function toFlat(
   node: DevtoComment,
   parentSourceId: string | null,
   articleUrl: string,
 ): FlatComment {
+  const username = node.user.username;
   return {
     sourceCommentId: node.id_code,
     authorName: node.user.name,
-    authorUsername: node.user.username,
-    authorProfileUrl: `https://dev.to/${node.user.username}`,
+    authorUsername: username,
+    // 削除ユーザー (username 空) はプロフィール URL を持たない (壊れた dev.to/ リンクを出さない)。
+    authorProfileUrl: username ? `https://dev.to/${username}` : "",
     sourceUrl: `${articleUrl}/comments/#comment-${node.id_code}`,
     body: htmlToText(node.body_html),
     createdAt: new Date(node.created_at),
     parentSourceId,
-    isOwner: node.user.username === OWNER_USERNAME,
+    isOwner: username === OWNER_USERNAME,
   };
 }
 
@@ -154,6 +175,7 @@ export function groupOwnerThreads(tree: DevtoComment[], articleUrl: string): Thr
   const groups: ThreadGroup[] = [];
   for (const top of tree) {
     if (!subtreeHasOwner(top)) continue; // OWNER が絡まないスレッドは丸ごと落とす
+    if (subtreeHasDeleted(top)) continue; // 削除コメント混じりは文脈が欠けるので丸ごと落とす
     const topFlat = toFlat(top, null, articleUrl);
     const timeline: FlatComment[] = [topFlat];
     const walk = (node: DevtoComment): void => {
@@ -179,22 +201,97 @@ export function flattenOwnerThreads(tree: DevtoComment[], articleUrl: string): F
   return groupOwnerThreads(tree, articleUrl).flatMap((g) => g.timeline);
 }
 
+/** 一時障害リトライの挙動。テストのために sleep / fetch を注入できる。 */
+export interface FetchRetryOptions {
+  /** 追加試行回数 (初回を除く)。 */
+  retries?: number;
+  /** 指数バックオフの基準ミリ秒 (attempt 0 の待機)。 */
+  baseDelayMs?: number;
+  /** 待機実装 (テストで即時解決に差し替える)。 */
+  sleep?: (ms: number) => Promise<void>;
+  /** fetch 実装 (テストで stub に差し替える)。 */
+  fetchImpl?: typeof fetch;
+  /** Retry-After / backoff 計算の現在時刻 (テスト決定性のため注入可)。 */
+  now?: () => number;
+}
+
+const defaultSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * `Retry-After` ヘッダ (秒数 or HTTP-date) を待機ミリ秒に変換する。解釈できなければ null。
+ *
+ * @graph-connects none
+ */
+export function parseRetryAfterMs(headerValue: string | null, nowMs: number): number | null {
+  if (!headerValue) return null;
+  const secs = Number(headerValue);
+  if (Number.isFinite(secs)) return Math.max(0, secs * 1000);
+  const dateMs = Date.parse(headerValue);
+  if (Number.isFinite(dateMs)) return Math.max(0, dateMs - nowMs);
+  return null;
+}
+
+/**
+ * dev.to API を叩いて JSON を返す。429 / 5xx / ネットワーク瞬断は指数バックオフで
+ * リトライし、429 は `Retry-After` ヘッダがあればそれを優先する。4xx (429 以外) は
+ * 決定的エラーとして即 throw。backfill は全記事を舐めるため 429 でこけないよう挟む。
+ *
+ * @graph-connects devto [calls] fetch で dev.to API を叩く (一時障害はバックオフ再試行)
+ */
+export async function fetchDevtoJson(
+  url: string,
+  label: string,
+  opts: FetchRetryOptions = {},
+): Promise<unknown> {
+  const {
+    retries = 4,
+    baseDelayMs = 1_000,
+    sleep = defaultSleep,
+    fetchImpl = fetch,
+    now = Date.now,
+  } = opts;
+  const backoff = (attempt: number): number => baseDelayMs * 2 ** attempt;
+
+  for (let attempt = 0; ; attempt++) {
+    let res: Response;
+    try {
+      res = await fetchImpl(url, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch (err) {
+      // ネットワーク / timeout も一時障害としてリトライ (試行を使い切ったら投げる)。
+      if (attempt >= retries) throw err;
+      await sleep(backoff(attempt));
+      continue;
+    }
+    if (res.ok) return res.json();
+
+    const retryable = res.status === 429 || res.status >= 500;
+    if (!retryable || attempt >= retries) {
+      throw new Error(`dev.to fetch failed: ${String(res.status)} for ${label}`);
+    }
+    const retryAfter =
+      res.status === 429 ? parseRetryAfterMs(res.headers.get("retry-after"), now()) : null;
+    await sleep(retryAfter ?? backoff(attempt));
+  }
+}
+
 /**
  * dev.to API で記事のコメントツリーを取得する。認証不要 (public 記事)。
  *
  * @graph-connects devto [calls] GET /api/comments?a_id=<id> でコメントツリーを取得
  */
-export async function fetchDevtoComments(articleId: number): Promise<DevtoComment[]> {
-  const res = await fetch(`https://dev.to/api/comments?a_id=${String(articleId)}`, {
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) {
-    throw new Error(
-      `dev.to comments fetch failed: ${String(res.status)} for a_id=${String(articleId)}`,
-    );
-  }
-  return parseDevtoComments(await res.json());
+export async function fetchDevtoComments(
+  articleId: number,
+  opts: FetchRetryOptions = {},
+): Promise<DevtoComment[]> {
+  const data = await fetchDevtoJson(
+    `https://dev.to/api/comments?a_id=${String(articleId)}`,
+    `a_id=${String(articleId)}`,
+    opts,
+  );
+  return parseDevtoComments(data);
 }
 
 /** 記事の deep link 構築 / 見出し表示に使う最小メタ。 */
@@ -226,17 +323,16 @@ export function parseArticleMeta(data: unknown, articleId: number): ArticleMeta 
  *
  * @graph-connects devto [calls] GET /api/articles/<id> で記事 url / title を取得
  */
-export async function fetchArticleMeta(articleId: number): Promise<ArticleMeta> {
-  const res = await fetch(`https://dev.to/api/articles/${String(articleId)}`, {
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) {
-    throw new Error(
-      `dev.to article fetch failed: ${String(res.status)} for id=${String(articleId)}`,
-    );
-  }
-  return parseArticleMeta(await res.json(), articleId);
+export async function fetchArticleMeta(
+  articleId: number,
+  opts: FetchRetryOptions = {},
+): Promise<ArticleMeta> {
+  const data = await fetchDevtoJson(
+    `https://dev.to/api/articles/${String(articleId)}`,
+    `id=${String(articleId)}`,
+    opts,
+  );
+  return parseArticleMeta(data, articleId);
 }
 
 /**
@@ -244,8 +340,11 @@ export async function fetchArticleMeta(articleId: number): Promise<ArticleMeta> 
  *
  * @graph-connects none
  */
-export async function fetchArticleUrl(articleId: number): Promise<string> {
-  return (await fetchArticleMeta(articleId)).url;
+export async function fetchArticleUrl(
+  articleId: number,
+  opts: FetchRetryOptions = {},
+): Promise<string> {
+  return (await fetchArticleMeta(articleId, opts)).url;
 }
 
 /** content/posts の全 <slug>.en.md から slug ↔ devto article id を引く。 */
