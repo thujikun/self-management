@@ -32,6 +32,9 @@ logs/
 *.swp
 *~
 
+# Zenn 手貼り文面の生成物 (scaffold .md / render 済み .html)。ローカル作業用なので commit しない
+.zenn-paste/
+
 # Claude Code local
 .claude/cache/
 .claude/scheduled_tasks.lock

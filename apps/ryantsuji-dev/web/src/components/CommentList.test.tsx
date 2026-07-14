@@ -28,6 +28,9 @@ function makeComment(over: Partial<CommentView> & Pick<CommentView, "id">): Comm
     body: over.body ?? "hello",
     createdAt: over.createdAt ?? "2026-05-10T00:00:00Z",
     parentCommentId: over.parentCommentId ?? null,
+    source: over.source ?? "native",
+    sourceUrl: over.sourceUrl ?? null,
+    authorProfileUrl: over.authorProfileUrl ?? null,
   };
 }
 
@@ -110,6 +113,47 @@ describe("CommentList SSR", () => {
     expect(html).toMatch(/comments__item--reply/);
     // 未認証なので reply / delete button は出ない
     expect(html).not.toMatch(/comments__action/);
+  });
+
+  it("取り込みコメントは author を profile へリンクし via バッジ + 原文リンクを出す", () => {
+    const imported = makeComment({
+      id: "imp",
+      authorName: "Vinicius",
+      body: "great post",
+      source: "dev.to",
+      sourceUrl: "https://dev.to/x/comment/abc",
+      authorProfileUrl: "https://dev.to/vini",
+    });
+    const html = renderToString(
+      <CommentList
+        comments={[imported]}
+        currentUserId={null}
+        onReply={async () => ({ ok: true })}
+        onDelete={async () => {}}
+      />,
+    );
+    // author 名は profile へのリンク (class + href が同じ <a> に乗る)
+    expect(html).toMatch(/<a class="comments__author" href="https:\/\/dev\.to\/vini"/);
+    // via バッジは source 名 + 原文 deep link
+    expect(html).toMatch(/comments__source-badge/);
+    expect(html).toMatch(/href="https:\/\/dev\.to\/x\/comment\/abc"/);
+    // React は静的 text と式の境界に `<!-- -->` を差し込むため間隔を許容
+    expect(html).toMatch(/via <!-- -->dev\.to</);
+  });
+
+  it("native コメントは via バッジも author リンクも出さない", () => {
+    const native = makeComment({ id: "n", authorName: "Local" });
+    const html = renderToString(
+      <CommentList
+        comments={[native]}
+        currentUserId={null}
+        onReply={async () => ({ ok: true })}
+        onDelete={async () => {}}
+      />,
+    );
+    expect(html).not.toMatch(/comments__source-badge/);
+    // author は plain span (リンクではない)
+    expect(html).toMatch(/<span class="comments__author">Local</);
   });
 
   it("認証済み + 自分の comment に delete / reply button を出す", () => {

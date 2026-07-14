@@ -1092,6 +1092,26 @@ main {
   color: var(--text-secondary);
 }
 
+a.comments__author:hover {
+  text-decoration: underline;
+}
+
+/* 取り込み元バッジ ("via dev.to")。原文 deep link を兼ねる。 */
+.comments__source-badge {
+  font-size: var(--font-size-xs);
+  padding: 0.05em 0.5em;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.comments__source-badge:hover {
+  color: var(--text-secondary);
+  border-color: var(--text-secondary);
+}
+
 .comments__date {
   font-variant-numeric: tabular-nums;
 }

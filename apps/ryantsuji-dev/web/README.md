@@ -192,6 +192,7 @@ SSoT は GCP Secret Manager なので、値を入れ直したら `gcloud secrets
 - **db schema**: `packages/db` (Drizzle + Neon) — posts / comments / likes / view_counts schema
 - **auth**: Better Auth (GitHub / X / Google OAuth、open sign-up — 第三者検証は OAuth provider に委ねる)
 - **engagement**: `/posts/$slug` に views (+1 per loader call) / likes (toggle、auth 必須) / comments (投稿、auth 必須) を追加
+- **dev.to コメント取り込み**: dev.to 記事の本人関与スレッドを comments へ `source=devto` で 1:1 冪等 upsert (下記「dev.to コメント取り込み」参照)
 
 ## content/ は submodule
 
@@ -295,6 +296,32 @@ content source は `apps/ryantsuji-dev/web/content/posts/` 配下に置き、
 
 詳細 page の SoT は本 repo の markdown。後続 PR で **dev.to** (EN) / **Zenn** (JP) に
 syndication 投稿し、`canonical_url` を `https://ryantsuji.dev/posts/<slug>` に揃える。
+
+## dev.to コメント取り込み (engagement)
+
+comments はサイト上での native 投稿 (auth 必須) に加えて、dev.to 側に付いた議論を
+`source=devto` として **1 dev.to コメント = 1 comment row** で取り込む経路を持つ。
+取り込み対象は本人 (ryantsuji) が返信したトップレベルスレッドのみ、本文は原文ママ。
+UI では「via dev.to」バッジを出し、原文 deep link (`source_url`) と発言者プロフィール
+(`author_profile_url`) へのリンクを添える。
+
+```bash
+# deploy 後に 1 回実行して過去分を backfill する (direnv で DATABASE_URL を通してから)。
+# 以降も同じコマンドの再実行 = 差分同期。
+pnpm tsx scripts/import-devto-comments.ts
+
+pnpm tsx scripts/import-devto-comments.ts <slug>     # 特定 slug のみ
+DRY_RUN=1 pnpm tsx scripts/import-devto-comments.ts  # DB 書き込みせず取り込み内容を print
+```
+
+冪等性は `comments` の `(source, source_comment_id)` unique index
+(`comments_source_id_uq`) への upsert で担保され、何度流しても二重取り込みは
+起きない (dev.to 側で本文が編集されていれば上書き反映)。schema 詳細は
+[`packages/db/README.md`](../../../packages/db/README.md) を参照。
+
+Zenn 側は書き込み API が無いため自動 upsert ではなく、翻訳付きの手貼り文面を
+`scripts/build-zenn-comment-paste.ts` で生成する (運用手順は
+`.claude/skills/zenn-comment-import/SKILL.md`)。
 
 ## 画像 (Cloudflare R2)
 

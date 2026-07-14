@@ -236,6 +236,9 @@ describe("dispatchCommentSubmit", () => {
       body: "new",
       createdAt: "2026-01-01",
       parentCommentId: null,
+      source: "native",
+      sourceUrl: null,
+      authorProfileUrl: null,
     };
     const existing = [{ ...comment, id: "c0" }];
     const addCommentFn = vi.fn().mockResolvedValue(comment);
