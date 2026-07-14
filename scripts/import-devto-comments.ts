@@ -31,173 +31,23 @@
  */
 
 import { existsSync } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
-import matter from "gray-matter";
 import { sql } from "drizzle-orm";
 import { comments, createDb, posts, type Db } from "@self/db";
 
-const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(SCRIPTS_DIR, "..");
-
-/** ryantsuji.dev 本人の dev.to username。この人の返信を含むスレッドだけ取り込む。 */
-const OWNER_USERNAME = "ryantsuji";
-
-/** content submodule の posts ディレクトリ。 */
-const POSTS_DIR = resolve(REPO_ROOT, "apps/ryantsuji-dev/web/content/posts");
+import {
+  fetchArticleUrl,
+  fetchDevtoComments,
+  flattenOwnerThreads,
+  POSTS_DIR,
+  readPostDevtoIds,
+  type FlatComment,
+} from "./lib/devto-threads.js";
 
 /** DB URL: env → direnv 経由。未設定なら明示エラー。 */
 const DATABASE_URL = process.env.DATABASE_URL;
 
 const DRY_RUN = process.env.DRY_RUN === "1";
-
-/** dev.to API のコメント 1 件 (ネスト children を持つ)。 */
-interface DevtoComment {
-  type_of: string;
-  id_code: string;
-  created_at: string;
-  body_html: string;
-  user: {
-    name: string;
-    username: string;
-  };
-  children: DevtoComment[];
-}
-
-/** フラット化後の取り込み対象 1 件。 */
-interface FlatComment {
-  sourceCommentId: string;
-  authorName: string;
-  authorProfileUrl: string;
-  sourceUrl: string;
-  body: string;
-  createdAt: Date;
-  /** 所属トップレベルの source_comment_id (自身がトップレベルなら null)。 */
-  parentSourceId: string | null;
-}
-
-/**
- * body_html を軽く plain text 化する。dev.to のコメントは markdown を html 化した形なので、
- * タグを剥がして entity を戻し、コードブロックの改行は保つ程度に留める (原文の意図を削らない)。
- *
- * @graph-connects none
- */
-function htmlToText(html: string): string {
-  return html
-    .replace(/<\/(p|div|li|h[1-6]|blockquote|pre)>/g, "\n\n")
-    .replace(/<br\s*\/?>/g, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-/**
- * dev.to のコメントツリーから、OWNER が返信を持つトップレベルスレッドだけを 1 階層に
- * フラット化する。会話の流れは created_at 昇順で保つ。
- *
- * @graph-connects none
- */
-function flattenOwnerThreads(tree: DevtoComment[], articleUrl: string): FlatComment[] {
-  const out: FlatComment[] = [];
-
-  const subtreeHasOwner = (node: DevtoComment): boolean => {
-    if (node.user.username === OWNER_USERNAME) return true;
-    return node.children.some(subtreeHasOwner);
-  };
-
-  const toFlat = (node: DevtoComment, parentSourceId: string | null): FlatComment => ({
-    sourceCommentId: node.id_code,
-    authorName: node.user.name,
-    authorProfileUrl: `https://dev.to/${node.user.username}`,
-    sourceUrl: `${articleUrl}/comments/#comment-${node.id_code}`,
-    body: htmlToText(node.body_html),
-    createdAt: new Date(node.created_at),
-    parentSourceId,
-  });
-
-  for (const top of tree) {
-    if (!subtreeHasOwner(top)) continue; // OWNER が絡まないスレッドは丸ごと落とす
-    // トップレベルは parent 無し。子孫は全部このトップレベルへの reply に畳む (1 階層化)。
-    const collected: FlatComment[] = [toFlat(top, null)];
-    const walk = (node: DevtoComment): void => {
-      for (const child of node.children) {
-        collected.push(toFlat(child, top.id_code));
-        walk(child);
-      }
-    };
-    walk(top);
-    collected.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-    out.push(...collected);
-  }
-  return out;
-}
-
-/**
- * dev.to API で記事のコメントツリーを取得する。認証不要 (public 記事)。
- *
- * @graph-connects devto [calls] GET /api/comments?a_id=<id> でコメントツリーを取得
- */
-async function fetchDevtoComments(articleId: number): Promise<DevtoComment[]> {
-  const res = await fetch(`https://dev.to/api/comments?a_id=${String(articleId)}`, {
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) {
-    throw new Error(
-      `dev.to comments fetch failed: ${String(res.status)} for a_id=${String(articleId)}`,
-    );
-  }
-  return (await res.json()) as DevtoComment[];
-}
-
-/**
- * dev.to API で記事の canonical path を取得する (deep link 構築用)。
- *
- * @graph-connects devto [calls] GET /api/articles/<id> で記事 url を取得
- */
-async function fetchArticleUrl(articleId: number): Promise<string> {
-  const res = await fetch(`https://dev.to/api/articles/${String(articleId)}`, {
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) {
-    throw new Error(
-      `dev.to article fetch failed: ${String(res.status)} for id=${String(articleId)}`,
-    );
-  }
-  const data = (await res.json()) as { url?: string };
-  if (!data.url) throw new Error(`dev.to article ${String(articleId)} has no url`);
-  return data.url;
-}
-
-/** content/posts の全 <slug>.en.md から slug ↔ devto article id を引く。 */
-async function readPostDevtoIds(
-  filterSlug: string | null,
-): Promise<{ slug: string; devtoId: number }[]> {
-  const files = await readdir(POSTS_DIR);
-  const out: { slug: string; devtoId: number }[] = [];
-  for (const f of files) {
-    if (!f.endsWith(".en.md")) continue;
-    if (f.startsWith("_")) continue; // fixture
-    const slug = f.slice(0, -".en.md".length);
-    if (filterSlug && slug !== filterSlug) continue;
-    const raw = await readFile(resolve(POSTS_DIR, f), "utf8");
-    const fm = matter(raw).data as {
-      syndication?: { devto?: { id?: number } };
-    };
-    const devtoId = fm.syndication?.devto?.id;
-    if (typeof devtoId === "number") out.push({ slug, devtoId });
-  }
-  return out;
-}
 
 /** posts テーブルに slug row が無ければ最小限で作る (comments の FK 受け皿)。 */
 async function ensurePostRow(db: Db, slug: string, title: string): Promise<void> {
