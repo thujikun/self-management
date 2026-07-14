@@ -170,6 +170,12 @@ export interface CommentView {
   createdAt: string;
   /** 親 comment id (null = top-level、UUID = その親への reply、1 階層のみ) */
   parentCommentId: string | null;
+  /** コメントの出所。'native' = 当サイト直接投稿、'devto' 等 = 他媒体からの取り込み。 */
+  source: string;
+  /** 取り込み元コメントの原文 deep link (native は null)。 */
+  sourceUrl: string | null;
+  /** 発言者の取り込み元プロフィール URL (native は null)。 */
+  authorProfileUrl: string | null;
 }
 
 /**
@@ -187,6 +193,9 @@ export async function listComments(db: Db, slug: string): Promise<CommentView[]>
       body: comments.body,
       createdAt: comments.createdAt,
       parentCommentId: comments.parentCommentId,
+      source: comments.source,
+      sourceUrl: comments.sourceUrl,
+      authorProfileUrl: comments.authorProfileUrl,
     })
     .from(comments)
     .where(and(eq(comments.postSlug, slug), isNull(comments.deletedAt)))
@@ -198,6 +207,9 @@ export async function listComments(db: Db, slug: string): Promise<CommentView[]>
     body: r.body,
     createdAt: normalizeTimestamp(r.createdAt),
     parentCommentId: r.parentCommentId,
+    source: r.source,
+    sourceUrl: r.sourceUrl,
+    authorProfileUrl: r.authorProfileUrl,
   }));
 }
 
@@ -268,6 +280,10 @@ export async function addComment(
     body: r.body,
     createdAt: normalizeTimestamp(r.createdAt),
     parentCommentId: r.parentCommentId,
+    // native 投稿は取り込み元を持たない (source は DB default 'native')
+    source: "native",
+    sourceUrl: null,
+    authorProfileUrl: null,
   };
 }
 

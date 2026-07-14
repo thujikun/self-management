@@ -22,6 +22,13 @@
       "when": 1778950322523,
       "tag": "0002_mean_marvel_zombies",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784063237150,
+      "tag": "0003_clever_enchantress",
+      "breakpoints": true
     }
   ]
 }

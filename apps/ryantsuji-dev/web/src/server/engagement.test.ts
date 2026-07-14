@@ -96,6 +96,9 @@ describe("addComment — top-level (parentCommentId 不在)", () => {
       body: "hi",
       createdAt: "2026-05-10T00:00:00.000Z",
       parentCommentId: null,
+      source: "native",
+      sourceUrl: null,
+      authorProfileUrl: null,
     });
     expect(insertChain.values).toHaveBeenCalledWith({
       postSlug: "p",

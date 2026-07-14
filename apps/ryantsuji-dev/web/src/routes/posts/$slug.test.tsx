@@ -721,6 +721,9 @@ describe("dispatchCommentSubmit", () => {
         body: "old",
         createdAt: "2026-05-09T00:00:00Z",
         parentCommentId: null,
+        source: "native",
+        sourceUrl: null,
+        authorProfileUrl: null,
       },
     ];
     await dispatchCommentSubmit({
@@ -1007,6 +1010,9 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
           body: "top",
           createdAt: "2026-05-10T00:00:00Z",
           parentCommentId: null,
+          source: "native",
+          sourceUrl: null,
+          authorProfileUrl: null,
         },
       ],
     });
@@ -1052,6 +1058,9 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
           body: "mine",
           createdAt: "2026-05-10T00:00:00Z",
           parentCommentId: null,
+          source: "native",
+          sourceUrl: null,
+          authorProfileUrl: null,
         },
       ],
     });
@@ -1082,6 +1091,9 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
           body: "mine",
           createdAt: "2026-05-10T00:00:00Z",
           parentCommentId: null,
+          source: "native",
+          sourceUrl: null,
+          authorProfileUrl: null,
         },
       ],
     });
@@ -1110,6 +1122,9 @@ describe("EngagementSection — DOM interaction (happy-dom)", () => {
           body: "top",
           createdAt: "2026-05-10T00:00:00Z",
           parentCommentId: null,
+          source: "native",
+          sourceUrl: null,
+          authorProfileUrl: null,
         },
       ],
     });
@@ -1236,6 +1251,9 @@ describe("EngagementSection — render branches", () => {
             body: "hi",
             createdAt: "2026-05-10T00:00:00Z",
             parentCommentId: null,
+            source: "native",
+            sourceUrl: null,
+            authorProfileUrl: null,
           },
         ],
       },

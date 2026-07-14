@@ -119,6 +119,12 @@ describe("comments schema", () => {
           },
           {
             "hasDefault": false,
+            "name": "author_profile_url",
+            "notNull": false,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
             "name": "body",
             "notNull": true,
             "primary": false,
@@ -151,6 +157,24 @@ describe("comments schema", () => {
             "hasDefault": false,
             "name": "post_slug",
             "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": true,
+            "name": "source",
+            "notNull": true,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "source_comment_id",
+            "notNull": false,
+            "primary": false,
+          },
+          {
+            "hasDefault": false,
+            "name": "source_url",
+            "notNull": false,
             "primary": false,
           },
           {

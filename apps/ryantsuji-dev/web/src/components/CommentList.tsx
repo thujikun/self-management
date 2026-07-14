@@ -247,10 +247,34 @@ function CommentRow({
 }) {
   const isOwn = currentUserId !== null && comment.authorId === currentUserId;
   const showActions = canReply || isOwn;
+  // 取り込み元 (dev.to 等) のコメントは、発言者名をプロフィールへリンクし、
+  // 「via <source>」バッジ + 原文 deep link を添える (attribution + 導線)。
+  const isImported = comment.source !== "native";
   return (
     <>
       <header className="comments__meta">
-        <span className="comments__author">{comment.authorName}</span>
+        {comment.authorProfileUrl ? (
+          <a
+            className="comments__author"
+            href={comment.authorProfileUrl}
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+          >
+            {comment.authorName}
+          </a>
+        ) : (
+          <span className="comments__author">{comment.authorName}</span>
+        )}
+        {isImported && comment.sourceUrl ? (
+          <a
+            className="comments__source-badge"
+            href={comment.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+          >
+            via {comment.source}
+          </a>
+        ) : null}
         <time dateTime={comment.createdAt} className="comments__date">
           {comment.createdAt.slice(0, 10)}
         </time>
