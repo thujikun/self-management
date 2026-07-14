@@ -7,7 +7,7 @@ ryantsuji.dev の Postgres (Neon) schema + client。Drizzle ORM + `@neondatabase
 | table | 役割 |
 |---|---|
 | `posts` | markdown 投稿の identity (slug PK)。本文は markdown SSoT 側、ここは comments / likes / view_counts の FK target |
-| `comments` | 投稿コメント (cascade FK to `posts.slug`)、認証導入前提の author* field、soft delete |
+| `comments` | 投稿コメント (cascade FK to `posts.slug`)、認証導入前提の author* field、soft delete。native 投稿に加えて dev.to 取り込み用の source 系 column (`source` / `source_comment_id` / `source_url` / `author_profile_url`) を持ち、`(source, source_comment_id)` の unique index (`comments_source_id_uq`) で冪等 upsert する (取り込み CLI は `scripts/import-devto-comments.ts`、運用手順は `apps/ryantsuji-dev/web/README.md` の「dev.to コメント取り込み」) |
 | `likes` | post への like / reaction、composite PK `(post_slug, identifier, kind)`、anonymous (cookie hash) と認証ユーザー (users.id) の両方を identifier に取る |
 | `view_counts` | 投稿ごとの view counter (1:1 with posts.slug、bigint counter) |
 

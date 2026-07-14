@@ -64,10 +64,6 @@ export const COVERAGE_EXCLUDE: readonly string[] = [
   "apps/ryantsuji-dev/web/src/start.ts",
   // 中間 type 定義のみ (実行時ロジックなし)
   "apps/graph/product/src/migrate/common/types.ts",
-  // Drizzle schema table 定義は宣言的 (runtime branch なし)。table 名 / 列 / PK / FK の
-  // shape は packages/db/src/schema/index.test.ts が getTableConfig の inline snapshot で
-  // 凍結してあり、sibling *.test.ts は冗長。index.ts は barrel re-export のみ。
-  "packages/db/src/schema/*.ts",
   // CLI entry-point: process.argv / staged file 取得 / process.exit のみ。
   // 純粋ロジックは sibling lib で網羅テスト済み。
   "scripts/hooks/*.cli.ts",

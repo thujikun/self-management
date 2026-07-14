@@ -6,17 +6,20 @@
  *
  * @graph-stack ryantsuji-dev
  * @graph-domain publishing
- * @graph-business htmlToText / groupOwnerThreads / flattenOwnerThreads の純粋ロジックを固定。本人関与スレッドだけを抽出し 1 階層フラット化 + createdAt 昇順に整列する選別規約を回帰テストで守る
+ * @graph-business htmlToText / groupOwnerThreads / flattenOwnerThreads の純粋ロジックと、dev.to API レスポンスの境界検証 (parseDevtoComments / parseArticleMeta) を固定。本人関与スレッドだけを抽出し 1 階層フラット化 + createdAt 昇順に整列する選別規約を回帰テストで守る
  * @graph-connects none
  */
 
 import { describe, expect, it } from "vitest";
+import { ZodError } from "zod";
 
 import {
   flattenOwnerThreads,
   groupOwnerThreads,
   htmlToText,
   OWNER_USERNAME,
+  parseArticleMeta,
+  parseDevtoComments,
   type DevtoComment,
 } from "./devto-threads.js";
 
@@ -48,6 +51,84 @@ describe("htmlToText", () => {
   it("<br> は単一改行、3 連以上の改行は 2 つに圧縮", () => {
     expect(htmlToText("a<br>b<br/>c")).toBe("a\nb\nc");
     expect(htmlToText("<div>x</div><div>y</div><div>z</div>")).toBe("x\n\ny\n\nz");
+  });
+
+  it("<a href> は URL を markdown link として保持する", () => {
+    const html =
+      '<p>see <a href="https://example.com/threat-model">this article</a> for detail</p>';
+    expect(htmlToText(html)).toBe(
+      "see [this article](https://example.com/threat-model) for detail",
+    );
+  });
+
+  it("text と href が同一の bare link は URL 単体に畳む", () => {
+    const html = '<p><a href="https://example.com/x">https://example.com/x</a></p>';
+    expect(htmlToText(html)).toBe("https://example.com/x");
+  });
+});
+
+describe("parseDevtoComments (境界検証)", () => {
+  it("正常な shape はそのまま返す (unknown key は落とす)", () => {
+    const raw = [
+      {
+        type_of: "comment",
+        id_code: "abc",
+        created_at: "2026-05-01T00:00:00Z",
+        body_html: "<p>hi</p>",
+        user: { name: "Vini", username: "vinimabreu", twitter_username: null },
+        children: [],
+        positive_reactions_count: 3,
+      },
+    ];
+    expect(parseDevtoComments(raw)).toStrictEqual([
+      {
+        type_of: "comment",
+        id_code: "abc",
+        created_at: "2026-05-01T00:00:00Z",
+        body_html: "<p>hi</p>",
+        user: { name: "Vini", username: "vinimabreu" },
+        children: [],
+      },
+    ]);
+  });
+
+  it("children 欠落は深部のクラッシュではなく境界の ZodError になる", () => {
+    const raw = [
+      {
+        type_of: "comment",
+        id_code: "abc",
+        created_at: "2026-05-01T00:00:00Z",
+        body_html: "<p>hi</p>",
+        user: { name: "Vini", username: "vinimabreu" },
+        // children なし (dev.to 側の仕様変更を想定)
+      },
+    ];
+    expect(() => parseDevtoComments(raw)).toThrow(ZodError);
+    expect(() => parseDevtoComments(raw)).toThrow(/children/);
+  });
+
+  it("配列でないレスポンス (error object 等) も ZodError で弾く", () => {
+    expect(() => parseDevtoComments({ error: "not found", status: 404 })).toThrow(ZodError);
+  });
+});
+
+describe("parseArticleMeta (境界検証)", () => {
+  it("url + title を検証して返す", () => {
+    expect(parseArticleMeta({ url: "https://dev.to/x/y", title: "T", extra: 1 }, 42)).toStrictEqual(
+      { url: "https://dev.to/x/y", title: "T" },
+    );
+  });
+
+  it("title 欠落は article id で代替する", () => {
+    expect(parseArticleMeta({ url: "https://dev.to/x/y" }, 42)).toStrictEqual({
+      url: "https://dev.to/x/y",
+      title: "article 42",
+    });
+  });
+
+  it("url 欠落は明示エラー、object 以外は ZodError", () => {
+    expect(() => parseArticleMeta({ title: "T" }, 42)).toThrow("dev.to article 42 has no url");
+    expect(() => parseArticleMeta("oops", 42)).toThrow(ZodError);
   });
 });
 

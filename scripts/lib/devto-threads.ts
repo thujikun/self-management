@@ -19,6 +19,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import matter from "gray-matter";
+import { z } from "zod";
 
 const LIB_DIR = dirname(fileURLToPath(import.meta.url));
 /** scripts/lib/ から見た repo root (2 階層上)。 */
@@ -41,6 +42,31 @@ export interface DevtoComment {
     username: string;
   };
   children: DevtoComment[];
+}
+
+/**
+ * dev.to API レスポンスの境界検証 schema (`DevtoComment` の再帰形)。
+ * 外部 API の shape 変化を DB 書き込みや深部の walk まで素通しにせず、fetch 直後に弾く。
+ */
+const devtoCommentSchema: z.ZodType<DevtoComment> = z.lazy(() =>
+  z.object({
+    type_of: z.string(),
+    id_code: z.string(),
+    created_at: z.string(),
+    body_html: z.string(),
+    user: z.object({ name: z.string(), username: z.string() }),
+    children: z.array(devtoCommentSchema),
+  }),
+);
+
+/**
+ * unknown な API レスポンスを DevtoComment[] として検証する。shape 不一致は
+ * どのフィールドが不正かを示す ZodError で落ちる (深部のクラッシュより原因が追える)。
+ *
+ * @graph-connects none
+ */
+export function parseDevtoComments(data: unknown): DevtoComment[] {
+  return z.array(devtoCommentSchema).parse(data);
 }
 
 /** フラット化後の取り込み対象 1 件。 */
@@ -72,18 +98,25 @@ export interface ThreadGroup {
  * @graph-connects none
  */
 export function htmlToText(html: string): string {
-  return html
-    .replace(/<\/(p|div|li|h[1-6]|blockquote|pre)>/g, "\n\n")
-    .replace(/<br\s*\/?>/g, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return (
+    html
+      .replace(/<\/(p|div|li|h[1-6]|blockquote|pre)>/g, "\n\n")
+      .replace(/<br\s*\/?>/g, "\n")
+      // リンクは URL ごと markdown 形式で保持する (原文の参照 URL を落とさない)。
+      // text と href が同一の bare link は URL 単体に畳む。
+      .replace(/<a\s[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g, (_m, href: string, text: string) =>
+        text.trim() === href ? href : `[${text.trim()}](${href})`,
+      )
+      .replace(/<[^>]+>/g, "")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&#x27;/g, "'")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
 }
 
 /** subtree のどこかに OWNER の発言があるか。 */
@@ -161,13 +194,31 @@ export async function fetchDevtoComments(articleId: number): Promise<DevtoCommen
       `dev.to comments fetch failed: ${String(res.status)} for a_id=${String(articleId)}`,
     );
   }
-  return (await res.json()) as DevtoComment[];
+  return parseDevtoComments(await res.json());
 }
 
 /** 記事の deep link 構築 / 見出し表示に使う最小メタ。 */
 export interface ArticleMeta {
   url: string;
   title: string;
+}
+
+/** dev.to 記事 API レスポンスの境界検証 schema (使うフィールドだけを検証)。 */
+const devtoArticleSchema = z.object({
+  url: z.string().optional(),
+  title: z.string().optional(),
+});
+
+/**
+ * unknown な記事 API レスポンスを ArticleMeta として検証する。url 欠落は deep link を
+ * 組めないため明示エラー、title 欠落は article id で代替する。
+ *
+ * @graph-connects none
+ */
+export function parseArticleMeta(data: unknown, articleId: number): ArticleMeta {
+  const parsed = devtoArticleSchema.parse(data);
+  if (!parsed.url) throw new Error(`dev.to article ${String(articleId)} has no url`);
+  return { url: parsed.url, title: parsed.title ?? `article ${String(articleId)}` };
 }
 
 /**
@@ -185,9 +236,7 @@ export async function fetchArticleMeta(articleId: number): Promise<ArticleMeta> 
       `dev.to article fetch failed: ${String(res.status)} for id=${String(articleId)}`,
     );
   }
-  const data = (await res.json()) as { url?: string; title?: string };
-  if (!data.url) throw new Error(`dev.to article ${String(articleId)} has no url`);
-  return { url: data.url, title: data.title ?? `article ${String(articleId)}` };
+  return parseArticleMeta(await res.json(), articleId);
 }
 
 /**

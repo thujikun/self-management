@@ -43,6 +43,7 @@ import {
   readPostDevtoIds,
   type FlatComment,
 } from "./lib/devto-threads.js";
+import { formatDryRunLine, orderCommentsForUpsert } from "./lib/devto-upsert.js";
 
 /** DB URL: env → direnv 経由。未設定なら明示エラー。 */
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -59,32 +60,23 @@ async function ensurePostRow(db: Db, slug: string, title: string): Promise<void>
 
 /**
  * フラット化済みコメントを comments テーブルに冪等 upsert する。
- * 2 パス: 先にトップレベルを入れて id を確定させ、次に reply の parentCommentId を解決する。
+ * 2 パス: 先にトップレベルを入れて id を確定させ、次に reply の parentCommentId を解決する
+ * (順序組立ては `scripts/lib/devto-upsert.ts` に分離、test で固定)。
+ * `db` が null (= DRY_RUN) の場合は DB に触れず取り込み内容だけ print する。
  *
  * @graph-connects db [calls] comments テーブルへ (source, source_comment_id) 冪等 upsert
  */
-async function upsertComments(db: Db, slug: string, flats: FlatComment[]): Promise<number> {
+async function upsertComments(db: Db | null, slug: string, flats: FlatComment[]): Promise<number> {
+  const ordered = orderCommentsForUpsert(flats);
+  if (!db) {
+    for (const c of ordered) console.log(formatDryRunLine(c));
+    return ordered.length;
+  }
+
   // source_comment_id → 挿入後の comments.id を引くための map。
   const idBySource = new Map<string, string>();
-
-  // まずトップレベル (parent 無し) を先に処理して id を確定。
-  const ordered = [
-    ...flats.filter((c) => c.parentSourceId === null),
-    ...flats.filter((c) => c.parentSourceId !== null),
-  ];
-
-  let written = 0;
   for (const c of ordered) {
     const parentCommentId = c.parentSourceId ? (idBySource.get(c.parentSourceId) ?? null) : null;
-    if (DRY_RUN) {
-      console.log(
-        `    [dry] ${c.parentSourceId ? "  ↳" : "•"} ${c.authorName} (${c.sourceCommentId}): ${c.body.slice(0, 60).replace(/\n/g, " ")}…`,
-      );
-      // dry-run でも parent 解決の整合を確認できるよう仮 id を振る
-      idBySource.set(c.sourceCommentId, `dry-${c.sourceCommentId}`);
-      written += 1;
-      continue;
-    }
     const rows = await db
       .insert(comments)
       .values({
@@ -114,9 +106,8 @@ async function upsertComments(db: Db, slug: string, flats: FlatComment[]): Promi
       .returning({ id: comments.id });
     const insertedId = rows[0]?.id;
     if (insertedId) idBySource.set(c.sourceCommentId, insertedId);
-    written += 1;
   }
-  return written;
+  return ordered.length;
 }
 
 async function main(): Promise<void> {
@@ -153,9 +144,7 @@ async function main(): Promise<void> {
     if (db) {
       await ensurePostRow(db, slug, slug);
     }
-    const written = db
-      ? await upsertComments(db, slug, flats)
-      : await upsertComments(null as unknown as Db, slug, flats);
+    const written = await upsertComments(db, slug, flats);
     console.log(`  ${slug} (a_id=${String(devtoId)}): ${String(written)} comment(s) imported`);
     totalWritten += written;
   }
