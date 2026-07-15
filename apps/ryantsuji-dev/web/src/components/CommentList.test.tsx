@@ -120,7 +120,7 @@ describe("CommentList SSR", () => {
       id: "imp",
       authorName: "Vinicius",
       body: "great post",
-      source: "dev.to",
+      source: "devto", // DB に入る識別子。表示は "dev.to" に整えられる
       sourceUrl: "https://dev.to/x/comment/abc",
       authorProfileUrl: "https://dev.to/vini",
     });
