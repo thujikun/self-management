@@ -10,18 +10,32 @@
  * @graph-connects none
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 
 import {
+  DevtoHttpError,
+  fetchDevtoJson,
   flattenOwnerThreads,
   groupOwnerThreads,
   htmlToText,
   OWNER_USERNAME,
   parseArticleMeta,
   parseDevtoComments,
+  parseRetryAfterMs,
+  RETRY_WAIT_MAX_MS,
   type DevtoComment,
 } from "./devto-threads.js";
+
+/** status / headers を持つ最小の Response 風 stub。 */
+function res(status: number, body: unknown = {}, headers: Record<string, string> = {}) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (k: string) => headers[k.toLowerCase()] ?? null },
+    json: () => Promise.resolve(body),
+  } as unknown as Response;
+}
 
 function node(
   idCode: string,
@@ -67,6 +81,136 @@ describe("htmlToText", () => {
   });
 });
 
+describe("parseRetryAfterMs", () => {
+  it("秒数ヘッダを ms に変換する", () => {
+    expect(parseRetryAfterMs("2", 1_000)).toBe(2_000);
+    expect(parseRetryAfterMs("0", 1_000)).toBe(0);
+  });
+
+  it("HTTP-date は現在時刻との差を返す (過去なら 0)", () => {
+    const now = Date.parse("2026-07-01T00:00:00Z");
+    expect(parseRetryAfterMs("Wed, 01 Jul 2026 00:00:05 GMT", now)).toBe(5_000);
+    expect(parseRetryAfterMs("Wed, 01 Jul 2026 00:00:00 GMT", now + 10_000)).toBe(0);
+  });
+
+  it("null / 解釈不能は null", () => {
+    expect(parseRetryAfterMs(null, 0)).toBeNull();
+    expect(parseRetryAfterMs("soon", 0)).toBeNull();
+  });
+});
+
+describe("fetchDevtoJson (レート制限リトライ)", () => {
+  const noSleep = () => Promise.resolve();
+
+  // リトライ時の待機 warn を stderr に流さず、cap テストで内容を assert できるよう spy する。
+  beforeEach(() => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("200 は 1 回で JSON を返す", async () => {
+    let calls = 0;
+    const fetchImpl = (() => {
+      calls++;
+      return Promise.resolve(res(200, { ok: true }));
+    }) as unknown as typeof fetch;
+    const out = await fetchDevtoJson("u", "l", { fetchImpl, sleep: noSleep });
+    expect(out).toEqual({ ok: true });
+    expect(calls).toBe(1);
+  });
+
+  it("429 の後 200 なら Retry-After を尊重してリトライする", async () => {
+    const statuses = [429, 200];
+    const waits: number[] = [];
+    let calls = 0;
+    const fetchImpl = (() => {
+      const s = statuses[calls++];
+      return Promise.resolve(
+        s === 429 ? res(429, {}, { "retry-after": "3" }) : res(200, { done: 1 }),
+      );
+    }) as unknown as typeof fetch;
+    const out = await fetchDevtoJson("u", "l", {
+      fetchImpl,
+      sleep: (ms) => {
+        waits.push(ms);
+        return Promise.resolve();
+      },
+    });
+    expect(out).toEqual({ done: 1 });
+    expect(calls).toBe(2);
+    expect(waits).toEqual([3_000]); // Retry-After: 3s を採用
+  });
+
+  it("極端な Retry-After は RETRY_WAIT_MAX_MS に cap し、待機理由を warn する", async () => {
+    const waits: number[] = [];
+    let calls = 0;
+    const fetchImpl = (() => {
+      calls++;
+      return Promise.resolve(
+        calls === 1 ? res(429, {}, { "retry-after": "3600" }) : res(200, { done: 1 }),
+      );
+    }) as unknown as typeof fetch;
+    const out = await fetchDevtoJson("u", "a_id=9", {
+      fetchImpl,
+      sleep: (ms) => {
+        waits.push(ms);
+        return Promise.resolve();
+      },
+    });
+    expect(out).toStrictEqual({ done: 1 });
+    expect(waits).toStrictEqual([RETRY_WAIT_MAX_MS]); // 3600s ではなく 30s
+    expect(vi.mocked(console.warn).mock.calls).toStrictEqual([
+      ["[devto] a_id=9: HTTP 429, retry in 30000ms (attempt 1/4)"],
+    ]);
+  });
+
+  it("5xx が続くと retries を使い切って throw する", async () => {
+    let calls = 0;
+    const fetchImpl = (() => {
+      calls++;
+      return Promise.resolve(res(503));
+    }) as unknown as typeof fetch;
+    await expect(
+      fetchDevtoJson("u", "a_id=1", { fetchImpl, sleep: noSleep, retries: 2 }),
+    ).rejects.toThrow(/503 for a_id=1/);
+    expect(calls).toBe(3); // 初回 + retries(2)
+  });
+
+  it("404 (429 以外の 4xx) は即 throw、リトライしない", async () => {
+    let calls = 0;
+    const fetchImpl = (() => {
+      calls++;
+      return Promise.resolve(res(404));
+    }) as unknown as typeof fetch;
+    await expect(fetchDevtoJson("u", "l", { fetchImpl, sleep: noSleep })).rejects.toThrow(/404/);
+    expect(calls).toBe(1);
+  });
+
+  it("HTTP エラーは status を持つ DevtoHttpError で投げる (404 skip 判定に使える)", async () => {
+    const fetchImpl = (() => Promise.resolve(res(404))) as unknown as typeof fetch;
+    const err = await fetchDevtoJson("u", "a_id=4100706", { fetchImpl, sleep: noSleep }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(DevtoHttpError);
+    expect((err as DevtoHttpError).status).toBe(404);
+    expect((err as DevtoHttpError).label).toBe("a_id=4100706");
+  });
+
+  it("ネットワーク例外も一時障害としてリトライする", async () => {
+    let calls = 0;
+    const fetchImpl = (() => {
+      calls++;
+      if (calls === 1) return Promise.reject(new Error("network down"));
+      return Promise.resolve(res(200, { recovered: true }));
+    }) as unknown as typeof fetch;
+    const out = await fetchDevtoJson("u", "l", { fetchImpl, sleep: noSleep });
+    expect(out).toEqual({ recovered: true });
+    expect(calls).toBe(2);
+  });
+});
+
 describe("parseDevtoComments (境界検証)", () => {
   it("正常な shape はそのまま返す (unknown key は落とす)", () => {
     const raw = [
@@ -109,6 +253,21 @@ describe("parseDevtoComments (境界検証)", () => {
 
   it("配列でないレスポンス (error object 等) も ZodError で弾く", () => {
     expect(() => parseDevtoComments({ error: "not found", status: 404 })).toThrow(ZodError);
+  });
+
+  it("削除コメント (user フィールド欠落) は throw せず placeholder に正規化する", () => {
+    const raw = [
+      {
+        type_of: "comment",
+        id_code: "del",
+        created_at: "2026-05-01T00:00:00Z",
+        body_html: "<p>[deleted]</p>",
+        user: {}, // 投稿者削除で name/username が無い
+        children: [],
+      },
+    ];
+    const [c] = parseDevtoComments(raw);
+    expect(c?.user).toStrictEqual({ name: "[deleted]", username: "" });
   });
 });
 
@@ -170,6 +329,20 @@ describe("groupOwnerThreads", () => {
     expect(group?.top.sourceUrl).toBe(`${ARTICLE_URL}/comments/#comment-top`);
     expect(group?.top.isOwner).toBe(false);
     expect(group?.timeline.find((c) => c.sourceCommentId === "mine")?.isOwner).toBe(true);
+  });
+
+  it("削除コメント (username 空) を含むスレッドは OWNER がいても丸ごと skip する", () => {
+    const deleted = {
+      ...node("del", "x", "2026-05-05T00:00:00Z"),
+      user: { name: "[deleted]", username: "" },
+    };
+    const tree = [
+      {
+        ...node("top", "vinicius", "2026-05-05T00:00:00Z", [deleted]),
+        children: [deleted, node("mine", OWNER_USERNAME, "2026-05-05T02:00:00Z")],
+      },
+    ];
+    expect(groupOwnerThreads(tree, ARTICLE_URL)).toEqual([]);
   });
 
   it("孫コメント (OWNER が深い階層で反応) でもスレッドを拾う", () => {

@@ -32,15 +32,18 @@
 
 import { existsSync } from "node:fs";
 
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { ZodError } from "zod";
 import { comments, createDb, posts, type Db } from "@self/db";
 
 import {
+  DevtoHttpError,
   fetchArticleUrl,
   fetchDevtoComments,
   flattenOwnerThreads,
   POSTS_DIR,
   readPostDevtoIds,
+  type DevtoComment,
   type FlatComment,
 } from "./lib/devto-threads.js";
 import { formatDryRunLine, orderCommentsForUpsert } from "./lib/devto-upsert.js";
@@ -110,6 +113,31 @@ async function upsertComments(db: Db | null, slug: string, flats: FlatComment[])
   return ordered.length;
 }
 
+/**
+ * 現在の選別結果に含まれない既存 devto row (孤児) を warn する。
+ * upsert 経路は insert / update のみで row を消さないため、import 済みスレッドが選別対象外に
+ * 変わる (例: 参加者がコメント削除 → 削除混じり skip 対象になる) と既存 row は本文編集の追随も
+ * 止まったまま残り続ける。乖離をここで可視化し、削除するかどうかは手動で判断する。
+ *
+ * @graph-connects db [reads_from] comments テーブルの source=devto row を slug 単位で照会し選別結果と突き合わせる
+ */
+async function warnOrphanDevtoRows(db: Db, slug: string, flats: FlatComment[]): Promise<void> {
+  const rows = await db
+    .select({ sourceCommentId: comments.sourceCommentId })
+    .from(comments)
+    .where(and(eq(comments.postSlug, slug), eq(comments.source, "devto")));
+  const kept = new Set(flats.map((f) => f.sourceCommentId));
+  const orphans = rows
+    .map((r) => r.sourceCommentId)
+    .filter((id): id is string => id !== null && !kept.has(id));
+  if (orphans.length > 0) {
+    console.warn(
+      `  ${slug}: ${String(orphans.length)} 件の既存 devto row が現在の選別結果に含まれない` +
+        ` (孤児): ${orphans.join(", ")}`,
+    );
+  }
+}
+
 async function main(): Promise<void> {
   const filterSlug = process.argv[2] ?? null;
 
@@ -131,12 +159,46 @@ async function main(): Promise<void> {
   );
 
   let totalWritten = 0;
+  let skipped = 0;
+  let first = true;
   for (const { slug, devtoId } of targets) {
-    const [tree, articleUrl] = await Promise.all([
-      fetchDevtoComments(devtoId),
-      fetchArticleUrl(devtoId),
-    ]);
+    // 全記事を舐める backfill で dev.to のレート制限を避けるため記事間に小休止を挟む
+    // (429 自体は fetchDevtoJson がバックオフ再試行するが、そもそも当てない方が速い)。
+    if (!first) await new Promise((r) => setTimeout(r, 600));
+    first = false;
+    // try は fetch 2 本に限定する。DB 書き込みや選別ロジックの失敗まで skip に丸めると
+    // 「全記事 skip でも exit 0」になり再実行の判断材料が消えるため、fetch 以外は loud に落とす。
+    let tree: DevtoComment[];
+    let articleUrl: string;
+    try {
+      [tree, articleUrl] = await Promise.all([
+        fetchDevtoComments(devtoId),
+        fetchArticleUrl(devtoId),
+      ]);
+    } catch (err: unknown) {
+      // ZodError = dev.to API の shape 変化。fetch の一時障害ではなく取り込み設計の前提崩れ
+      // なので、skip に握り潰さず原因を追える形で即落とす。
+      if (err instanceof ZodError) throw err;
+      // 1 記事の fetch 失敗で backfill 全体を落とさない。404 = dev.to に記事なし
+      // (未公開 / scheduled / 削除) はよくあるので warn して次へ。冪等なので再実行で拾える。
+      const is404 = err instanceof DevtoHttpError && err.status === 404;
+      const reason =
+        err instanceof DevtoHttpError
+          ? is404
+            ? "dev.to に記事なし (未公開 / 削除)"
+            : `HTTP ${String(err.status)}`
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      console.warn(`  ${slug} (a_id=${String(devtoId)}): skip — ${reason}`);
+      skipped += 1;
+      // 404 以外の skip (リトライ使い切りの 429/5xx / ネットワーク断) は想定内ではないので、
+      // done と報告しつつも exit code を非 0 にして再実行が必要だと分かるようにする。
+      if (!is404) process.exitCode = 1;
+      continue;
+    }
     const flats = flattenOwnerThreads(tree, articleUrl);
+    if (db) await warnOrphanDevtoRows(db, slug, flats);
     if (flats.length === 0) {
       console.log(`  ${slug} (a_id=${String(devtoId)}): no owner-threads, skip`);
       continue;
@@ -148,7 +210,10 @@ async function main(): Promise<void> {
     console.log(`  ${slug} (a_id=${String(devtoId)}): ${String(written)} comment(s) imported`);
     totalWritten += written;
   }
-  console.log(`[import] done: ${String(totalWritten)} comment(s) total`);
+  console.log(
+    `[import] done: ${String(totalWritten)} comment(s) total` +
+      (skipped > 0 ? ` (${String(skipped)} article(s) skipped)` : ""),
+  );
 }
 
 main().catch((err: unknown) => {
