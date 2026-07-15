@@ -1,0 +1,75 @@
+# dev.to コメント取り込みの定期実行 workflow。
+#
+# `scripts/import-devto-comments.ts` を schedule で回し、本人が返信した dev.to スレッドを
+# ryantsuji.dev の Postgres コメント欄へ冪等 upsert する (source=devto)。手動 backfill を
+# CI 化したもの。upsert は (source, source_comment_id) の unique index で冪等なので、
+# 毎回全記事を舐めても重複せず、新規コメント / 本文編集の差分だけ反映される。
+#
+# content submodule (ryantsuji-dev-content) は main の pin が常に最新 (push → syndicate が
+# 承認なしで pin 更新) なので、`submodules: true` で checkout すれば最新記事の devto id を引ける。
+#
+# auth / DB: deploy-ryantsuji-dev.yml と同じ WIF flow。GitHub OIDC → `pulumi-ci@` SA を
+# impersonate し、`gcloud secrets versions access neon-database-url` で本番 Neon の接続文字列を
+# 動的取得して job env に注入する (yaml に直書きしない / log は ::add-mask:: で mask)。
+#
+# 失敗時の扱い: script は 404 (未公開 / 削除記事) を warn + exit 0 で skip、429/5xx の
+# リトライ使い切り等の想定外 skip は exit 1 にするので、恒常的な障害は run 失敗として surface される。
+#
+# secrets / vars (deploy-ryantsuji-dev.yml と共有):
+# - var: GCP_PROJECT_ID / GCP_PROJECT_NUMBER / PULUMI_CI_SA_EMAIL
+# - secret (GCP Secret Manager): neon-database-url
+name: Import dev.to comments
+
+on:
+  schedule:
+    # 毎日 15:00 UTC (= 00:00 JST)。dev.to コメントは低頻度なので 1 日 1 回で十分。
+    - cron: "0 15 * * *"
+  workflow_dispatch:
+
+# 先行 run が走っていても取り込み自体は冪等だが、同時に 2 本走らせる意味はないので
+# 直列化する (cancel はしない = 実行中の取り込みは完走させる)。
+concurrency:
+  group: import-devto-comments
+  cancel-in-progress: false
+
+# WIF を使うために id-token: write が必須。
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  import:
+    name: import dev.to comments
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - uses: ./.github/actions/setup
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions/providers/github-actions
+          service_account: ${{ vars.PULUMI_CI_SA_EMAIL }}
+
+      # 本番 Neon の接続文字列を SSoT (GCP Secret Manager `neon-database-url`) から動的取得。
+      # ::add-mask:: で log mask 化してから job env に注入する。
+      - name: Fetch DATABASE_URL from Secret Manager
+        id: db-url
+        run: |
+          url=$(gcloud secrets versions access latest \
+            --secret=neon-database-url \
+            --project=${{ vars.GCP_PROJECT_ID }})
+          echo "::add-mask::$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Import dev.to comments
+        run: pnpm exec tsx scripts/import-devto-comments.ts
+        env:
+          DATABASE_URL: ${{ steps.db-url.outputs.url }}
