@@ -36,6 +36,7 @@ import { sql } from "drizzle-orm";
 import { comments, createDb, posts, type Db } from "@self/db";
 
 import {
+  DevtoHttpError,
   fetchArticleUrl,
   fetchDevtoComments,
   flattenOwnerThreads,
@@ -131,29 +132,48 @@ async function main(): Promise<void> {
   );
 
   let totalWritten = 0;
+  let skipped = 0;
   let first = true;
   for (const { slug, devtoId } of targets) {
     // 全記事を舐める backfill で dev.to のレート制限を避けるため記事間に小休止を挟む
     // (429 自体は fetchDevtoJson がバックオフ再試行するが、そもそも当てない方が速い)。
     if (!first) await new Promise((r) => setTimeout(r, 600));
     first = false;
-    const [tree, articleUrl] = await Promise.all([
-      fetchDevtoComments(devtoId),
-      fetchArticleUrl(devtoId),
-    ]);
-    const flats = flattenOwnerThreads(tree, articleUrl);
-    if (flats.length === 0) {
-      console.log(`  ${slug} (a_id=${String(devtoId)}): no owner-threads, skip`);
-      continue;
+    try {
+      const [tree, articleUrl] = await Promise.all([
+        fetchDevtoComments(devtoId),
+        fetchArticleUrl(devtoId),
+      ]);
+      const flats = flattenOwnerThreads(tree, articleUrl);
+      if (flats.length === 0) {
+        console.log(`  ${slug} (a_id=${String(devtoId)}): no owner-threads, skip`);
+        continue;
+      }
+      if (db) {
+        await ensurePostRow(db, slug, slug);
+      }
+      const written = await upsertComments(db, slug, flats);
+      console.log(`  ${slug} (a_id=${String(devtoId)}): ${String(written)} comment(s) imported`);
+      totalWritten += written;
+    } catch (err: unknown) {
+      // 1 記事の失敗で backfill 全体を落とさない。404 = dev.to に記事なし
+      // (未公開 / scheduled / 削除) はよくあるので warn して次へ。冪等なので再実行で拾える。
+      const reason =
+        err instanceof DevtoHttpError
+          ? err.status === 404
+            ? "dev.to に記事なし (未公開 / 削除)"
+            : `HTTP ${String(err.status)}`
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      console.warn(`  ${slug} (a_id=${String(devtoId)}): skip — ${reason}`);
+      skipped += 1;
     }
-    if (db) {
-      await ensurePostRow(db, slug, slug);
-    }
-    const written = await upsertComments(db, slug, flats);
-    console.log(`  ${slug} (a_id=${String(devtoId)}): ${String(written)} comment(s) imported`);
-    totalWritten += written;
   }
-  console.log(`[import] done: ${String(totalWritten)} comment(s) total`);
+  console.log(
+    `[import] done: ${String(totalWritten)} comment(s) total` +
+      (skipped > 0 ? ` (${String(skipped)} article(s) skipped)` : ""),
+  );
 }
 
 main().catch((err: unknown) => {

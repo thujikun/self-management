@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
 
 import {
+  DevtoHttpError,
   fetchDevtoJson,
   flattenOwnerThreads,
   groupOwnerThreads,
@@ -153,6 +154,16 @@ describe("fetchDevtoJson (レート制限リトライ)", () => {
     }) as unknown as typeof fetch;
     await expect(fetchDevtoJson("u", "l", { fetchImpl, sleep: noSleep })).rejects.toThrow(/404/);
     expect(calls).toBe(1);
+  });
+
+  it("HTTP エラーは status を持つ DevtoHttpError で投げる (404 skip 判定に使える)", async () => {
+    const fetchImpl = (() => Promise.resolve(res(404))) as unknown as typeof fetch;
+    const err = await fetchDevtoJson("u", "a_id=4100706", { fetchImpl, sleep: noSleep }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(DevtoHttpError);
+    expect((err as DevtoHttpError).status).toBe(404);
+    expect((err as DevtoHttpError).label).toBe("a_id=4100706");
   });
 
   it("ネットワーク例外も一時障害としてリトライする", async () => {

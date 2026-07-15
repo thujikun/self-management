@@ -218,6 +218,23 @@ export interface FetchRetryOptions {
 const defaultSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * dev.to API が非 2xx を返した (リトライ不能 or 試行使い切り) ときの typed error。
+ * `status` を持つので、呼び出し側が 404 (未公開 / 削除記事) を「その記事だけ skip」と
+ * 判別できる (backfill 全体を 1 記事で落とさない)。
+ *
+ * @graph-connects none
+ */
+export class DevtoHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly label: string,
+  ) {
+    super(`dev.to fetch failed: ${String(status)} for ${label}`);
+    this.name = "DevtoHttpError";
+  }
+}
+
+/**
  * `Retry-After` ヘッダ (秒数 or HTTP-date) を待機ミリ秒に変換する。解釈できなければ null。
  *
  * @graph-connects none
@@ -269,7 +286,7 @@ export async function fetchDevtoJson(
 
     const retryable = res.status === 429 || res.status >= 500;
     if (!retryable || attempt >= retries) {
-      throw new Error(`dev.to fetch failed: ${String(res.status)} for ${label}`);
+      throw new DevtoHttpError(res.status, label);
     }
     const retryAfter =
       res.status === 429 ? parseRetryAfterMs(res.headers.get("retry-after"), now()) : null;
