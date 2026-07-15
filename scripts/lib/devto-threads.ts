@@ -218,6 +218,13 @@ export interface FetchRetryOptions {
 const defaultSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * リトライ 1 回あたりの待機上限 ms。`Retry-After` が極端な値 (3600 秒や遠い未来の
+ * HTTP-date) でも、手動実行の CLI がハングと区別できない長時間の無言 sleep に
+ * ならないよう cap する (指数バックオフ側の最大 16s と非対称にしない)。
+ */
+export const RETRY_WAIT_MAX_MS = 30_000;
+
+/**
  * dev.to API が非 2xx を返した (リトライ不能 or 試行使い切り) ときの typed error。
  * `status` を持つので、呼び出し側が 404 (未公開 / 削除記事) を「その記事だけ skip」と
  * 判別できる (backfill 全体を 1 記事で落とさない)。
@@ -290,7 +297,12 @@ export async function fetchDevtoJson(
     }
     const retryAfter =
       res.status === 429 ? parseRetryAfterMs(res.headers.get("retry-after"), now()) : null;
-    await sleep(retryAfter ?? backoff(attempt));
+    const waitMs = Math.min(retryAfter ?? backoff(attempt), RETRY_WAIT_MAX_MS);
+    // 無言 sleep はハングと区別が付かないので、待機理由 (status / 待機 ms) を 1 行出す。
+    console.warn(
+      `[devto] ${label}: HTTP ${String(res.status)}, retry in ${String(waitMs)}ms (attempt ${String(attempt + 1)}/${String(retries)})`,
+    );
+    await sleep(waitMs);
   }
 }
 

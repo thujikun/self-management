@@ -10,7 +10,7 @@
  * @graph-connects none
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 
 import {
@@ -23,6 +23,7 @@ import {
   parseArticleMeta,
   parseDevtoComments,
   parseRetryAfterMs,
+  RETRY_WAIT_MAX_MS,
   type DevtoComment,
 } from "./devto-threads.js";
 
@@ -101,6 +102,14 @@ describe("parseRetryAfterMs", () => {
 describe("fetchDevtoJson (レート制限リトライ)", () => {
   const noSleep = () => Promise.resolve();
 
+  // リトライ時の待機 warn を stderr に流さず、cap テストで内容を assert できるよう spy する。
+  beforeEach(() => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("200 は 1 回で JSON を返す", async () => {
     let calls = 0;
     const fetchImpl = (() => {
@@ -132,6 +141,29 @@ describe("fetchDevtoJson (レート制限リトライ)", () => {
     expect(out).toEqual({ done: 1 });
     expect(calls).toBe(2);
     expect(waits).toEqual([3_000]); // Retry-After: 3s を採用
+  });
+
+  it("極端な Retry-After は RETRY_WAIT_MAX_MS に cap し、待機理由を warn する", async () => {
+    const waits: number[] = [];
+    let calls = 0;
+    const fetchImpl = (() => {
+      calls++;
+      return Promise.resolve(
+        calls === 1 ? res(429, {}, { "retry-after": "3600" }) : res(200, { done: 1 }),
+      );
+    }) as unknown as typeof fetch;
+    const out = await fetchDevtoJson("u", "a_id=9", {
+      fetchImpl,
+      sleep: (ms) => {
+        waits.push(ms);
+        return Promise.resolve();
+      },
+    });
+    expect(out).toStrictEqual({ done: 1 });
+    expect(waits).toStrictEqual([RETRY_WAIT_MAX_MS]); // 3600s ではなく 30s
+    expect(vi.mocked(console.warn).mock.calls).toStrictEqual([
+      ["[devto] a_id=9: HTTP 429, retry in 30000ms (attempt 1/4)"],
+    ]);
   });
 
   it("5xx が続くと retries を使い切って throw する", async () => {
