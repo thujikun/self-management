@@ -3,6 +3,7 @@
  *
  * - buildCommentTree の 1 階層 nest / 親不在 reply の昇格 / replies の時系列 sort
  * - 空 list / top-level のみ / reply 入り の SSR markup
+ * - 取り込みコメントの via バッジ (既知 source のラベル変換 / 未知 source の fallback)
  * - reply form の open/close、submit で onReply 呼び出し
  * - own comment にだけ delete button が出る、click で onDelete 呼び出し
  *
@@ -120,7 +121,7 @@ describe("CommentList SSR", () => {
       id: "imp",
       authorName: "Vinicius",
       body: "great post",
-      source: "dev.to",
+      source: "devto", // DB に入る識別子。表示は "dev.to" に整えられる
       sourceUrl: "https://dev.to/x/comment/abc",
       authorProfileUrl: "https://dev.to/vini",
     });
@@ -139,6 +140,24 @@ describe("CommentList SSR", () => {
     expect(html).toMatch(/href="https:\/\/dev\.to\/x\/comment\/abc"/);
     // React は静的 text と式の境界に `<!-- -->` を差し込むため間隔を許容
     expect(html).toMatch(/via <!-- -->dev\.to</);
+  });
+
+  it("未知の source はラベル変換せずそのまま出す", () => {
+    const imported = makeComment({
+      id: "imp2",
+      source: "zenn", // sourceLabel の map に無い識別子 → fallback でそのまま表示
+      sourceUrl: "https://zenn.dev/x/comments/abc",
+    });
+    const html = renderToString(
+      <CommentList
+        comments={[imported]}
+        currentUserId={null}
+        onReply={async () => ({ ok: true })}
+        onDelete={async () => {}}
+      />,
+    );
+    // React は静的 text と式の境界に `<!-- -->` を差し込むため間隔を許容
+    expect(html).toMatch(/via <!-- -->zenn</);
   });
 
   it("native コメントは via バッジも author リンクも出さない", () => {
