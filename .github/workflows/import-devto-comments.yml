@@ -8,15 +8,18 @@
 # content submodule (ryantsuji-dev-content) は main の pin が常に最新 (push → syndicate が
 # 承認なしで pin 更新) なので、`submodules: true` で checkout すれば最新記事の devto id を引ける。
 #
-# auth / DB: deploy-ryantsuji-dev.yml と同じ WIF flow。GitHub OIDC → `pulumi-ci@` SA を
+# auth / DB: GitHub OIDC → `devto-import@` SA (import 専用の最小権限 SA、権限は
+# `neon-database-url` secret の read のみ。infra/core/index.ts で Pulumi 管理) を WIF で
 # impersonate し、`gcloud secrets versions access neon-database-url` で本番 Neon の接続文字列を
 # 動的取得して job env に注入する (yaml に直書きしない / log は ::add-mask:: で mask)。
+# admin 権限を持つ pulumi-ci@ SA は使わない (schedule 無人実行 job の露出面を最小化)。
 #
 # 失敗時の扱い: script は 404 (未公開 / 削除記事) を warn + exit 0 で skip、429/5xx の
 # リトライ使い切り等の想定外 skip は exit 1 にするので、恒常的な障害は run 失敗として surface される。
 #
-# secrets / vars (deploy-ryantsuji-dev.yml と共有):
-# - var: GCP_PROJECT_ID / GCP_PROJECT_NUMBER / PULUMI_CI_SA_EMAIL
+# secrets / vars:
+# - var: GCP_PROJECT_ID / GCP_PROJECT_NUMBER (deploy-ryantsuji-dev.yml と共有)
+# - var: DEVTO_IMPORT_SA_EMAIL (devto-import@<project>.iam.gserviceaccount.com、本 workflow 専用)
 # - secret (GCP Secret Manager): neon-database-url
 name: Import dev.to comments
 
@@ -56,7 +59,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions/providers/github-actions
-          service_account: ${{ vars.PULUMI_CI_SA_EMAIL }}
+          service_account: ${{ vars.DEVTO_IMPORT_SA_EMAIL }}
 
       # 本番 Neon の接続文字列を SSoT (GCP Secret Manager `neon-database-url`) から動的取得。
       # ::add-mask:: で log mask 化してから job env に注入する。
