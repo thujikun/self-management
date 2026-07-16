@@ -220,6 +220,23 @@ content の frontmatter 書き戻しと submodule pointer の bump は別 workfl
    1 段だけ** 行う。parent repo (`self-management`) には触れない。submodule 内
    commit が main に着地した時点で content repo 側の `dispatch-on-push.yml` が
    後段 (3.) を kick する。
+
+   Zenn 二重配信 (stale 読み) の再発防止として 2 層の防御が入っている:
+
+   - **層 1: submodule HEAD sync** — syndicate 実行前に submodule を content
+     repo の **origin/main HEAD へ sync** して読み書きの時点を揃える。bump chain
+     (3.) 経由の pointer は writeback (`syndication.zenn.id`) 反映前の stale で
+     あり得るため、pin のまま読むと id 未付与に見えて新 id を発行 → 正規
+     article を zombie 削除する flip-flop が起きる
+   - **層 2: adoptable 分類** — orphan (canonical set に無い `articles/*.md`) は
+     **zombie / adoptable / legitOrphan の 3 分類**。adoptable = title 一致 +
+     post 側 id 未付与で、削除も新 id 発行もせず **既存 article の id を
+     writeback で post に再採用** して収束させる。zombie (title 一致 + post が
+     別 id 持ち) は自動削除、legitOrphan (title 不一致) は warn のみ
+
+   なお HEAD sync (層 1) は CI 実行のみ。local 実行
+   (`scripts/syndicate.cli.ts --publish`) は従来どおり submodule pin を読むため、
+   stale 読みへの防御は adopt 層 (層 2) だけになる点に注意。
 3. **`bump-submodule.yml`** (本 monorepo) が `repository_dispatch`
    (`content-updated`) を受けて、`git submodule update --remote` で pointer を
    最新 main 追従に上げ、**`bot/content-bump-<sha>` branch で PR を開いて

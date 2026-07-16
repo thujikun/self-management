@@ -1427,9 +1427,11 @@ describe("detectOrphanZennArticles", () => {
   it("title 一致 post が id 未付与なら zombie ではなく adoptable (stale 読みで正規 article を削除しない)", () => {
     const posts: ParsedPost[] = [makePost({ slug: "unpublished", lang: "ja" })];
     const result = detectOrphanZennArticles([{ id: "someid111111111", title: "title" }], posts);
-    expect(result.zombies).toEqual([]);
-    expect(result.legitOrphans).toEqual([]);
-    expect(result.adoptable).toEqual([{ articleId: "someid111111111", postSlug: "unpublished" }]);
+    expect(result).toStrictEqual({
+      zombies: [],
+      legitOrphans: [],
+      adoptable: [{ articleId: "someid111111111", postSlug: "unpublished" }],
+    });
   });
 
   it("title 一致 post が別 id を持つ場合は従来通り zombie (adoptable に入らない)", () => {
@@ -1437,8 +1439,11 @@ describe("detectOrphanZennArticles", () => {
       makePost({ slug: "post-a", lang: "ja", zennId: "c93e730ea6e5c3" }),
     ];
     const result = detectOrphanZennArticles([{ id: "89da562d3026d5", title: "title" }], posts);
-    expect(result.zombies).toEqual(["89da562d3026d5"]);
-    expect(result.adoptable).toEqual([]);
+    expect(result).toStrictEqual({
+      zombies: ["89da562d3026d5"],
+      legitOrphans: [],
+      adoptable: [],
+    });
   });
 });
 
