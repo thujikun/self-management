@@ -117,6 +117,9 @@ Pulumi state encryption は Cloud KMS で完結するため `PULUMI_CONFIG_PASSP
 - `GCP_PROJECT_ID` = `ryan-self-management`
 - `GCP_PROJECT_NUMBER` = `600456222971` (`gcloud projects describe ryan-self-management --format="value(projectNumber)"`)
 - `PULUMI_CI_SA_EMAIL` = `pulumi-ci@ryan-self-management.iam.gserviceaccount.com`
+- `DEVTO_IMPORT_SA_EMAIL` = `devto-import@ryan-self-management.iam.gserviceaccount.com`
+  (import-devto-comments.yml 専用の最小権限 SA。権限は `neon-database-url` の
+  `secretAccessor` のみ。本 stack の `devto-import-sa` を apply してから設定する)
 - `PULUMI_ORG` = `tsuji-0107-gmail-com` (Pulumi Cloud organization slug)
 
 ### bootstrap (初回のみ、手で 1 回 `pulumi up` を local から)

@@ -61,6 +61,7 @@ describe("infra/core stack", () => {
         "datasetId",
         "datasetLocation",
         "devToApiKeySecretId",
+        "devtoImportServiceAccountEmail",
         "githubOauthClientIdSecretId",
         "githubOauthClientSecretSecretId",
         "githubWifProviderResource",
