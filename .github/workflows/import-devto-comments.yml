@@ -22,8 +22,8 @@ name: Import dev.to comments
 
 on:
   schedule:
-    # 毎日 15:00 UTC (= 00:00 JST)。dev.to コメントは低頻度なので 1 日 1 回で十分。
-    - cron: "0 15 * * *"
+    # 毎時 0 分 (1 時間ごと)。upsert は冪等なので毎時舐めても重複せず、新規コメントの反映が速い。
+    - cron: "0 * * * *"
   workflow_dispatch:
 
 # 先行 run が走っていても取り込み自体は冪等だが、同時に 2 本走らせる意味はないので
