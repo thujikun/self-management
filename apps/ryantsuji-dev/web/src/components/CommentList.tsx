@@ -39,6 +39,17 @@ export interface DeleteHandler {
 }
 
 /**
+ * 取り込み元 (`source`) をバッジ用の表示名に整える。DB には識別子 (`devto`) が入っているので、
+ * ブランド表記 (`dev.to`) に寄せる。未知の source はそのまま出す。
+ *
+ * @graph-connects none
+ */
+function sourceLabel(source: string): string {
+  const labels: Record<string, string> = { devto: "dev.to" };
+  return labels[source] ?? source;
+}
+
+/**
  * flat comment list を `parentCommentId` で 1 階層に group する pure 関数。
  *
  * top-level 群を入力順 (= newest first) で並べ、各 top-level に子 reply を入れる。
@@ -272,7 +283,7 @@ function CommentRow({
             target="_blank"
             rel="noopener noreferrer nofollow"
           >
-            via {comment.source}
+            via {sourceLabel(comment.source)}
           </a>
         ) : null}
         <time dateTime={comment.createdAt} className="comments__date">

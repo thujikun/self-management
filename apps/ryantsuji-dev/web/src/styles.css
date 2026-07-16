@@ -1092,24 +1092,37 @@ main {
   color: var(--text-secondary);
 }
 
-a.comments__author:hover {
+/* リンク付き発言者名 (取り込みコメント) は accent 色 + 下線でひと目でリンクと分かるようにする。 */
+a.comments__author {
+  color: var(--text-accent);
   text-decoration: underline;
+  text-underline-offset: 0.18em;
 }
 
-/* 取り込み元バッジ ("via dev.to")。原文 deep link を兼ねる。 */
+a.comments__author:hover {
+  color: var(--accent-bg);
+}
+
+/* 取り込み元バッジ ("via dev.to")。原文 deep link を兼ねるので、accent 色 + 淡い accent 背景の
+   clickable な pill として、ひと目でリンクと分かる見た目にする。 */
 .comments__source-badge {
   font-size: var(--font-size-xs);
-  padding: 0.05em 0.5em;
-  border: 1px solid var(--border-subtle);
+  padding: 0.1em 0.6em;
+  border: 1px solid var(--accent-border);
   border-radius: 999px;
-  color: var(--text-secondary);
+  background: color-mix(in oklch, var(--accent-bg) 12%, transparent);
+  color: var(--text-accent);
   text-decoration: none;
   white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--easing-out),
+    border-color var(--duration-fast) var(--easing-out);
 }
 
 .comments__source-badge:hover {
-  color: var(--text-secondary);
-  border-color: var(--text-secondary);
+  background: color-mix(in oklch, var(--accent-bg) 22%, transparent);
+  border-color: var(--accent-bg);
+  color: var(--accent-bg);
 }
 
 .comments__date {
