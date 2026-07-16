@@ -18,7 +18,7 @@
 
 import * as gcp from "@pulumi/gcp";
 import * as pulumi from "@pulumi/pulumi";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { provisionGithubWif, type ProvisionGithubWifOutput } from "./github-wif.js";
 
@@ -89,13 +89,16 @@ beforeAll(async () => {
   });
 
   // Pulumi resource registration は async。output を resolve して dependency 連鎖で
-  // 登録を flush し、output に露出しない IAM binding 群は追加の macrotask で drain する。
+  // 登録を flush し、output に露出しない IAM binding 群は期待件数 (iam-api 除き 19 件)
+  // が captured に揃うまで poll して待つ (固定 sleep は遅い runner で flaky になる)。
   await Promise.all([
     promiseOf(output.pulumiCiSaEmail),
     promiseOf(output.devtoImportSaEmail),
     promiseOf(output.githubWifProviderName),
   ]);
-  await new Promise<void>((resolve) => setTimeout(resolve, 50));
+  await vi.waitFor(() => {
+    expect(captured.filter((r) => r.name !== "iam-api")).toHaveLength(19);
+  });
 });
 
 /**
