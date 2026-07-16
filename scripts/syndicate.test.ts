@@ -838,6 +838,37 @@ describe("emitZenn publish create branch", () => {
     await rm(repoDir, { recursive: true, force: true });
   });
 
+  it("id 不在の .ja post + title 一致の既存 article: 新 id を発行せず既存 id を adopt する", async () => {
+    // stale 読み (writeback 前の submodule pin) を模擬: post 側は id 未付与だが、
+    // Zenn repo 側には同 title の articles/<id>.md が既に存在する。従来はこの article を
+    // zombie 削除して新 id を発行し、Zenn 側に二重 draft が残っていた (再発防止の本丸)。
+    const repoDir = await mkdtemp(join(tmpdir(), "syndicate-zpub-repo-"));
+    await mkdir(join(repoDir, "articles"), { recursive: true });
+    await writeFile(
+      join(repoDir, "articles", "abcd1234abcd12.md"),
+      `---\ntitle: title\n---\nold\n`,
+    );
+    publishToZennMock.mockResolvedValueOnce({
+      filePath: "/fake/articles/abcd1234abcd12.md",
+      commitSha: "deadbeef0123",
+      pushed: true,
+    });
+    const srcFile = join(postsDir, "alpha.ja.md");
+    await writeFile(srcFile, `---\ntitle: t\npublishedAt: "2026-01-01"\n---\nhello\n`);
+    const posts = [makePost({ slug: "alpha", lang: "ja", body: "hello\n" })];
+
+    await emitZenn({ posts, outDir, footer: "", publish: true, postsDir, repoDir });
+
+    // 既存 article の id が writeback される (新 id を生成しない)
+    const after = await readFile(srcFile, "utf8");
+    expect(after).toMatch(/zenn:\n {4}id: "abcd1234abcd12"/);
+    // adopt した article は zombie 削除されない
+    expect(cleanupOrphanZennArticlesMock).not.toHaveBeenCalled();
+    // 出力 file 名も adopt した id
+    expect(await readdir(outDir)).toStrictEqual(["abcd1234abcd12.md"]);
+    await rm(repoDir, { recursive: true, force: true });
+  });
+
   it("id 不在の .ja post を publish: 新規 zenn id 生成 → writeback → publishToZenn を実行", async () => {
     publishToZennMock.mockResolvedValueOnce({
       filePath: "/fake/articles/xxx.md",
@@ -1393,11 +1424,21 @@ describe("detectOrphanZennArticles", () => {
     expect(result.legitOrphans).toEqual(["somezenn1111111"]);
   });
 
-  it("id 無し (未 publish) の ja post があっても title は canonical titles に入る", () => {
+  it("title 一致 post が id 未付与なら zombie ではなく adoptable (stale 読みで正規 article を削除しない)", () => {
     const posts: ParsedPost[] = [makePost({ slug: "unpublished", lang: "ja" })];
     const result = detectOrphanZennArticles([{ id: "someid111111111", title: "title" }], posts);
-    expect(result.zombies).toEqual(["someid111111111"]);
+    expect(result.zombies).toEqual([]);
     expect(result.legitOrphans).toEqual([]);
+    expect(result.adoptable).toEqual([{ articleId: "someid111111111", postSlug: "unpublished" }]);
+  });
+
+  it("title 一致 post が別 id を持つ場合は従来通り zombie (adoptable に入らない)", () => {
+    const posts: ParsedPost[] = [
+      makePost({ slug: "post-a", lang: "ja", zennId: "c93e730ea6e5c3" }),
+    ];
+    const result = detectOrphanZennArticles([{ id: "89da562d3026d5", title: "title" }], posts);
+    expect(result.zombies).toEqual(["89da562d3026d5"]);
+    expect(result.adoptable).toEqual([]);
   });
 });
 

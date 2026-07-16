@@ -157,6 +157,18 @@ jobs:
           git config --local --unset-all "url.https://github.com/.insteadOf" || true
           git remote set-url origin git@github.com:thujikun/ryantsuji-dev-content.git
 
+      # 読み側 (posts = submodule pin) と書き側 (Zenn repo = 最新 clone) の時点ズレが
+      # Zenn 二重配信の根本原因: bump 前の pin は writeback (`syndication.zenn.id`) を
+      # 含まないため、id 未付与に見えて新 id を発行し、正規 articles/<id>.md を zombie
+      # 削除する flip-flop が起きる (一時的に push された別 id の article が Zenn 側に
+      # 残って二重化)。syndicate 前に submodule を origin/main の HEAD へ進めて、読み書き
+      # を同一時点に揃える (run 自体は concurrency group で直列)。
+      - name: Sync content submodule to latest origin/main
+        run: |
+          cd apps/ryantsuji-dev/web/content
+          git fetch origin main
+          git checkout --detach FETCH_HEAD
+
       # Zenn 側 repo を `$RUNNER_TEMP/ryantsuji-dev-content` に clone (= publishToZenn
       # の `repoDir`)。SSH key 認証で git@github.com:... 経由で push する。
       - name: Run syndication (Zenn + dev.to, include drafts)
