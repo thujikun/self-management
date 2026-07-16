@@ -395,17 +395,25 @@ export interface ZennArticleFileInfo {
 
 /** {@link detectOrphanZennArticles} の結果。 */
 export interface OrphanZennDetection {
-  /** canonical set に無いが title 一致 post を持つ article。 zombie 判定して自動削除対象。 */
+  /** title 一致 post が既に別 id を持つ article。 zombie 判定して自動削除対象。 */
   zombies: string[];
   /** canonical set にも title 一致 post にも該当しない article。 手動 review 対象で自動削除しない。 */
   legitOrphans: string[];
+  /**
+   * title 一致 post が **id 未付与** の article。post 側の読みが writeback 前の stale
+   * (submodule pin ラグ等) である可能性が高いため、削除も新 id 発行もせず **この article
+   * の id を post に再採用** する ({@link emitZenn} が writeback)。stale 読みでも
+   * 「新 id 発行 → 正規 article を zombie 削除」の flip-flop にならず既存 id に収束する。
+   */
+  adoptable: { articleId: string; postSlug: string }[];
 }
 
 /**
- * Zenn repo の `articles/*.md` から orphan (canonical set に無いファイル) を検出し、
- * title 一致の post が canonical に存在する場合は `zombies` に分類 (bug 経路で作られた
- * 重複と見なす)。 title が一致しない場合は `legitOrphans` に分類 (post が rename /
- * 削除された可能性があるため自動削除しない)。
+ * Zenn repo の `articles/*.md` から orphan (canonical set に無いファイル) を検出し分類する。
+ *
+ * - title 一致 post が別 id を持つ → `zombies` (bug 経路で作られた重複。自動削除)
+ * - title 一致 post が id 未付与 → `adoptable` (article の id を post に再採用。削除しない)
+ * - title 不一致 → `legitOrphans` (post rename / 削除の可能性。自動削除しない)
  *
  * ロジックは pure。 I/O (git rm / commit / push) は
  * `cleanupOrphanZennArticles` (`@self/syndication`) に委譲する。
@@ -418,23 +426,27 @@ export function detectOrphanZennArticles(
 ): OrphanZennDetection {
   const jaPosts = canonicalPosts.filter((p) => p.lang === "ja");
   const canonicalIds = new Set<string>();
-  const canonicalTitles = new Set<string>();
+  const postByTitle = new Map<string, ParsedPost>();
   for (const p of jaPosts) {
     const id = p.meta.syndication.zenn?.id;
     if (id) canonicalIds.add(id);
-    if (p.meta.title) canonicalTitles.add(p.meta.title);
+    if (p.meta.title) postByTitle.set(p.meta.title, p);
   }
   const zombies: string[] = [];
   const legitOrphans: string[] = [];
+  const adoptable: { articleId: string; postSlug: string }[] = [];
   for (const file of articleFiles) {
     if (canonicalIds.has(file.id)) continue;
-    if (canonicalTitles.has(file.title)) {
+    const matched = postByTitle.get(file.title);
+    if (!matched) {
+      legitOrphans.push(file.id);
+    } else if (matched.meta.syndication.zenn?.id) {
       zombies.push(file.id);
     } else {
-      legitOrphans.push(file.id);
+      adoptable.push({ articleId: file.id, postSlug: matched.slug });
     }
   }
-  return { zombies, legitOrphans };
+  return { zombies, legitOrphans, adoptable };
 }
 
 /**
@@ -526,10 +538,12 @@ export async function emitZenn(args: EmitZennArgs): Promise<void> {
   // publishAt 境界 race 防止のため、loop 開始前に 1 度だけ now を fix する
   const now = args.now ?? new Date();
 
-  // publish mode で articles/ に orphan (canonical set に無い) 記事があれば、
-  // title 一致で zombie と判定して自動削除する。 過去に syndication bot が buggy な
-  // run (git stash conflict 等) で作った重複 draft が Zenn 側で「push のたびに resurrect
-  // される」問題への対処。 title 不一致 (post rename / 削除の可能性) は自動削除せず warn。
+  // publish mode で articles/ に orphan (canonical set に無い) 記事があれば分類して処理:
+  // title 一致 + post が別 id 持ち = zombie (自動削除)、title 一致 + post が id 未付与 =
+  // adoptable (article の id を post に再採用。post 側の読みが writeback 前の stale な
+  // ケースで、新 id 発行 → 正規 article 削除の flip-flop = Zenn 二重配信を防ぐ)、
+  // title 不一致 (post rename / 削除の可能性) は自動削除せず warn。
+  const adoptableIdBySlug = new Map<string, string>();
   if (args.publish) {
     // cold-start (repoDir が persist されず未 clone) では articles/ が読めず、 zombie
     // 検出が空振りして cleanup が次 run まで遅延する。 detection の前に clone を保証し、
@@ -537,7 +551,13 @@ export async function emitZenn(args: EmitZennArgs): Promise<void> {
     await ensureZennRepoCloned(repoDir, ZENN_REPO_REMOTE);
     const articlesDir = resolve(repoDir, "articles");
     const articleFiles = await readZennArticleFiles(articlesDir);
-    const { zombies, legitOrphans } = detectOrphanZennArticles(articleFiles, args.posts);
+    const { zombies, legitOrphans, adoptable } = detectOrphanZennArticles(articleFiles, args.posts);
+    for (const a of adoptable) {
+      adoptableIdBySlug.set(a.postSlug, a.articleId);
+      console.log(
+        `  [adopt] articles/${a.articleId}.md: title-matched post ${a.postSlug} has no zenn id — reusing this id`,
+      );
+    }
     if (zombies.length > 0) {
       console.log(
         `  [cleanup] found ${zombies.length} orphan Zenn article(s) with matching title (auto-delete):`,
@@ -571,12 +591,18 @@ export async function emitZenn(args: EmitZennArgs): Promise<void> {
         console.warn(`  [skip] ${p.slug}.ja.md: no syndication.zenn.id (dry-run)`);
         continue;
       }
-      // publish mode で id が無い場合は新規 article として hex を生成 → frontmatter に
-      // 書き戻し → 以後の syndicate でこの id が使われる。
-      zennId = generateZennId();
+      // publish mode で id が無い場合: title 一致の既存 article があればその id を再採用
+      // (stale 読みでも既存 id に収束)。無ければ新規 article として hex を生成。
+      // どちらも frontmatter に書き戻し、以後の syndicate でこの id が使われる。
+      const adopted = adoptableIdBySlug.get(p.slug);
+      zennId = adopted ?? generateZennId();
       const srcFile = resolve(args.postsDir ?? POSTS_DIR, `${p.slug}.ja.md`);
       await writebackZennIdToFile(srcFile, zennId);
-      console.log(`  [create] ${p.slug}.ja.md: generated zenn id=${zennId}`);
+      console.log(
+        adopted
+          ? `  [adopt] ${p.slug}.ja.md: reused existing zenn id=${zennId}`
+          : `  [create] ${p.slug}.ja.md: generated zenn id=${zennId}`,
+      );
     }
     const enUrl = slugsWithEn.has(p.slug) ? `${RYANTSUJI_DEV_BASE}/posts/${p.slug}?lang=en` : null;
     const markdown = syndicateForZenn({
